@@ -75,12 +75,17 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.zerointrusion.domain.NotificationDecision
+import com.zerointrusion.presentation.home.DeviceInformationScreen
+import com.zerointrusion.presentation.home.PostLoginHomeScreen
+import com.zerointrusion.presentation.home.QrReadScreen
 
 sealed class AppRoute(val route: String) {
     data object Loading : AppRoute("loading")
     data object Security : AppRoute("security")
     data object Registration : AppRoute("registration")
     data object Home : AppRoute("home")
+    data object DeviceInformation : AppRoute("device-information")
+    data object QrRead : AppRoute("qr-read")
 }
 
 @Composable
@@ -139,185 +144,45 @@ fun ZeroIntrusionAppRoot(
                 }
             }
             composable(AppRoute.Home.route) {
-                HomeScreen(
+                PostLoginHomeScreen(
                     deviceId = appState.registrationState?.deviceId.orEmpty(),
                     namespaceName = appState.registrationState?.namespaceName.orEmpty(),
                     email = appState.registrationState?.email.orEmpty(),
-                    fcmSyncState = appState.fcmSyncState,
+                    notification = appState.notificationOverlay.notification,
+                    notificationError = appState.notificationOverlay.mismatchError,
                     newDeviceRegistrationState = appState.newDeviceRegistrationState,
-                    onRetryFcmSync = appViewModel::retryFcmSync,
-                    onReadQrCode = appViewModel::registerNewDeviceFromQr,
+                    onOpenDeviceInformation = {
+                        navController.navigate(AppRoute.DeviceInformation.route)
+                    },
+                    onOpenQrRead = {
+                        navController.navigate(AppRoute.QrRead.route)
+                    },
                     onClearNewDeviceRegistrationState = appViewModel::clearNewDeviceRegistrationState,
+                    onAllowNotification = {
+                        appViewModel.onNotificationDecision(NotificationDecision.Accept)
+                    },
+                    onDeclineNotification = {
+                        appViewModel.onNotificationDecision(NotificationDecision.Decline)
+                    },
+                    onDismissNotificationError = appViewModel::dismissNotificationMismatch,
                 )
             }
-        }
-
-        val mismatchError = appState.notificationOverlay.mismatchError
-        if (!mismatchError.isNullOrBlank()) {
-            NotificationMismatchBanner(
-                message = mismatchError,
-                onDismiss = appViewModel::dismissNotificationMismatch,
-            )
-        }
-
-        appState.notificationOverlay.notification?.let { notification ->
-            IncomingNotificationSheet(
-                notification = notification,
-                showDecisionButtons = appState.notificationOverlay.canRespond,
-                onAccept = { appViewModel.onNotificationDecision(NotificationDecision.Accept) },
-                onDecline = { appViewModel.onNotificationDecision(NotificationDecision.Decline) },
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun IncomingNotificationSheet(
-    notification: com.zerointrusion.domain.BackendPushNotification,
-    showDecisionButtons: Boolean,
-    onAccept: () -> Unit,
-    onDecline: () -> Unit,
-) {
-    ModalBottomSheet(
-        onDismissRequest = onDecline,
-        containerColor = MaterialTheme.colorScheme.surface,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            HeroPanel(
-                eyebrow = "Incoming backend push",
-                title = notification.title.ifBlank { "Push notification" },
-                body = notification.body.ifBlank { "A backend notification was delivered to this device." },
-            )
-            StatusBanner(
-                title = if (showDecisionButtons) "Matched registered device" else "Decision buttons hidden",
-                message = if (showDecisionButtons) {
-                    "The incoming accountId and deviceId exactly match the persisted registration state, so this dedicated notification view is allowed."
-                } else {
-                    "The incoming accountId and deviceId do not match the persisted registration state, so the action buttons are hidden."
-                },
-                tone = if (showDecisionButtons) BannerTone.Success else BannerTone.Info,
-            )
-            DetailRow(label = "Title", value = notification.title.ifBlank { "(empty)" })
-            DetailRow(label = "Body", value = notification.body.ifBlank { "(empty)" })
-            DetailRow(label = "Type", value = notification.type.ifBlank { "(empty)" })
-            DetailRow(label = "Screen", value = notification.screen.ifBlank { "(empty)" })
-            DetailRow(label = "Account ID", value = notification.accountId)
-            DetailRow(label = "Device ID", value = notification.deviceId)
-            NotificationDataCard(data = notification.data)
-            if (showDecisionButtons) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Button(
-                        onClick = onDecline,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(18.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = MaterialTheme.colorScheme.onSurface,
-                        ),
-                    ) {
-                        Text("Decline")
-                    }
-                    PrimaryActionButton(
-                        text = "Accept",
-                        onClick = onAccept,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NotificationMismatchBanner(
-    message: String,
-    onDismiss: () -> Unit,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(WindowInsets.safeDrawing.asPaddingValues())
-            .padding(16.dp),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(24.dp))
-                .background(MaterialTheme.colorScheme.surface)
-                .border(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.32f), RoundedCornerShape(24.dp))
-                .padding(16.dp)
-                .clickable(onClick = onDismiss),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            StatusBanner(
-                title = "Push notification blocked",
-                message = message,
-                tone = BannerTone.Error,
-            )
-            Button(
-                onClick = onDismiss,
-                shape = RoundedCornerShape(14.dp),
-            ) {
-                Text("Dismiss")
-            }
-        }
-    }
-}
-
-@Composable
-private fun NotificationDataCard(data: Map<String, String>) {
-    Card(
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-    ) {
-        Column(
-            modifier = Modifier.padding(18.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                text = "Payload data",
-                style = MaterialTheme.typography.titleLarge,
-            )
-            if (data.isEmpty()) {
-                Text(
-                    text = "No additional key-value data arrived with this push.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            composable(AppRoute.DeviceInformation.route) {
+                DeviceInformationScreen(
+                    deviceId = appState.registrationState?.deviceId.orEmpty(),
+                    namespaceName = appState.registrationState?.namespaceName.orEmpty(),
+                    email = appState.registrationState?.email.orEmpty(),
+                    onBack = { navController.popBackStack() },
                 )
-            } else {
-                data.forEach { (key, value) ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Text(
-                            text = key,
-                            modifier = Modifier.weight(0.35f),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.primary,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = value,
-                            modifier = Modifier.weight(0.65f),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    }
-                }
+            }
+            composable(AppRoute.QrRead.route) {
+                QrReadScreen(
+                    onBack = { navController.popBackStack() },
+                    onPayloadScanned = { payload ->
+                        appViewModel.registerNewDeviceFromQr(payload)
+                        navController.popBackStack()
+                    },
+                )
             }
         }
     }
@@ -374,46 +239,79 @@ private fun SecurityScreen(
     }
 
     AppBackground {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 24.dp)
-                .padding(WindowInsets.safeDrawing.asPaddingValues()),
-            verticalArrangement = Arrangement.Center,
+                .padding(WindowInsets.safeDrawing.asPaddingValues())
+                .padding(horizontal = 20.dp, vertical = 20.dp),
         ) {
-            HeroPanel(
-                eyebrow = "Security Gate",
-                title = "Confirm this is your trusted device.",
-                body = "The app unlocks registration and stored account state only after a strong biometric or your device credential succeeds.",
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-            Surface(
-                shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 2.dp,
-                shadowElevation = 8.dp,
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 100.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Column(
-                    modifier = Modifier.padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                Text(
+                    text = "Home",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+                Card(
+                    shape = RoundedCornerShape(24.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    PillLabel(text = "Required before routing")
-                    Text(
-                        text = "Authenticate with a strong biometric or the configured device credential.",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(
-                        text = "If authentication or enrollment is unavailable, the app stays blocked and offers manual retry only.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (!errorMessage.isNullOrBlank()) {
-                        StatusBanner(
-                            title = "Authentication blocked",
-                            message = errorMessage,
-                            tone = BannerTone.Error,
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Button(
+                            onClick = {},
+                            enabled = false,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Device information")
+                        }
+                        Button(
+                            onClick = {},
+                            enabled = false,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Qr-Read")
+                        }
+                    }
+                }
+
+                Card(
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(220.dp)
+                        .border(1.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(18.dp)),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = "No active notification",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text = "Unlock ZeroIntrusion to interact with notifications.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
+                }
+
+                if (!errorMessage.isNullOrBlank()) {
+                    StatusBanner(
+                        title = "Authentication blocked",
+                        message = errorMessage,
+                        tone = BannerTone.Error,
+                    )
                     Button(
                         onClick = { promptNonce++ },
                         shape = RoundedCornerShape(16.dp),
@@ -421,6 +319,45 @@ private fun SecurityScreen(
                     ) {
                         Text("Retry Authentication")
                     }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .navigationBarsPadding(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Button(
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier
+                        .weight(1f)
+                        .border(2.dp, MaterialTheme.colorScheme.tertiary, RoundedCornerShape(12.dp)),
+                ) {
+                    Text("Allow")
+                }
+                Button(
+                    onClick = {},
+                    enabled = false,
+                    modifier = Modifier
+                        .weight(1f)
+                        .border(2.dp, MaterialTheme.colorScheme.tertiary, RoundedCornerShape(12.dp)),
+                ) {
+                    Text("Decline")
+                }
+            }
+
+            if (errorMessage.isNullOrBlank()) {
+                Button(
+                    onClick = { promptNonce++ },
+                    shape = RoundedCornerShape(16.dp),
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd),
+                ) {
+                    Text("Retry")
                 }
             }
         }
@@ -586,235 +523,6 @@ private fun LoadingScreen(message: String) {
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun HomeScreen(
-    deviceId: String,
-    namespaceName: String,
-    email: String,
-    fcmSyncState: FcmSyncUiState,
-    newDeviceRegistrationState: NewDeviceRegistrationUiState,
-    onRetryFcmSync: () -> Unit,
-    onReadQrCode: (String) -> Unit,
-    onClearNewDeviceRegistrationState: () -> Unit,
-) {
-    val context = LocalContext.current
-    val notificationManager = remember(context) { NotificationManagerCompat.from(context) }
-    val isFcmReady = fcmSyncState is FcmSyncUiState.Success
-    var isScannerOpen by rememberSaveable { mutableStateOf(false) }
-    var openScannerAfterPermissionGrant by rememberSaveable { mutableStateOf(false) }
-    var cameraPermissionGranted by rememberSaveable {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
-        )
-    }
-    var cameraPermissionError by rememberSaveable { mutableStateOf<String?>(null) }
-    var hasRequestedCameraPermission by rememberSaveable { mutableStateOf(false) }
-    var hasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
-    var notificationsEnabled by rememberSaveable { mutableStateOf(notificationManager.areNotificationsEnabled()) }
-    var notificationsPermissionGranted by rememberSaveable {
-        mutableStateOf(
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED,
-        )
-    }
-
-    val cameraPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        cameraPermissionGranted = granted
-        cameraPermissionError = if (granted) {
-            null
-        } else {
-            "Camera permission was denied, so QR scanning is unavailable."
-        }
-        if (granted && openScannerAfterPermissionGrant) {
-            isScannerOpen = true
-        }
-        if (!granted) {
-            openScannerAfterPermissionGrant = false
-        }
-    }
-
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        notificationsPermissionGranted = granted
-        notificationsEnabled = notificationManager.areNotificationsEnabled()
-    }
-
-    LaunchedEffect(Unit) {
-        if (!cameraPermissionGranted && !hasRequestedCameraPermission) {
-            hasRequestedCameraPermission = true
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-
-        if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            !notificationsPermissionGranted &&
-            !hasRequestedNotificationPermission
-        ) {
-            hasRequestedNotificationPermission = true
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-
-        notificationsEnabled = notificationManager.areNotificationsEnabled()
-    }
-
-    LaunchedEffect(cameraPermissionGranted) {
-        if (!cameraPermissionGranted) {
-            isScannerOpen = false
-        }
-    }
-
-    LaunchedEffect(notificationsPermissionGranted) {
-        notificationsEnabled = notificationManager.areNotificationsEnabled()
-    }
-
-    AppBackground {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(WindowInsets.safeDrawing.asPaddingValues())
-                .padding(20.dp),
-            verticalArrangement = Arrangement.Top,
-        ) {
-            HeroPanel(
-                eyebrow = if (isFcmReady) "Registered + FCM Ready" else "Registered",
-                title = if (isFcmReady) "Channel Active" else "Device Registered",
-                body = if (isFcmReady) {
-                    "The device is registered"
-                } else {
-                    "The primary device registration state is present and routed past the security gate."
-                },
-            )
-            Spacer(modifier = Modifier.height(18.dp))
-            Card(
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
-            ) {
-                Column(
-                    modifier = Modifier.padding(22.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                ) {
-                    StatusBanner(
-                        title = if (isFcmReady) "Registration and FCM active" else "Registration active",
-                        message = if (isFcmReady) {
-                            "Stored account state is available and the device is ready to receive push-targeted backend events."
-                        } else {
-                            "Stored account state is available and the device can continue from the registered flow."
-                        },
-                        tone = BannerTone.Success,
-                    )
-                    if (isFcmReady) {
-                        StatusBanner(
-                            title = "New view unlocked",
-                            message = "This screen is shown only after successful registration and a valid FCM token sync.",
-                            tone = BannerTone.Info,
-                        )
-                    }
-                    if (!notificationsEnabled || !notificationsPermissionGranted) {
-                        StatusBanner(
-                            title = "Notifications disabled",
-                            message = "Push alerts may not appear while the app is in background. Enable app notifications in Android settings and allow notification permission.",
-                            tone = BannerTone.Error,
-                        )
-                        Button(
-                            onClick = {
-                                notificationsEnabled = notificationManager.areNotificationsEnabled()
-                                if (
-                                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-                                    !notificationsPermissionGranted
-                                ) {
-                                    hasRequestedNotificationPermission = true
-                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                } else {
-                                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                    }
-                                    context.startActivity(intent)
-                                }
-                            },
-                            shape = RoundedCornerShape(18.dp),
-                        ) {
-                            Text("Enable notifications")
-                        }
-                    }
-                    FcmStatusCard(
-                        fcmSyncState = fcmSyncState,
-                        onRetryFcmSync = onRetryFcmSync,
-                    )
-                    StatusBanner(
-                        title = "Read registration QR",
-                        message = "Scan the target device QR code to create and submit a NewDeviceRegistrationDto to the backend root-device endpoint.",
-                        tone = BannerTone.Info,
-                    )
-                    Button(
-                        onClick = {
-                            onClearNewDeviceRegistrationState()
-                            if (cameraPermissionGranted) {
-                                cameraPermissionError = null
-                                openScannerAfterPermissionGrant = false
-                                isScannerOpen = true
-                            } else {
-                                openScannerAfterPermissionGrant = true
-                                hasRequestedCameraPermission = true
-                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                            }
-                        },
-                        shape = RoundedCornerShape(18.dp),
-                    ) {
-                        Text("Read QR Code")
-                    }
-                    cameraPermissionError?.let { message ->
-                        StatusBanner(
-                            title = "Camera access required",
-                            message = message,
-                            tone = BannerTone.Error,
-                        )
-                    }
-                    when (newDeviceRegistrationState) {
-                        NewDeviceRegistrationUiState.Idle -> Unit
-                        NewDeviceRegistrationUiState.InProgress -> StatusBanner(
-                            title = "Registering scanned device",
-                            message = "The app is fetching the root device DEK, decrypting it locally, re-encrypting it for the scanned public key, and sending the DTO to the backend.",
-                            tone = BannerTone.Info,
-                        )
-                        is NewDeviceRegistrationUiState.Success -> StatusBanner(
-                            title = "New device registered",
-                            message = "The QR flow completed successfully for device ${newDeviceRegistrationState.deviceId}.",
-                            tone = BannerTone.Success,
-                        )
-                        is NewDeviceRegistrationUiState.Error -> StatusBanner(
-                            title = "QR registration failed",
-                            message = newDeviceRegistrationState.message,
-                            tone = BannerTone.Error,
-                        )
-                    }
-                    DetailRow(label = "Device ID", value = deviceId)
-                    DetailRow(label = "Namespace", value = namespaceName)
-                    DetailRow(label = "Email", value = email)
-                }
-            }
-        }
-
-        if (isScannerOpen) {
-            QrScannerSheet(
-                onDismiss = { isScannerOpen = false },
-                onPayloadScanned = { payload ->
-                    isScannerOpen = false
-                    onReadQrCode(payload)
-                },
-                onScannerError = { message ->
-                    isScannerOpen = false
-                    cameraPermissionError = message
-                },
-            )
         }
     }
 }
