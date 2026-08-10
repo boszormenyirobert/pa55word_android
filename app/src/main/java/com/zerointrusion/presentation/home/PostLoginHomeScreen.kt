@@ -49,11 +49,11 @@ import com.zerointrusion.domain.BackendPushNotification
 import com.zerointrusion.presentation.NewDeviceRegistrationUiState
 import com.zerointrusion.ui.theme.Blue
 import com.zerointrusion.ui.theme.Dark
-import com.zerointrusion.ui.theme.ErrorColor
+import com.zerointrusion.ui.theme.ActionDeclineRed
 import com.zerointrusion.ui.theme.ErrorTextLight
-import com.zerointrusion.ui.theme.Green
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
+import com.zerointrusion.ui.theme.Yellow
 
 @Composable
 fun PostLoginHomeScreen(
@@ -296,12 +296,7 @@ fun PostLoginHomeScreen(
                 onClick = onAllowNotification,
                 modifier = Modifier.weight(1f),
                 enabled = hasNotification,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Green,
-                    contentColor = White,
-                    disabledContainerColor = Green.copy(alpha = 0.45f),
-                    disabledContentColor = White.copy(alpha = 0.8f),
-                ),
+                border = if (hasNotification) BorderStroke(2.dp, Yellow) else null,
             ) {
                 Text("Allow")
             }
@@ -309,10 +304,11 @@ fun PostLoginHomeScreen(
                 onClick = onDeclineNotification,
                 modifier = Modifier.weight(1f),
                 enabled = hasNotification,
+                border = if (hasNotification) BorderStroke(2.dp, Yellow) else null,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = ErrorColor,
+                    containerColor = ActionDeclineRed,
                     contentColor = White,
-                    disabledContainerColor = ErrorColor.copy(alpha = 0.45f),
+                    disabledContainerColor = ActionDeclineRed.copy(alpha = 0.45f),
                     disabledContentColor = White.copy(alpha = 0.8f),
                 ),
             ) {
