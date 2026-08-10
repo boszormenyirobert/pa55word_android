@@ -27,10 +27,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -49,10 +49,11 @@ import com.zerointrusion.domain.BackendPushNotification
 import com.zerointrusion.presentation.NewDeviceRegistrationUiState
 import com.zerointrusion.ui.theme.Blue
 import com.zerointrusion.ui.theme.Dark
+import com.zerointrusion.ui.theme.ErrorColor
 import com.zerointrusion.ui.theme.ErrorTextLight
+import com.zerointrusion.ui.theme.Green
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
-import com.zerointrusion.ui.theme.Yellow
 
 @Composable
 fun PostLoginHomeScreen(
@@ -291,21 +292,31 @@ fun PostLoginHomeScreen(
                 .padding(horizontal = 20.dp, vertical = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedButton(
+            Button(
                 onClick = onAllowNotification,
                 modifier = Modifier.weight(1f),
-                border = BorderStroke(2.dp, Yellow),
                 enabled = hasNotification,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Green,
+                    contentColor = White,
+                    disabledContainerColor = Green.copy(alpha = 0.45f),
+                    disabledContentColor = White.copy(alpha = 0.8f),
+                ),
             ) {
-                Text("Allow", color = White)
+                Text("Allow")
             }
-            OutlinedButton(
+            Button(
                 onClick = onDeclineNotification,
                 modifier = Modifier.weight(1f),
-                border = BorderStroke(2.dp, Yellow),
                 enabled = hasNotification,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ErrorColor,
+                    contentColor = White,
+                    disabledContainerColor = ErrorColor.copy(alpha = 0.45f),
+                    disabledContentColor = White.copy(alpha = 0.8f),
+                ),
             ) {
-                Text("Decline", color = White)
+                Text("Decline")
             }
         }
     }
@@ -374,11 +385,14 @@ private fun NotificationStateBox(
                     color = ErrorTextLight,
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                OutlinedButton(
+                Button(
                     onClick = onDismissNotificationError,
-                    border = BorderStroke(2.dp, Yellow),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = LightDark,
+                        contentColor = White,
+                    ),
                 ) {
-                    Text("Dismiss", color = White)
+                    Text("Dismiss")
                 }
             }
         }

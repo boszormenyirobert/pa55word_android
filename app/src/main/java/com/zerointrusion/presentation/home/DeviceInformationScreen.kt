@@ -30,6 +30,7 @@ import com.zerointrusion.ui.theme.Yellow
 
 @Composable
 fun DeviceInformationScreen(
+    accountId: String,
     deviceId: String,
     namespaceName: String,
     email: String,
@@ -51,6 +52,11 @@ fun DeviceInformationScreen(
         Text(
             text = "Device information",
             style = MaterialTheme.typography.headlineMedium,
+            color = White,
+        )
+        Text(
+            text = "Account ID: ${accountId.ifBlank { "(empty)" }}",
+            style = MaterialTheme.typography.bodyMedium,
             color = White,
         )
 

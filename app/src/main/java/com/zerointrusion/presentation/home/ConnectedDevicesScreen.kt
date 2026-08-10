@@ -34,6 +34,7 @@ import com.zerointrusion.ui.theme.Yellow
 
 @Composable
 fun ConnectedDevicesScreen(
+    accountId: String,
     state: ConnectedDevicesUiState,
     onRetry: () -> Unit,
     onBack: () -> Unit,
@@ -53,6 +54,11 @@ fun ConnectedDevicesScreen(
         Text(
             text = "Connected devices",
             style = MaterialTheme.typography.headlineMedium,
+            color = White,
+        )
+        Text(
+            text = "Account ID: ${accountId.ifBlank { "(empty)" }}",
+            style = MaterialTheme.typography.bodyMedium,
             color = White,
         )
 

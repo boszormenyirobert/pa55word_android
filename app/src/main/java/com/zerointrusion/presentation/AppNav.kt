@@ -174,6 +174,7 @@ fun ZeroIntrusionAppRoot(
             }
             composable(AppRoute.DeviceInformation.route) {
                 DeviceInformationScreen(
+                    accountId = appState.registrationState?.accountId.orEmpty(),
                     deviceId = appState.registrationState?.deviceId.orEmpty(),
                     namespaceName = appState.registrationState?.namespaceName.orEmpty(),
                     email = appState.registrationState?.email.orEmpty(),
@@ -194,6 +195,7 @@ fun ZeroIntrusionAppRoot(
                     appViewModel.loadConnectedDevices()
                 }
                 ConnectedDevicesScreen(
+                    accountId = appState.registrationState?.accountId.orEmpty(),
                     state = appState.connectedDevicesState,
                     onRetry = appViewModel::loadConnectedDevices,
                     onBack = { navController.popBackStack() },
