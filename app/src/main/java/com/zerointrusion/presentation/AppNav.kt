@@ -75,6 +75,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.zerointrusion.domain.NotificationDecision
+import com.zerointrusion.presentation.home.ConnectedDevicesScreen
 import com.zerointrusion.presentation.home.DeviceInformationScreen
 import com.zerointrusion.presentation.home.PostLoginHomeScreen
 import com.zerointrusion.presentation.home.QrReadScreen
@@ -86,6 +87,7 @@ sealed class AppRoute(val route: String) {
     data object Home : AppRoute("home")
     data object DeviceInformation : AppRoute("device-information")
     data object QrRead : AppRoute("qr-read")
+    data object ConnectedDevices : AppRoute("connected-devices")
 }
 
 @Composable
@@ -157,6 +159,9 @@ fun ZeroIntrusionAppRoot(
                     onOpenQrRead = {
                         navController.navigate(AppRoute.QrRead.route)
                     },
+                    onOpenConnectedDevices = {
+                        navController.navigate(AppRoute.ConnectedDevices.route)
+                    },
                     onClearNewDeviceRegistrationState = appViewModel::clearNewDeviceRegistrationState,
                     onAllowNotification = {
                         appViewModel.onNotificationDecision(NotificationDecision.Accept)
@@ -182,6 +187,16 @@ fun ZeroIntrusionAppRoot(
                         appViewModel.registerNewDeviceFromQr(payload)
                         navController.popBackStack()
                     },
+                )
+            }
+            composable(AppRoute.ConnectedDevices.route) {
+                LaunchedEffect(Unit) {
+                    appViewModel.loadConnectedDevices()
+                }
+                ConnectedDevicesScreen(
+                    state = appState.connectedDevicesState,
+                    onRetry = appViewModel::loadConnectedDevices,
+                    onBack = { navController.popBackStack() },
                 )
             }
         }

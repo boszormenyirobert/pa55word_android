@@ -6,6 +6,7 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Url
+import okhttp3.ResponseBody
 
 data class NamespaceDto(
     val namespaceId: String,
@@ -102,4 +103,10 @@ interface RegistrationApi {
         @Header("X-Signature") signature: String,
         @Body request: AuthenticationResponseRequestDto,
     ): Response<Unit>
+
+    @GET
+    suspend fun getAccountDetails(
+        @Url url: String,
+        @Header("X-Signature") signature: String,
+    ): Response<ResponseBody>
 }

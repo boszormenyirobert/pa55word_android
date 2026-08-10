@@ -49,6 +49,7 @@ import com.zerointrusion.domain.BackendPushNotification
 import com.zerointrusion.presentation.NewDeviceRegistrationUiState
 import com.zerointrusion.ui.theme.Blue
 import com.zerointrusion.ui.theme.Dark
+import com.zerointrusion.ui.theme.ErrorTextLight
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
 import com.zerointrusion.ui.theme.Yellow
@@ -63,6 +64,7 @@ fun PostLoginHomeScreen(
     newDeviceRegistrationState: NewDeviceRegistrationUiState,
     onOpenDeviceInformation: () -> Unit,
     onOpenQrRead: () -> Unit,
+    onOpenConnectedDevices: () -> Unit,
     onClearNewDeviceRegistrationState: () -> Unit,
     onAllowNotification: () -> Unit,
     onDeclineNotification: () -> Unit,
@@ -236,6 +238,13 @@ fun PostLoginHomeScreen(
                     ) {
                         Text("Qr-Read")
                     }
+
+                    Button(
+                        onClick = onOpenConnectedDevices,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Connected devices")
+                    }
                 }
             }
 
@@ -243,7 +252,7 @@ fun PostLoginHomeScreen(
                 Text(
                     text = message,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
+                    color = ErrorTextLight,
                 )
             }
 
@@ -259,7 +268,7 @@ fun PostLoginHomeScreen(
                 )
                 is NewDeviceRegistrationUiState.Error -> Text(
                     text = newDeviceRegistrationState.message,
-                    color = MaterialTheme.colorScheme.error,
+                    color = ErrorTextLight,
                 )
             }
 
@@ -362,7 +371,7 @@ private fun NotificationStateBox(
             if (!notificationError.isNullOrBlank()) {
                 Text(
                     text = notificationError,
-                    color = MaterialTheme.colorScheme.error,
+                    color = ErrorTextLight,
                     style = MaterialTheme.typography.bodyMedium,
                 )
                 OutlinedButton(

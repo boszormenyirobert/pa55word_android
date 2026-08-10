@@ -55,6 +55,7 @@ class DefaultRegistrationRepository @Inject constructor(
     private companion object {
         const val QR_LOG_TAG = "ZeroIntrusionQr"
         const val REG_LOG_TAG = "ZeroIntrusionRegistration"
+        const val ACCOUNT_LOG_TAG = "ZeroIntrusionAccount"
     }
 
     private data class RawQrRegistrationPayload(
@@ -334,6 +335,62 @@ class DefaultRegistrationRepository @Inject constructor(
         dto
     }
 
+    override suspend fun fetchConnectedDevices(): String = withContext(Dispatchers.IO) {
+        val registrationState = stateStore.observeState().first()
+            ?: throw RegistrationFailure.Validation("No registered account is stored on this device.")
+
+        if (registrationState.accountId.isBlank()) {
+            throw RegistrationFailure.Validation("The stored registration state does not contain a valid accountId.")
+        }
+        if (registrationState.deviceId.isBlank()) {
+            throw RegistrationFailure.Validation("The stored registration state does not contain a valid deviceId.")
+        }
+
+        val requestUrl = buildConnectedDevicesUrl(
+            baseUrl = registrationState.namespaceUrl,
+            accountId = registrationState.accountId,
+            deviceId = registrationState.deviceId,
+        )
+        val signaturePayload = RootDeviceFetchSignaturePayload(
+            accountId = registrationState.accountId,
+            deviceId = registrationState.deviceId,
+        )
+        val signaturePayloadJson = gson.toJson(signaturePayload)
+        val signature = signatureService.signJsonString(signaturePayloadJson)
+
+        Log.d(ACCOUNT_LOG_TAG, "ACCOUNT details fetch start. url=$requestUrl")
+        val response = try {
+            registrationApi.getAccountDetails(
+                url = requestUrl,
+                signature = signature,
+            )
+        } catch (exception: Exception) {
+            Log.e(ACCOUNT_LOG_TAG, "ACCOUNT details fetch failed before HTTP response. url=$requestUrl", exception)
+            throw mapNetworkException(requestUrl, exception)
+        }
+
+        if (!response.isSuccessful) {
+            val errorBody = response.errorBody()?.string()
+            Log.e(ACCOUNT_LOG_TAG, "ACCOUNT details fetch failed. http=${response.code()} url=$requestUrl")
+            throw RegistrationFailure.Server(
+                errorBody ?: "Request failed with HTTP ${response.code()} at $requestUrl.",
+            )
+        }
+
+        val body = response.body()?.string()?.trim().orEmpty()
+        if (body.isEmpty()) {
+            throw RegistrationFailure.Server("The backend returned an empty account response from $requestUrl.")
+        }
+
+        runCatching {
+            gson.fromJson(body, Any::class.java)
+        }.onSuccess { parsed ->
+            return@withContext gson.toJson(parsed)
+        }
+
+        body
+    }
+
     private fun decryptRootDeviceDek(
         fetchedEncDek: String,
         storedEncDek: String?,
@@ -403,6 +460,13 @@ class DefaultRegistrationRepository @Inject constructor(
 
     private fun buildRootDeviceRegistrationUrl(baseUrl: String): String =
         baseUrl.trim().trimEnd('/') + AppConstants.ROOT_DEVICE_ENDPOINT_PATH
+
+    private fun buildConnectedDevicesUrl(
+        baseUrl: String,
+        accountId: String,
+        deviceId: String,
+    ): String = baseUrl.trim().trimEnd('/') +
+        AppConstants.REGISTRATION_ENDPOINT_PATH + "/" + accountId.trim() + "/" + deviceId.trim()
 
     private fun parseQrPayload(qrPayload: String): QrRegistrationPayload {
         val trimmedPayload = qrPayload.trim()

@@ -33,6 +33,13 @@ sealed class NewDeviceRegistrationUiState {
     data class Error(val message: String) : NewDeviceRegistrationUiState()
 }
 
+sealed class ConnectedDevicesUiState {
+    data object Idle : ConnectedDevicesUiState()
+    data object InProgress : ConnectedDevicesUiState()
+    data class Success(val responseBody: String) : ConnectedDevicesUiState()
+    data class Error(val message: String) : ConnectedDevicesUiState()
+}
+
 data class NotificationOverlayUiState(
     val notification: BackendPushNotification? = null,
     val mismatchError: String? = null,
@@ -49,6 +56,7 @@ data class AppUiState(
     val authenticationError: String? = null,
     val fcmSyncState: FcmSyncUiState = FcmSyncUiState.Idle,
     val newDeviceRegistrationState: NewDeviceRegistrationUiState = NewDeviceRegistrationUiState.Idle,
+    val connectedDevicesState: ConnectedDevicesUiState = ConnectedDevicesUiState.Idle,
     val notificationOverlay: NotificationOverlayUiState = NotificationOverlayUiState(),
 ) {
     val currentRoute: String
@@ -145,6 +153,30 @@ class AppViewModel @Inject constructor(
 
     fun clearNewDeviceRegistrationState() {
         _uiState.update { it.copy(newDeviceRegistrationState = NewDeviceRegistrationUiState.Idle) }
+    }
+
+    fun loadConnectedDevices() {
+        if (_uiState.value.connectedDevicesState is ConnectedDevicesUiState.InProgress) {
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(connectedDevicesState = ConnectedDevicesUiState.InProgress) }
+            runCatching { registrationRepository.fetchConnectedDevices() }
+                .onSuccess { responseBody ->
+                    _uiState.update {
+                        it.copy(connectedDevicesState = ConnectedDevicesUiState.Success(responseBody))
+                    }
+                }
+                .onFailure { throwable ->
+                    val message = (throwable as? RegistrationFailure)?.message
+                        ?: throwable.message
+                        ?: "Connected devices fetch failed."
+                    _uiState.update {
+                        it.copy(connectedDevicesState = ConnectedDevicesUiState.Error(message))
+                    }
+                }
+        }
     }
 
     fun registerNewDeviceFromQr(qrPayload: String) {

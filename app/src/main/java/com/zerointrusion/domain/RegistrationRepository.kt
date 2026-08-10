@@ -18,4 +18,6 @@ interface RegistrationRepository {
         deviceId: String,
         approved: Boolean,
     )
+
+    suspend fun fetchConnectedDevices(): String
 }
