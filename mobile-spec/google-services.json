@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "561286686541",
+    "project_id": "zerointrusionlock",
+    "storage_bucket": "zerointrusionlock.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:561286686541:android:eedfd1e0f275e6fcdfb904",
+        "android_client_info": {
+          "package_name": "com.zerointrusion"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAwZXKyzRlWXiMs-UsCArsnJbxS0SbsQoM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

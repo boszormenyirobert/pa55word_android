@@ -1,0 +1,105 @@
+package com.zerointrusion.data.network
+
+import retrofit2.Response
+import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.Header
+import retrofit2.http.POST
+import retrofit2.http.Url
+
+data class NamespaceDto(
+    val namespaceId: String,
+    val name: String,
+    val url: String,
+)
+
+data class DeviceDto(
+    val deviceId: String,
+    val publicKey: String,
+    val deviceIdAdditional: String? = null,
+)
+
+data class DekDto(
+    val deviceId: String,
+    val encDek: String,
+)
+
+data class NewDeviceRegistrationDto(
+    val accountId: String,
+    val device: DeviceDto,
+    val dek: DekDto,
+)
+
+data class RootDeviceDekResponseDto(
+    val id: Long?,
+    val accountId: String?,
+    val deviceId: String?,
+    val encDek: String?,
+)
+
+data class AccountRegistrationRequestDto(
+    val namespace: NamespaceDto,
+    val device: DeviceDto,
+    val dek: DekDto,
+    val email: String,
+    val phone: String,
+)
+
+data class AccountRegistrationResponseDto(
+    val success: Boolean,
+    val accountId: String?,
+)
+
+data class AccountErrorResponseDto(
+    val error: Int?,
+    val message: String?,
+    val internalCode: String?,
+)
+
+data class FcmRegistrationRequestDto(
+    val accountId: String,
+    val deviceId: String,
+    val fcmToken: String,
+)
+
+data class AuthenticationResponseRequestDto(
+    val notificationId: String,
+    val accountId: String,
+    val deviceId: String,
+    val approved: Boolean,
+)
+
+interface RegistrationApi {
+    @POST
+    suspend fun registerAccount(
+        @Url url: String,
+        @Body request: AccountRegistrationRequestDto,
+    ): Response<AccountRegistrationResponseDto>
+
+    @POST
+    suspend fun registerFcmToken(
+        @Url url: String,
+        @Header("X-Signature") signature: String,
+        @Body request: FcmRegistrationRequestDto,
+    ): Response<Unit>
+
+    @GET
+    suspend fun fetchRootDeviceDek(
+        @Url url: String,
+        @Header("X-Signature") signature: String,
+    ): Response<RootDeviceDekResponseDto>
+
+    @POST
+    suspend fun registerNewDevice(
+        @Url url: String,
+        @Header("X-Signature") signature: String,
+        @Body request: NewDeviceRegistrationDto,
+    ): Response<Unit>
+
+    @POST
+    suspend fun sendAuthenticationResponse(
+        @Url url: String,
+        @Header("X-Signature") signature: String,
+        @Body request: AuthenticationResponseRequestDto,
+    ): Response<Unit>
+}

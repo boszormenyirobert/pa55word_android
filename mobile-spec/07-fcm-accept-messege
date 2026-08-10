@@ -1,0 +1,14 @@
+Implement Android push notification receiving in the existing Kotlin app based on mobile-spec/06-notification-receiving-and-response.md.
+
+Requirements:
+- Use FirebaseMessagingService
+- Normalize incoming payloads into a domain model
+- Treat the actual Firebase-delivered notification payload as the source of truth
+- Show a dedicated Compose screen above the current UI for pushes coming from this backend
+- Before navigating, compare notification `accountId` and `deviceId` with the mobile app's persisted `accountId` and `deviceId`
+- Only on exact match may the app show the dedicated screen
+- On mismatch, the app must show an error and keep the original screen visible
+- The screen must show incoming notification title, body, `type`, `screen`, `accountId`, `deviceId`, and received key-value data, plus Accept / Decline buttons
+- Foreground, background tap, and cold-start tap must all route to the same screen
+- Keep parsing, routing, and UI separated by architecture layer
+- Follow the existing app architecture: MVVM, Clean Architecture, Hilt, Flow, Navigation Compose

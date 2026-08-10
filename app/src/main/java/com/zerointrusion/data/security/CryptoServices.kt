@@ -1,0 +1,434 @@
+package com.zerointrusion.data.security
+
+import android.content.Context
+import android.os.Build
+import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyProperties
+import android.util.Base64
+import android.util.Log
+import com.google.gson.Gson
+import com.google.gson.JsonArray
+import com.google.gson.JsonElement
+import com.google.gson.JsonNull
+import com.google.gson.JsonObject
+import com.google.gson.JsonPrimitive
+import com.zerointrusion.core.AppConstants
+import com.zerointrusion.domain.DekPayload
+import com.zerointrusion.domain.Device
+import com.zerointrusion.domain.Namespace
+import com.zerointrusion.domain.RegistrationFailure
+import com.zerointrusion.domain.RegistrationPayload
+import java.nio.charset.StandardCharsets
+import java.security.KeyFactory
+import java.security.KeyPairGenerator
+import java.security.KeyStore
+import java.security.MessageDigest
+import java.security.ProviderException
+import java.security.PrivateKey
+import java.security.PublicKey
+import java.security.SecureRandom
+import java.security.Signature
+import java.security.spec.MGF1ParameterSpec
+import java.security.spec.X509EncodedKeySpec
+import javax.crypto.Cipher
+import javax.crypto.spec.OAEPParameterSpec
+import javax.crypto.spec.PSource
+import javax.inject.Inject
+import javax.inject.Singleton
+
+interface KeyStoreService {
+    fun ensureKeyPair()
+    fun getPublicKey(): PublicKey
+    fun sign(data: ByteArray): ByteArray
+    fun decrypt(
+        data: ByteArray,
+        transformation: String = "RSA/ECB/OAEPWithSHA-1AndMGF1Padding",
+        oaepSpec: OAEPParameterSpec? = null,
+    ): ByteArray
+}
+
+interface DeviceService {
+    fun createDevice(publicKey: PublicKey): Device
+}
+
+interface NamespaceService {
+    fun createNamespace(name: String, url: String): Namespace
+}
+
+interface DekService {
+    fun createEncryptedDek(publicKey: PublicKey, deviceId: String): DekPayload
+
+    fun decryptDek(encDek: String): ByteArray
+
+    fun encryptDek(rawDek: ByteArray, encodedPublicKey: String): String
+}
+
+interface SignatureService {
+    fun signPayload(payload: RegistrationPayload): String
+    fun signJsonString(json: String): String
+}
+
+@Singleton
+class AndroidKeyStoreService @Inject constructor(
+    private val context: Context,
+) : KeyStoreService {
+    override fun ensureKeyPair() {
+        val keyStore = loadKeyStore()
+        if (keyStore.containsAlias(AppConstants.KEYSTORE_ALIAS)) {
+            return
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && hasStrongBox()) {
+            runCatching { generateKeyPair(useStrongBox = true) }
+                .onSuccess { return }
+        }
+
+        generateKeyPair(useStrongBox = false)
+    }
+
+    override fun getPublicKey(): PublicKey {
+        ensureKeyPair()
+        return loadKeyStore().getCertificate(AppConstants.KEYSTORE_ALIAS)?.publicKey
+            ?: throw RegistrationFailure.Security("Unable to read the generated device key.")
+    }
+
+    override fun sign(data: ByteArray): ByteArray {
+        ensureKeyPair()
+        val privateKey = getPrivateKey()
+
+        return Signature.getInstance("SHA1withRSA").run {
+            initSign(privateKey)
+            update(data)
+            sign()
+        }
+    }
+
+    override fun decrypt(
+        data: ByteArray,
+        transformation: String,
+        oaepSpec: OAEPParameterSpec?,
+    ): ByteArray {
+        ensureKeyPair()
+        return Cipher.getInstance(transformation).run {
+            if (oaepSpec != null) {
+                init(Cipher.DECRYPT_MODE, getPrivateKey(), oaepSpec)
+            } else {
+                init(Cipher.DECRYPT_MODE, getPrivateKey())
+            }
+            doFinal(data)
+        }
+    }
+
+    private fun loadKeyStore(): KeyStore = KeyStore.getInstance(ANDROID_KEY_STORE).apply {
+        load(null)
+    }
+
+    private fun generateKeyPair(useStrongBox: Boolean) {
+        try {
+            val generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, ANDROID_KEY_STORE)
+            val builder = KeyGenParameterSpec.Builder(
+                AppConstants.KEYSTORE_ALIAS,
+                KeyProperties.PURPOSE_SIGN or
+                    KeyProperties.PURPOSE_VERIFY or
+                    KeyProperties.PURPOSE_ENCRYPT or
+                    KeyProperties.PURPOSE_DECRYPT,
+            )
+                .setKeySize(2048)
+                .setDigests(KeyProperties.DIGEST_SHA1, KeyProperties.DIGEST_SHA512)
+                .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_OAEP)
+                .setUserAuthenticationRequired(false)
+
+            if (useStrongBox && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                builder.setIsStrongBoxBacked(true)
+            }
+
+            generator.initialize(builder.build())
+            generator.generateKeyPair()
+        } catch (exception: ProviderException) {
+            if (useStrongBox) {
+                throw RegistrationFailure.Security("StrongBox generation failed; falling back to Keystore.")
+            }
+            throw RegistrationFailure.Security("Unable to generate the device keypair.")
+        } catch (exception: Exception) {
+            if (useStrongBox) {
+                throw RegistrationFailure.Security("StrongBox generation failed; falling back to Keystore.")
+            }
+            throw RegistrationFailure.Security("Unable to generate the device keypair.")
+        }
+    }
+
+    private fun hasStrongBox(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+            context.packageManager.hasSystemFeature("android.hardware.strongbox_keystore")
+
+    private fun getPrivateKey(): PrivateKey =
+        loadKeyStore().getKey(AppConstants.KEYSTORE_ALIAS, null) as? PrivateKey
+            ?: throw RegistrationFailure.Security("Unable to access the device private key.")
+
+    private companion object {
+        const val ANDROID_KEY_STORE = "AndroidKeyStore"
+    }
+}
+
+@Singleton
+class DefaultDeviceService @Inject constructor() : DeviceService {
+    private val secureRandom = SecureRandom()
+    private val deviceAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+
+    override fun createDevice(publicKey: PublicKey): Device {
+        val encodedKey = Base64.encodeToString(publicKey.encoded, Base64.NO_WRAP)
+        val deviceId = buildString(10) {
+            repeat(10) {
+                append(deviceAlphabet[secureRandom.nextInt(deviceAlphabet.length)])
+            }
+        }
+
+        return Device(deviceId = deviceId, publicKey = encodedKey)
+    }
+}
+
+@Singleton
+class DefaultNamespaceService @Inject constructor() : NamespaceService {
+    override fun createNamespace(name: String, url: String): Namespace {
+        val normalizedName = name.trim()
+        val normalizedUrl = url.trim().trimEnd('/')
+        // The spec requires local namespaceId generation but does not define the source,
+        // so v1 derives it deterministically from the normalized namespace name and base URL.
+        val seed = "$normalizedName|$normalizedUrl"
+        val digest = MessageDigest.getInstance("SHA-256").digest(seed.toByteArray(StandardCharsets.UTF_8))
+        val namespaceId = digest.joinToString(separator = "") { "%02x".format(it) }
+
+        return Namespace(
+            namespaceId = namespaceId,
+            name = normalizedName,
+            url = normalizedUrl,
+        )
+    }
+}
+
+@Singleton
+class DefaultDekService @Inject constructor(
+    private val keyStoreService: KeyStoreService,
+) : DekService {
+    private companion object {
+        const val DEK_LOG_TAG = "ZeroIntrusionQr"
+        const val OAEP_SHA1_TRANSFORMATION = "RSA/ECB/OAEPWithSHA-1AndMGF1Padding"
+
+        val OAEP_PROBE_ORDER = listOf(OaepCompatibilityMode.ExplicitSha1Mgf1Sha1)
+    }
+
+    private enum class OaepCompatibilityMode {
+        ExplicitSha1Mgf1Sha1
+    }
+
+    private val secureRandom = SecureRandom()
+    private val oaepSpecSha1Mgf1Sha1 = OAEPParameterSpec(
+        "SHA-1",
+        "MGF1",
+        MGF1ParameterSpec.SHA1,
+        PSource.PSpecified.DEFAULT,
+    )
+    @Volatile
+    private var resolvedOaepMode: OaepCompatibilityMode? = null
+
+    override fun createEncryptedDek(publicKey: PublicKey, deviceId: String): DekPayload {
+        val rawDek = ByteArray(32).also(secureRandom::nextBytes)
+        val mode = resolveOaepCompatibilityMode()
+        val encrypted = encryptWithMode(rawDek, publicKey, mode)
+
+        return DekPayload(
+            deviceId = deviceId,
+            encDek = Base64.encodeToString(encrypted, Base64.NO_WRAP),
+        )
+    }
+
+    override fun decryptDek(encDek: String): ByteArray {
+        Log.d(DEK_LOG_TAG, "DEK decrypt start. encDekLength=${encDek.length}")
+        val encrypted = decodeBase64(
+            encDek,
+            "The encrypted DEK returned by the backend is not valid Base64.",
+        )
+        val preferredMode = resolvedOaepMode ?: resolveOaepCompatibilityMode()
+        val candidateModes = listOf(preferredMode) + OAEP_PROBE_ORDER.filterNot { it == preferredMode }
+
+        candidateModes.forEach { mode ->
+            runCatching {
+                decryptWithMode(encrypted, mode)
+            }.onSuccess { rawDek ->
+                resolvedOaepMode = mode
+                Log.d(DEK_LOG_TAG, "DEK decrypt success. mode=$mode rawDekSize=${rawDek.size}")
+                return rawDek
+            }.onFailure { failure ->
+                Log.w(DEK_LOG_TAG, "DEK decrypt failed in mode=$mode: ${failure.message}")
+            }
+        }
+
+        Log.e(DEK_LOG_TAG, "DEK decrypt failed with all supported OAEP compatibility modes.")
+        throw RegistrationFailure.Security("Unable to decrypt the stored DEK with the device private key.")
+    }
+
+    override fun encryptDek(rawDek: ByteArray, encodedPublicKey: String): String {
+        Log.d(DEK_LOG_TAG, "DEK re-encrypt start. rawDekSize=${rawDek.size}, publicKeyLength=${encodedPublicKey.length}")
+        val publicKey = parsePublicKey(encodedPublicKey)
+        val mode = resolveOaepCompatibilityMode()
+        val encrypted = try {
+            encryptWithMode(rawDek, publicKey, mode)
+        } catch (failure: RegistrationFailure) {
+            Log.e(DEK_LOG_TAG, "DEK re-encrypt failed with registration error: ${failure.message}", failure)
+            throw failure
+        } catch (_: Exception) {
+            Log.e(DEK_LOG_TAG, "DEK re-encrypt failed for scanned device public key.")
+            throw RegistrationFailure.Security("Unable to encrypt the DEK for the scanned device public key.")
+        }
+
+        return Base64.encodeToString(encrypted, Base64.NO_WRAP).also { encodedDek ->
+            Log.d(DEK_LOG_TAG, "DEK re-encrypt success. mode=$mode encDekLength=${encodedDek.length}")
+        }
+    }
+
+    private fun resolveOaepCompatibilityMode(): OaepCompatibilityMode {
+        resolvedOaepMode?.let { return it }
+
+        val probePublicKey = keyStoreService.getPublicKey()
+        val probeDek = ByteArray(32).also(secureRandom::nextBytes)
+
+        OAEP_PROBE_ORDER.forEach { mode ->
+            val encrypted = runCatching { encryptWithMode(probeDek, probePublicKey, mode) }
+                .getOrElse { failure ->
+                    Log.w(DEK_LOG_TAG, "DEK OAEP probe encrypt failed for mode=$mode: ${failure.message}")
+                    return@forEach
+                }
+
+            val decrypted = runCatching { decryptWithMode(encrypted, mode) }
+                .getOrElse { failure ->
+                    Log.w(DEK_LOG_TAG, "DEK OAEP probe decrypt failed for mode=$mode: ${failure.message}")
+                    return@forEach
+                }
+
+            if (decrypted.contentEquals(probeDek)) {
+                resolvedOaepMode = mode
+                Log.d(DEK_LOG_TAG, "DEK OAEP compatibility mode selected: $mode")
+                return mode
+            }
+        }
+
+        throw RegistrationFailure.Security(
+            "Unable to find a compatible RSA OAEP mode for the current device keystore.",
+        )
+    }
+
+    private fun encryptWithMode(
+        rawDek: ByteArray,
+        publicKey: PublicKey,
+        mode: OaepCompatibilityMode,
+    ): ByteArray {
+        val transformation = when (mode) {
+            OaepCompatibilityMode.ExplicitSha1Mgf1Sha1 -> OAEP_SHA1_TRANSFORMATION
+        }
+        val spec = when (mode) {
+            OaepCompatibilityMode.ExplicitSha1Mgf1Sha1 -> oaepSpecSha1Mgf1Sha1
+        }
+
+        return Cipher.getInstance(transformation).run {
+            init(Cipher.ENCRYPT_MODE, publicKey, spec)
+            doFinal(rawDek)
+        }
+    }
+
+    private fun decryptWithMode(
+        encryptedDek: ByteArray,
+        mode: OaepCompatibilityMode,
+    ): ByteArray = when (mode) {
+        OaepCompatibilityMode.ExplicitSha1Mgf1Sha1 -> decryptWithSpec(
+            encryptedDek,
+            OAEP_SHA1_TRANSFORMATION,
+            oaepSpecSha1Mgf1Sha1,
+        )
+    }
+
+    private fun decryptWithSpec(
+        encryptedDek: ByteArray,
+        transformation: String,
+        spec: OAEPParameterSpec,
+    ): ByteArray = keyStoreService.decrypt(
+        data = encryptedDek,
+        transformation = transformation,
+        oaepSpec = spec,
+    )
+
+    private fun parsePublicKey(encodedPublicKey: String): PublicKey {
+        val keyBytes = decodeBase64(
+            encodedPublicKey,
+            "The QR payload publicKey is not valid Base64 X.509 SubjectPublicKeyInfo data.",
+        )
+        return try {
+            KeyFactory.getInstance("RSA").generatePublic(X509EncodedKeySpec(keyBytes))
+        } catch (_: Exception) {
+            throw RegistrationFailure.Validation(
+                "The QR payload publicKey is not a valid RSA X.509 SubjectPublicKeyInfo key.",
+            )
+        }
+    }
+
+    private fun decodeBase64(value: String, message: String): ByteArray = try {
+        Base64.decode(value, Base64.DEFAULT)
+    } catch (_: IllegalArgumentException) {
+        throw RegistrationFailure.Validation(message)
+    }
+}
+
+@Singleton
+class DefaultSignatureService @Inject constructor(
+    private val gson: Gson,
+    private val keyStoreService: KeyStoreService,
+) : SignatureService {
+
+    override fun signPayload(payload: RegistrationPayload): String {
+        val canonicalJson = canonicalize(payload)
+        return signJsonString(canonicalJson)
+    }
+
+    override fun signJsonString(json: String): String {
+        val signature = keyStoreService.sign(json.toByteArray(StandardCharsets.UTF_8))
+        return Base64.encodeToString(signature, Base64.NO_WRAP)
+    }
+
+    private fun canonicalize(payload: RegistrationPayload): String {
+        val root = JsonObject().apply {
+            add("dek", JsonObject().apply {
+                addProperty("deviceId", payload.dek.deviceId)
+                addProperty("encDek", payload.dek.encDek)
+            })
+            add("device", JsonObject().apply {
+                addProperty("deviceId", payload.device.deviceId)
+                addProperty("publicKey", payload.device.publicKey)
+            })
+            addProperty("email", payload.email)
+            add("namespace", JsonObject().apply {
+                addProperty("name", payload.namespace.name)
+                addProperty("namespaceId", payload.namespace.namespaceId)
+                addProperty("url", payload.namespace.url)
+            })
+            addProperty("phone", payload.phone)
+        }
+
+        return gson.toJson(sortElement(root))
+    }
+
+    private fun sortElement(element: JsonElement): JsonElement = when {
+        element is JsonObject -> JsonObject().also { sorted ->
+            element.entrySet()
+                .filterNot { (_, value) -> value.isJsonNull || isEmptyOptional(value) }
+                .sortedBy { it.key }
+                .forEach { (key, value) -> sorted.add(key, sortElement(value)) }
+        }
+        element is JsonArray -> JsonArray().also { sorted ->
+            element.forEach { sorted.add(sortElement(it)) }
+        }
+        else -> element
+    }
+
+    private fun isEmptyOptional(value: JsonElement): Boolean =
+        value is JsonPrimitive && value.isString && value.asString.isEmpty() || value is JsonNull
+}
