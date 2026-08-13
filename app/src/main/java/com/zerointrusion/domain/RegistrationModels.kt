@@ -28,6 +28,14 @@ data class RegistrationResult(
     val accountId: String,
 )
 
+data class NamespaceEntry(
+    val namespaceName: String,
+    val namespaceId: String,
+    val namespaceUrl: String,
+    val accountId: String,
+    val deviceId: String,
+)
+
 data class RegistrationState(
     val accountId: String,
     val deviceId: String,
@@ -58,6 +66,15 @@ data class RegistrationFormValidation(
             phoneError == null &&
             namespaceNameError == null &&
             apiUrlError == null
+}
+
+data class NamespaceFormValidation(
+    val namespaceNameError: String? = null,
+    val namespaceUrlError: String? = null,
+) {
+    val isValid: Boolean =
+        namespaceNameError == null &&
+            namespaceUrlError == null
 }
 
 sealed class RegistrationFailure(message: String) : Exception(message) {

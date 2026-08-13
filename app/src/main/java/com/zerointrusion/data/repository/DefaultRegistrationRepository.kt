@@ -2,6 +2,8 @@ package com.zerointrusion.data.repository
 
 import android.util.Log
 import com.google.gson.Gson
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
 import com.google.gson.JsonSyntaxException
 import com.zerointrusion.core.AppConstants
 import com.zerointrusion.data.firebase.FirebaseService
@@ -11,6 +13,7 @@ import com.zerointrusion.data.network.AuthenticationResponseRequestDto
 import com.zerointrusion.data.network.DekDto
 import com.zerointrusion.data.network.DeviceDto
 import com.zerointrusion.data.network.NewDeviceRegistrationDto
+import com.zerointrusion.data.network.NamespaceRegistrationRequestDto
 import com.zerointrusion.data.network.NamespaceDto
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.network.RootDeviceDekResponseDto
@@ -19,7 +22,9 @@ import com.zerointrusion.data.security.DeviceService
 import com.zerointrusion.data.security.KeyStoreService
 import com.zerointrusion.data.security.NamespaceService
 import com.zerointrusion.data.security.SignatureService
+import com.zerointrusion.data.storage.NamespaceStore
 import com.zerointrusion.data.storage.RegistrationStateStore
+import com.zerointrusion.domain.NamespaceEntry
 import com.zerointrusion.domain.RegistrationFailure
 import com.zerointrusion.domain.RegistrationFormInput
 import com.zerointrusion.domain.RegistrationPayload
@@ -48,6 +53,7 @@ class DefaultRegistrationRepository @Inject constructor(
     private val namespaceService: NamespaceService,
     private val dekService: DekService,
     private val signatureService: SignatureService,
+    private val namespaceStore: NamespaceStore,
     private val stateStore: RegistrationStateStore,
     private val validator: RegistrationValidator,
     private val gson: Gson,
@@ -73,7 +79,69 @@ class DefaultRegistrationRepository @Inject constructor(
         val deviceId: String,
     )
 
+    private data class NamespaceResponseDto(
+        val id: Long?,
+        val accountId: String?,
+        val namespaceId: String?,
+        val namespace: String?,
+        val url: String?,
+    )
+
     override fun observeRegistrationState(): Flow<RegistrationState?> = stateStore.observeState()
+
+    override fun observeNamespaces(): Flow<List<NamespaceEntry>> = namespaceStore.observeNamespaces()
+
+    override suspend fun fetchNamespaces(): List<NamespaceEntry> = withContext(Dispatchers.IO) {
+        val registrationState = stateStore.observeState().first()
+            ?: throw RegistrationFailure.Validation("No registered account is stored on this device.")
+
+        if (registrationState.accountId.isBlank()) {
+            throw RegistrationFailure.Validation("The stored registration state does not contain a valid accountId.")
+        }
+        if (registrationState.deviceId.isBlank()) {
+            throw RegistrationFailure.Validation("The stored registration state does not contain a valid deviceId.")
+        }
+
+        val requestUrl = buildNamespaceFetchUrl(
+            baseUrl = registrationState.namespaceUrl,
+            accountId = registrationState.accountId,
+            deviceId = registrationState.deviceId,
+        )
+        val signaturePayload = RootDeviceFetchSignaturePayload(
+            accountId = registrationState.accountId,
+            deviceId = registrationState.deviceId,
+        )
+        val signature = signatureService.signJsonString(gson.toJson(signaturePayload))
+
+        Log.d(ACCOUNT_LOG_TAG, "NAMESPACE fetch start. url=$requestUrl")
+        val response = try {
+            registrationApi.fetchNamespaces(
+                url = requestUrl,
+                signature = signature,
+            )
+        } catch (exception: Exception) {
+            Log.e(ACCOUNT_LOG_TAG, "NAMESPACE fetch failed before HTTP response. url=$requestUrl", exception)
+            throw mapNetworkException(requestUrl, exception)
+        }
+
+        if (!response.isSuccessful) {
+            Log.e(ACCOUNT_LOG_TAG, "NAMESPACE fetch failed. http=${response.code()} url=$requestUrl")
+            throw serverFailure(response.errorBody()?.charStream(), response.code(), requestUrl)
+        }
+
+        val body = response.body()?.string()?.trim().orEmpty()
+        if (body.isEmpty()) {
+            throw RegistrationFailure.Server("The backend returned an empty namespace response from $requestUrl.")
+        }
+
+        val namespaces = parseNamespaceEntries(
+            rawBody = body,
+            fallbackDeviceId = registrationState.deviceId,
+        )
+        namespaceStore.saveNamespaces(namespaces)
+        Log.d(ACCOUNT_LOG_TAG, "NAMESPACE fetch success. count=${namespaces.size} url=$requestUrl")
+        namespaces
+    }
 
     override suspend fun syncFcmToken(state: RegistrationState): RegistrationState = withContext(Dispatchers.IO) {
         val currentFcmToken = try {
@@ -218,6 +286,94 @@ class DefaultRegistrationRepository @Inject constructor(
         }
     }
 
+    override suspend fun saveNamespace(
+        namespaceName: String,
+        namespaceUrl: String,
+    ): NamespaceEntry = withContext(Dispatchers.IO) {
+        val validation = validator.validateNamespaceForm(namespaceName, namespaceUrl)
+        if (!validation.isValid) {
+            throw RegistrationFailure.Validation(
+                validation.namespaceNameError ?: validation.namespaceUrlError ?: "Namespace form is invalid.",
+            )
+        }
+
+        val registrationState = stateStore.observeState().first()
+            ?: throw RegistrationFailure.Validation("No registered account is stored on this device.")
+
+        if (registrationState.accountId.isBlank()) {
+            throw RegistrationFailure.Validation("The stored registration state does not contain a valid accountId.")
+        }
+        if (registrationState.deviceId.isBlank()) {
+            throw RegistrationFailure.Validation("The stored registration state does not contain a valid deviceId.")
+        }
+
+        val namespace = namespaceService.createNamespace(namespaceName, namespaceUrl)
+        val request = NamespaceRegistrationRequestDto(
+            accountId = registrationState.accountId,
+            deviceId = registrationState.deviceId,
+            namespaceId = namespace.namespaceId,
+            name = namespace.name,
+            url = namespace.url,
+        )
+        val requestUrl = buildNamespaceRegistrationUrl(registrationState.namespaceUrl)
+
+        Log.d(
+            REG_LOG_TAG,
+            "NAMESPACE save start. url=$requestUrl namespace=${request.name} accountId=${request.accountId}",
+        )
+
+        val response = try {
+            registrationApi.registerNamespace(
+                url = requestUrl,
+                request = request,
+            )
+        } catch (exception: Exception) {
+            Log.e(REG_LOG_TAG, "NAMESPACE save failed before HTTP response. url=$requestUrl", exception)
+            throw mapNetworkException(requestUrl, exception)
+        }
+
+        if (!response.isSuccessful) {
+            Log.e(REG_LOG_TAG, "NAMESPACE save failed. http=${response.code()} url=$requestUrl")
+            throw serverFailure(response.errorBody()?.charStream(), response.code(), requestUrl)
+        }
+
+        val namespaceEntry = NamespaceEntry(
+            namespaceName = request.name,
+            namespaceId = request.namespaceId,
+            namespaceUrl = request.url,
+            accountId = request.accountId,
+            deviceId = request.deviceId,
+        )
+        val currentNamespaces = namespaceStore.observeNamespaces().first()
+        val updatedNamespaces = currentNamespaces
+            .filterNot { it.namespaceId == namespaceEntry.namespaceId }
+            .plus(namespaceEntry)
+            .sortedBy { it.namespaceName.lowercase() }
+        namespaceStore.saveNamespaces(updatedNamespaces)
+        Log.d(REG_LOG_TAG, "NAMESPACE save success. namespaceId=${namespaceEntry.namespaceId}")
+        namespaceEntry
+    }
+
+    override suspend fun setActiveNamespace(namespace: NamespaceEntry): RegistrationState = withContext(Dispatchers.IO) {
+        val currentState = stateStore.observeState().first()
+            ?: throw RegistrationFailure.Validation("No registered account is stored on this device.")
+
+        if (namespace.accountId.isBlank() || namespace.deviceId.isBlank()) {
+            throw RegistrationFailure.Validation("The selected namespace does not contain a valid accountId or deviceId.")
+        }
+
+        val updatedState = currentState.copy(
+            accountId = namespace.accountId,
+            deviceId = namespace.deviceId,
+            namespaceName = namespace.namespaceName,
+            namespaceUrl = namespace.namespaceUrl,
+            namespaceId = namespace.namespaceId,
+        )
+        stateStore.save(updatedState)
+        Log.d(REG_LOG_TAG, "NAMESPACE active changed. namespaceId=${namespace.namespaceId} url=${namespace.namespaceUrl}")
+        updatedState
+    }
+
     override suspend fun respondToAuthentication(
         notificationId: String,
         accountId: String,
@@ -296,14 +452,14 @@ class DefaultRegistrationRepository @Inject constructor(
             ?: throw RegistrationFailure.Server("The backend returned an empty root-device response from $fetchUrl.")
 
         val rawDek = decryptRootDeviceDek(
-            fetchedEncDek = rootDeviceBody.encDek!!,
+            fetchedEncDek = rootDeviceBody.dek!!.encDek!!,
             storedEncDek = registrationState.encDek,
         )
         Log.d(QR_LOG_TAG, "DEK decrypt confirmed in repository. rawDekSize=${rawDek.size}")
         val reEncryptedDek = dekService.encryptDek(rawDek, qrData.publicKey)
         Log.d(QR_LOG_TAG, "DEK re-encrypt confirmed in repository. scannedDeviceId=${qrData.deviceId}, encDekLength=${reEncryptedDek.length}")
         val dto = NewDeviceRegistrationDto(
-            accountId = registrationState.accountId,
+            accountId = rootDeviceBody.dek.accountId!!,
             device = DeviceDto(
                 deviceId = registrationState.deviceId,
                 publicKey = qrData.publicKey,
@@ -449,8 +605,18 @@ class DefaultRegistrationRepository @Inject constructor(
     private fun buildRegistrationUrl(baseUrl: String): String =
         baseUrl.trim().trimEnd('/') + AppConstants.REGISTRATION_ENDPOINT_PATH
 
+    private fun buildNamespaceFetchUrl(
+        baseUrl: String,
+        accountId: String,
+        deviceId: String,
+    ): String = baseUrl.trim().trimEnd('/') +
+        AppConstants.NAMESPACE_ENDPOINT_PATH + "/" + accountId.trim() + "/" + deviceId.trim()
+
     private fun buildAuthenticationResponseUrl(baseUrl: String): String =
         baseUrl.trim().trimEnd('/') + AppConstants.AUTHENTICATION_RESPONSE_ENDPOINT_PATH
+
+    private fun buildNamespaceRegistrationUrl(baseUrl: String): String =
+        baseUrl.trim().trimEnd('/') + AppConstants.NAMESPACE_ENDPOINT_PATH
 
     private fun buildRootDeviceFetchUrl(
         baseUrl: String,
@@ -503,16 +669,70 @@ class DefaultRegistrationRepository @Inject constructor(
         return QrRegistrationPayload(deviceId = deviceId, publicKey = publicKey)
     }
 
+    private fun parseNamespaceEntries(
+        rawBody: String,
+        fallbackDeviceId: String,
+    ): List<NamespaceEntry> {
+        val element = try {
+            gson.fromJson(rawBody, JsonElement::class.java)
+        } catch (_: JsonSyntaxException) {
+            throw RegistrationFailure.Server("The backend returned invalid JSON for the namespace response.")
+        }
+
+        val payloadElements = when {
+            element.isJsonArray -> element.asJsonArray.toList()
+            element.isJsonObject -> element.asJsonObject.extractNamespaceElements()
+            else -> throw RegistrationFailure.Server("The backend returned an unsupported namespace response format.")
+        }
+
+        return payloadElements.map { entryElement ->
+            val dto = runCatching { gson.fromJson(entryElement, NamespaceResponseDto::class.java) }
+                .getOrElse {
+                    throw RegistrationFailure.Server("The backend returned a namespace entry with an invalid schema.")
+                }
+
+            val accountId = dto.accountId?.trim().orEmpty()
+            val namespaceId = dto.namespaceId?.trim().orEmpty()
+            val namespaceName = dto.namespace?.trim().orEmpty()
+            val namespaceUrl = dto.url?.trim().orEmpty()
+
+            if (accountId.isEmpty() || namespaceId.isEmpty() || namespaceName.isEmpty() || namespaceUrl.isEmpty()) {
+                throw RegistrationFailure.Server("The backend returned a namespace entry with missing required fields.")
+            }
+
+            NamespaceEntry(
+                namespaceName = namespaceName,
+                namespaceId = namespaceId,
+                namespaceUrl = namespaceUrl,
+                accountId = accountId,
+                deviceId = fallbackDeviceId,
+            )
+        }.distinctBy { it.namespaceId }
+            .sortedBy { it.namespaceName.lowercase() }
+    }
+
+    private fun JsonObject.extractNamespaceElements(): List<JsonElement> {
+        val arrayCandidate = get("namespaces")
+        return when {
+            arrayCandidate?.isJsonArray == true -> arrayCandidate.asJsonArray.toList()
+            has("accountId") && has("namespaceId") && has("namespace") && has("url") -> listOf(this)
+            else -> throw RegistrationFailure.Server("The backend returned an unsupported namespace response format.")
+        }
+    }
+
     private fun RootDeviceDekResponseDto.validateRootDeviceResponse(
         registrationState: RegistrationState,
     ): RootDeviceDekResponseDto {
-        if (accountId.isNullOrBlank() || accountId != registrationState.accountId) {
+        val dekPayload = dek
+            ?: throw RegistrationFailure.Server("The root-device response did not contain a dek object.")
+
+        if (dekPayload.accountId.isNullOrBlank() || dekPayload.accountId != registrationState.accountId) {
             throw RegistrationFailure.Server("The root-device response did not contain the expected accountId.")
         }
-        if (deviceId.isNullOrBlank() || deviceId != registrationState.deviceId) {
+        if (dekPayload.deviceId.isNullOrBlank() || dekPayload.deviceId != registrationState.deviceId) {
             throw RegistrationFailure.Server("The root-device response did not contain the expected root deviceId.")
         }
-        if (encDek.isNullOrBlank()) {
+        if (dekPayload.encDek.isNullOrBlank()) {
             throw RegistrationFailure.Server("The root-device response did not contain an encDek value.")
         }
         return this

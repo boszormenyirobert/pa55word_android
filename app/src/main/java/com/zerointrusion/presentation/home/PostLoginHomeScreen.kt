@@ -66,6 +66,7 @@ fun PostLoginHomeScreen(
     onOpenDeviceInformation: () -> Unit,
     onOpenQrRead: () -> Unit,
     onOpenConnectedDevices: () -> Unit,
+    onOpenNamespaces: () -> Unit,
     onClearNewDeviceRegistrationState: () -> Unit,
     onAllowNotification: () -> Unit,
     onDeclineNotification: () -> Unit,
@@ -164,6 +165,11 @@ fun PostLoginHomeScreen(
                 style = MaterialTheme.typography.headlineMedium,
                 color = White,
             )
+            Text(
+                text = "Active namespace: ${namespaceName.ifBlank { "(empty)" }}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = White,
+            )
 
             if (!notificationsEnabled || !notificationsPermissionGranted) {
                 Card(
@@ -245,6 +251,13 @@ fun PostLoginHomeScreen(
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text("Connected devices")
+                    }
+
+                    Button(
+                        onClick = onOpenNamespaces,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Namespaces")
                     }
                 }
             }

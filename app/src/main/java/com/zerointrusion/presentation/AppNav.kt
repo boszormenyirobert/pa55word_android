@@ -77,6 +77,8 @@ import androidx.navigation.compose.rememberNavController
 import com.zerointrusion.domain.NotificationDecision
 import com.zerointrusion.presentation.home.ConnectedDevicesScreen
 import com.zerointrusion.presentation.home.DeviceInformationScreen
+import com.zerointrusion.presentation.home.AddNamespaceScreen
+import com.zerointrusion.presentation.home.NamespacesScreen
 import com.zerointrusion.presentation.home.PostLoginHomeScreen
 import com.zerointrusion.presentation.home.QrReadScreen
 
@@ -88,6 +90,8 @@ sealed class AppRoute(val route: String) {
     data object DeviceInformation : AppRoute("device-information")
     data object QrRead : AppRoute("qr-read")
     data object ConnectedDevices : AppRoute("connected-devices")
+    data object Namespaces : AppRoute("namespaces")
+    data object AddNamespace : AppRoute("add-namespace")
 }
 
 @Composable
@@ -162,6 +166,10 @@ fun ZeroIntrusionAppRoot(
                     onOpenConnectedDevices = {
                         navController.navigate(AppRoute.ConnectedDevices.route)
                     },
+                    onOpenNamespaces = {
+                        appViewModel.clearNamespaceSaveState()
+                        navController.navigate(AppRoute.Namespaces.route)
+                    },
                     onClearNewDeviceRegistrationState = appViewModel::clearNewDeviceRegistrationState,
                     onAllowNotification = {
                         appViewModel.onNotificationDecision(NotificationDecision.Accept)
@@ -199,6 +207,43 @@ fun ZeroIntrusionAppRoot(
                     state = appState.connectedDevicesState,
                     onRetry = appViewModel::loadConnectedDevices,
                     onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.Namespaces.route) {
+                LaunchedEffect(Unit) {
+                    appViewModel.loadNamespaces()
+                }
+                NamespacesScreen(
+                    namespaces = appState.namespaces,
+                    activeNamespaceId = appState.activeNamespaceId,
+                    fetchState = appState.namespaceFetchState,
+                    onAddNewNamespace = {
+                        appViewModel.startNamespaceAdd()
+                        navController.navigate(AppRoute.AddNamespace.route)
+                    },
+                    onNamespaceSelected = appViewModel::setActiveNamespace,
+                    onCancel = {
+                        appViewModel.clearNamespaceSaveState()
+                        navController.popBackStack()
+                    },
+                )
+            }
+            composable(AppRoute.AddNamespace.route) {
+                LaunchedEffect(appState.namespaceSaveState) {
+                    if (appState.namespaceSaveState is NamespaceSaveUiState.Success) {
+                        navController.popBackStack()
+                    }
+                }
+                AddNamespaceScreen(
+                    draft = appState.namespaceDraft,
+                    saveState = appState.namespaceSaveState,
+                    onNamespaceNameChanged = appViewModel::onNamespaceDraftNameChanged,
+                    onNamespaceUrlChanged = appViewModel::onNamespaceDraftUrlChanged,
+                    onSave = appViewModel::saveNamespace,
+                    onBack = {
+                        appViewModel.cancelNamespaceAdd()
+                        navController.popBackStack()
+                    },
                 )
             }
         }

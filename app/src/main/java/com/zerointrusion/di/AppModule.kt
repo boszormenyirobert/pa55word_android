@@ -19,6 +19,8 @@ import com.zerointrusion.data.security.DeviceService
 import com.zerointrusion.data.security.KeyStoreService
 import com.zerointrusion.data.security.NamespaceService
 import com.zerointrusion.data.security.SignatureService
+import com.zerointrusion.data.storage.EncryptedNamespaceStore
+import com.zerointrusion.data.storage.NamespaceStore
 import com.zerointrusion.data.storage.EncryptedRegistrationStateStore
 import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.domain.NotificationRepository
@@ -133,6 +135,13 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideNamespaceStore(
+        @ApplicationContext context: Context,
+        gson: Gson,
+    ): NamespaceStore = EncryptedNamespaceStore(context, gson)
+
+    @Provides
+    @Singleton
     fun provideFirebaseService(
         @ApplicationContext context: Context,
         registrationApi: RegistrationApi,
@@ -157,6 +166,7 @@ object AppModule {
         namespaceService: NamespaceService,
         dekService: DekService,
         signatureService: SignatureService,
+        namespaceStore: NamespaceStore,
         registrationStateStore: RegistrationStateStore,
         validator: com.zerointrusion.domain.RegistrationValidator,
         gson: Gson,
@@ -168,6 +178,7 @@ object AppModule {
         namespaceService = namespaceService,
         dekService = dekService,
         signatureService = signatureService,
+        namespaceStore = namespaceStore,
         stateStore = registrationStateStore,
         validator = validator,
         gson = gson,

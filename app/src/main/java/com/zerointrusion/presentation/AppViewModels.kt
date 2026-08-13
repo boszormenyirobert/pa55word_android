@@ -4,6 +4,7 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zerointrusion.domain.BackendPushNotification
+import com.zerointrusion.domain.NamespaceEntry
 import com.zerointrusion.domain.NotificationDecision
 import com.zerointrusion.domain.NotificationRepository
 import com.zerointrusion.domain.RegistrationFailure
@@ -40,6 +41,26 @@ sealed class ConnectedDevicesUiState {
     data class Error(val message: String) : ConnectedDevicesUiState()
 }
 
+sealed class NamespaceSaveUiState {
+    data object Idle : NamespaceSaveUiState()
+    data object InProgress : NamespaceSaveUiState()
+    data class Success(val namespaceName: String) : NamespaceSaveUiState()
+    data class Error(val message: String) : NamespaceSaveUiState()
+}
+
+sealed class NamespaceFetchUiState {
+    data object Idle : NamespaceFetchUiState()
+    data object InProgress : NamespaceFetchUiState()
+    data class Error(val message: String) : NamespaceFetchUiState()
+}
+
+data class NamespaceDraftUiState(
+    val namespaceName: String = "",
+    val namespaceUrl: String = "",
+    val namespaceNameError: String? = null,
+    val namespaceUrlError: String? = null,
+)
+
 data class NotificationOverlayUiState(
     val notification: BackendPushNotification? = null,
     val mismatchError: String? = null,
@@ -57,6 +78,12 @@ data class AppUiState(
     val fcmSyncState: FcmSyncUiState = FcmSyncUiState.Idle,
     val newDeviceRegistrationState: NewDeviceRegistrationUiState = NewDeviceRegistrationUiState.Idle,
     val connectedDevicesState: ConnectedDevicesUiState = ConnectedDevicesUiState.Idle,
+    val namespaces: List<NamespaceEntry> = emptyList(),
+    val activeNamespaceId: String? = null,
+    val isAddingNamespace: Boolean = false,
+    val namespaceDraft: NamespaceDraftUiState = NamespaceDraftUiState(),
+    val namespaceFetchState: NamespaceFetchUiState = NamespaceFetchUiState.Idle,
+    val namespaceSaveState: NamespaceSaveUiState = NamespaceSaveUiState.Idle,
     val notificationOverlay: NotificationOverlayUiState = NotificationOverlayUiState(),
 ) {
     val currentRoute: String
@@ -85,6 +112,7 @@ data class RegistrationUiState(
 class AppViewModel @Inject constructor(
     private val registrationRepository: RegistrationRepository,
     private val notificationRepository: NotificationRepository,
+    private val validator: RegistrationValidator,
 ) : ViewModel() {
     private companion object {
         const val QR_LOG_TAG = "ZeroIntrusionQr"
@@ -94,6 +122,7 @@ class AppViewModel @Inject constructor(
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
     private var lastFcmSyncKey: String? = null
     private var fcmSyncInFlight: Boolean = false
+    private var storedNamespaces: List<NamespaceEntry> = emptyList()
 
     init {
         viewModelScope.launch {
@@ -108,11 +137,22 @@ class AppViewModel @Inject constructor(
                             state.fcmToken.isNullOrBlank() -> FcmSyncUiState.Idle
                             else -> FcmSyncUiState.Success(state.fcmToken.toPreview())
                         },
+                        activeNamespaceId = state?.namespaceId,
+                        namespaces = storedNamespaces,
                     )
                 }
 
                 if (state != null) {
                     ensureFcmTokenSync(state)
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            registrationRepository.observeNamespaces().collect { namespaces ->
+                storedNamespaces = namespaces
+                _uiState.update { state ->
+                    state.copy(namespaces = namespaces)
                 }
             }
         }
@@ -153,6 +193,140 @@ class AppViewModel @Inject constructor(
 
     fun clearNewDeviceRegistrationState() {
         _uiState.update { it.copy(newDeviceRegistrationState = NewDeviceRegistrationUiState.Idle) }
+    }
+
+    fun startNamespaceAdd() {
+        _uiState.update {
+            it.copy(
+                isAddingNamespace = true,
+                namespaceDraft = NamespaceDraftUiState(),
+                namespaceSaveState = NamespaceSaveUiState.Idle,
+            )
+        }
+    }
+
+    fun loadNamespaces() {
+        if (_uiState.value.namespaceFetchState is NamespaceFetchUiState.InProgress) {
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(namespaceFetchState = NamespaceFetchUiState.InProgress) }
+            runCatching { registrationRepository.fetchNamespaces() }
+                .onSuccess {
+                    _uiState.update { state ->
+                        state.copy(namespaceFetchState = NamespaceFetchUiState.Idle)
+                    }
+                }
+                .onFailure { throwable ->
+                    val message = (throwable as? RegistrationFailure)?.message
+                        ?: throwable.message
+                        ?: "Namespace fetch failed."
+                    _uiState.update {
+                        it.copy(namespaceFetchState = NamespaceFetchUiState.Error(message))
+                    }
+                }
+        }
+    }
+
+    fun onNamespaceDraftNameChanged(value: String) {
+        _uiState.update {
+            it.copy(
+                namespaceDraft = it.namespaceDraft.copy(namespaceName = value, namespaceNameError = null),
+                namespaceSaveState = NamespaceSaveUiState.Idle,
+            )
+        }
+    }
+
+    fun onNamespaceDraftUrlChanged(value: String) {
+        _uiState.update {
+            it.copy(
+                namespaceDraft = it.namespaceDraft.copy(namespaceUrl = value, namespaceUrlError = null),
+                namespaceSaveState = NamespaceSaveUiState.Idle,
+            )
+        }
+    }
+
+    fun clearNamespaceSaveState() {
+        _uiState.update { it.copy(namespaceSaveState = NamespaceSaveUiState.Idle) }
+    }
+
+    fun cancelNamespaceAdd() {
+        _uiState.update {
+            it.copy(
+                isAddingNamespace = false,
+                namespaceDraft = NamespaceDraftUiState(),
+                namespaceSaveState = NamespaceSaveUiState.Idle,
+            )
+        }
+    }
+
+    fun setActiveNamespace(namespace: NamespaceEntry) {
+        viewModelScope.launch {
+            runCatching { registrationRepository.setActiveNamespace(namespace) }
+                .onSuccess { state ->
+                    _uiState.update {
+                        it.copy(
+                            registrationState = state,
+                            activeNamespaceId = state.namespaceId,
+                        )
+                    }
+                }
+                .onFailure { throwable ->
+                    val message = (throwable as? RegistrationFailure)?.message
+                        ?: throwable.message
+                        ?: "Namespace selection failed."
+                    _uiState.update {
+                        it.copy(namespaceFetchState = NamespaceFetchUiState.Error(message))
+                    }
+                }
+        }
+    }
+
+    fun saveNamespace() {
+        if (_uiState.value.namespaceSaveState is NamespaceSaveUiState.InProgress) {
+            return
+        }
+
+        val draft = _uiState.value.namespaceDraft
+        val validation = validator.validateNamespaceForm(draft.namespaceName, draft.namespaceUrl)
+        if (!validation.isValid) {
+            _uiState.update {
+                it.copy(
+                    namespaceDraft = it.namespaceDraft.copy(
+                        namespaceNameError = validation.namespaceNameError,
+                        namespaceUrlError = validation.namespaceUrlError,
+                    ),
+                    namespaceSaveState = NamespaceSaveUiState.Idle,
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(namespaceSaveState = NamespaceSaveUiState.InProgress) }
+            runCatching {
+                registrationRepository.saveNamespace(
+                    namespaceName = draft.namespaceName,
+                    namespaceUrl = draft.namespaceUrl,
+                )
+            }.onSuccess { namespaceEntry ->
+                _uiState.update {
+                    it.copy(
+                        isAddingNamespace = false,
+                        namespaceDraft = NamespaceDraftUiState(),
+                        namespaceSaveState = NamespaceSaveUiState.Success(namespaceEntry.namespaceName),
+                    )
+                }
+            }.onFailure { throwable ->
+                val message = (throwable as? RegistrationFailure)?.message
+                    ?: throwable.message
+                    ?: "Namespace save failed."
+                _uiState.update {
+                    it.copy(namespaceSaveState = NamespaceSaveUiState.Error(message))
+                }
+            }
+        }
     }
 
     fun loadConnectedDevices() {

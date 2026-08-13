@@ -32,6 +32,10 @@ data class NewDeviceRegistrationDto(
 )
 
 data class RootDeviceDekResponseDto(
+    val dek: RootDeviceDekDto?,
+)
+
+data class RootDeviceDekDto(
     val id: Long?,
     val accountId: String?,
     val deviceId: String?,
@@ -49,6 +53,14 @@ data class AccountRegistrationRequestDto(
 data class AccountRegistrationResponseDto(
     val success: Boolean,
     val accountId: String?,
+)
+
+data class NamespaceRegistrationRequestDto(
+    val accountId: String,
+    val deviceId: String,
+    val namespaceId: String,
+    val name: String,
+    val url: String,
 )
 
 data class AccountErrorResponseDto(
@@ -77,36 +89,48 @@ interface RegistrationApi {
         @Body request: AccountRegistrationRequestDto,
     ): Response<AccountRegistrationResponseDto>
 
+    @GET
+    suspend fun fetchNamespaces(
+        @Url url: String,
+        @Header("x-signature") signature: String,
+    ): Response<ResponseBody>
+
+    @POST
+    suspend fun registerNamespace(
+        @Url url: String,
+        @Body request: NamespaceRegistrationRequestDto,
+    ): Response<Unit>
+
     @POST
     suspend fun registerFcmToken(
         @Url url: String,
-        @Header("X-Signature") signature: String,
+        @Header("x-signature") signature: String,
         @Body request: FcmRegistrationRequestDto,
     ): Response<Unit>
 
     @GET
     suspend fun fetchRootDeviceDek(
         @Url url: String,
-        @Header("X-Signature") signature: String,
+        @Header("x-signature") signature: String,
     ): Response<RootDeviceDekResponseDto>
 
     @POST
     suspend fun registerNewDevice(
         @Url url: String,
-        @Header("X-Signature") signature: String,
+        @Header("x-signature") signature: String,
         @Body request: NewDeviceRegistrationDto,
     ): Response<Unit>
 
     @POST
     suspend fun sendAuthenticationResponse(
         @Url url: String,
-        @Header("X-Signature") signature: String,
+        @Header("x-signature") signature: String,
         @Body request: AuthenticationResponseRequestDto,
     ): Response<Unit>
 
     @GET
     suspend fun getAccountDetails(
         @Url url: String,
-        @Header("X-Signature") signature: String,
+        @Header("x-signature") signature: String,
     ): Response<ResponseBody>
 }

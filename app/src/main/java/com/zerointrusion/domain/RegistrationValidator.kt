@@ -56,6 +56,27 @@ class RegistrationValidator @Inject constructor() {
         }
     }
 
+    fun validateNamespaceForm(
+        namespaceName: String,
+        namespaceUrl: String,
+    ): NamespaceFormValidation {
+        val normalizedNamespace = namespaceName.trim()
+        val normalizedUrl = namespaceUrl.trim()
+
+        return NamespaceFormValidation(
+            namespaceNameError = when {
+                normalizedNamespace.isEmpty() -> "Namespace name is required."
+                else -> null
+            },
+            namespaceUrlError = when {
+                normalizedUrl.isEmpty() -> "Namespace URL is required."
+                !isValidHttpUrl(normalizedUrl) -> "Enter a valid http or https URL."
+                !hasSupportedPort(normalizedUrl) -> "Enter the base URL with an explicit port, for example http://192.168.178.20:3000."
+                else -> null
+            },
+        )
+    }
+
     private fun isValidHttpUrl(value: String): Boolean = try {
         val uri = URI(value)
         val scheme = uri.scheme?.lowercase()
