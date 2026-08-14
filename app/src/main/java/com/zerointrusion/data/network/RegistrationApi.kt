@@ -98,6 +98,7 @@ interface RegistrationApi {
     @POST
     suspend fun registerNamespace(
         @Url url: String,
+        @Header("x-signature") signature: String,
         @Body request: NamespaceRegistrationRequestDto,
     ): Response<Unit>
 

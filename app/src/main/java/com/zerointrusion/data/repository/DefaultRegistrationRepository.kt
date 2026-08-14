@@ -1,5 +1,6 @@
 package com.zerointrusion.data.repository
 
+import android.util.Base64
 import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.JsonElement
@@ -316,6 +317,7 @@ class DefaultRegistrationRepository @Inject constructor(
             url = namespace.url,
         )
         val requestUrl = buildNamespaceRegistrationUrl(registrationState.namespaceUrl)
+        val signature = signatureService.signJsonString(gson.toJson(request))
 
         Log.d(
             REG_LOG_TAG,
@@ -325,6 +327,7 @@ class DefaultRegistrationRepository @Inject constructor(
         val response = try {
             registrationApi.registerNamespace(
                 url = requestUrl,
+                signature = signature,
                 request = request,
             )
         } catch (exception: Exception) {
@@ -351,6 +354,93 @@ class DefaultRegistrationRepository @Inject constructor(
             .sortedBy { it.namespaceName.lowercase() }
         namespaceStore.saveNamespaces(updatedNamespaces)
         Log.d(REG_LOG_TAG, "NAMESPACE save success. namespaceId=${namespaceEntry.namespaceId}")
+
+        val encDek = registrationState.encDek
+        if (encDek.isNullOrBlank()) {
+            Log.w(REG_LOG_TAG, "NAMESPACE account registration skipped: no encDek in registration state.")
+        } else {
+            val newNamespaceRegistrationUrl = buildRegistrationUrl(namespaceEntry.namespaceUrl)
+            val publicKey = Base64.encodeToString(keyStoreService.getPublicKey().encoded, Base64.NO_WRAP)
+            val newNamespaceRequest = AccountRegistrationRequestDto(
+                namespace = NamespaceDto(
+                    namespaceId = namespaceEntry.namespaceId,
+                    name = namespaceEntry.namespaceName,
+                    url = namespaceEntry.namespaceUrl,
+                ),
+                device = DeviceDto(
+                    deviceId = registrationState.deviceId,
+                    publicKey = publicKey,
+                ),
+                dek = DekDto(
+                    deviceId = registrationState.deviceId,
+                    encDek = encDek,
+                ),
+                email = registrationState.email,
+                phone = registrationState.phone,
+            )
+            Log.d(
+                REG_LOG_TAG,
+                "NAMESPACE account registration start. url=$newNamespaceRegistrationUrl namespaceId=${namespaceEntry.namespaceId}",
+            )
+            val newNamespaceResponse = try {
+                registrationApi.registerAccount(
+                    url = newNamespaceRegistrationUrl,
+                    request = newNamespaceRequest,
+                )
+            } catch (exception: Exception) {
+                Log.e(REG_LOG_TAG, "NAMESPACE account registration failed before HTTP response. url=$newNamespaceRegistrationUrl", exception)
+                throw mapNetworkException(newNamespaceRegistrationUrl, exception)
+            }
+            if (!newNamespaceResponse.isSuccessful) {
+                Log.e(REG_LOG_TAG, "NAMESPACE account registration failed. http=${newNamespaceResponse.code()} url=$newNamespaceRegistrationUrl")
+                throw serverFailure(newNamespaceResponse.errorBody()?.charStream(), newNamespaceResponse.code(), newNamespaceRegistrationUrl)
+            }
+
+            val newNamespaceBody = newNamespaceResponse.body()
+                ?: throw RegistrationFailure.Server("The backend returned an empty response from $newNamespaceRegistrationUrl.")
+            if (!newNamespaceBody.success || newNamespaceBody.accountId.isNullOrBlank()) {
+                throw RegistrationFailure.Server("The backend did not return a valid account ID from $newNamespaceRegistrationUrl.")
+            }
+
+            val updatedEntry = namespaceEntry.copy(accountId = newNamespaceBody.accountId)
+            val refreshedNamespaces = namespaceStore.observeNamespaces().first()
+                .filterNot { it.namespaceId == updatedEntry.namespaceId }
+                .plus(updatedEntry)
+                .sortedBy { it.namespaceName.lowercase() }
+            namespaceStore.saveNamespaces(refreshedNamespaces)
+            Log.d(REG_LOG_TAG, "NAMESPACE account registration success. namespaceId=${updatedEntry.namespaceId} accountId=${newNamespaceBody.accountId}")
+
+            val syncUrl = buildNamespaceRegistrationUrl(updatedEntry.namespaceUrl)
+            refreshedNamespaces.forEach { ns ->
+                val syncRequest = NamespaceRegistrationRequestDto(
+                    accountId = newNamespaceBody.accountId,
+                    deviceId = registrationState.deviceId,
+                    namespaceId = ns.namespaceId,
+                    name = ns.namespaceName,
+                    url = ns.namespaceUrl,
+                )
+                val syncSignature = signatureService.signJsonString(gson.toJson(syncRequest))
+                Log.d(REG_LOG_TAG, "NAMESPACE sync start. targetUrl=$syncUrl namespaceId=${ns.namespaceId}")
+                val syncResponse = try {
+                    registrationApi.registerNamespace(
+                        url = syncUrl,
+                        signature = syncSignature,
+                        request = syncRequest,
+                    )
+                } catch (exception: Exception) {
+                    Log.e(REG_LOG_TAG, "NAMESPACE sync failed before HTTP response. targetUrl=$syncUrl namespaceId=${ns.namespaceId}", exception)
+                    throw mapNetworkException(syncUrl, exception)
+                }
+                if (!syncResponse.isSuccessful) {
+                    Log.e(REG_LOG_TAG, "NAMESPACE sync failed. http=${syncResponse.code()} targetUrl=$syncUrl namespaceId=${ns.namespaceId}")
+                    throw serverFailure(syncResponse.errorBody()?.charStream(), syncResponse.code(), syncUrl)
+                }
+                Log.d(REG_LOG_TAG, "NAMESPACE sync success. targetUrl=$syncUrl namespaceId=${ns.namespaceId}")
+            }
+
+            return@withContext updatedEntry
+        }
+
         namespaceEntry
     }
 
