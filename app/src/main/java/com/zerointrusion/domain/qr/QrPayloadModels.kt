@@ -14,6 +14,7 @@ data class DeviceRegistrationQrPayload(
 data class NamespaceQrPayload(
     override val deviceId: String,
     override val publicKey: String,
+    val deviceName: String,
     val namespaceId: String,
     val namespaceName: String,
     val namespaceUrl: String,

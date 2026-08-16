@@ -104,7 +104,7 @@ internal class NamespaceRegistrationFromQrFlow(
             namespaceUrl = normalizedNamespaceUrl,
             accountId = phoneRegistrationBody.accountId,
             deviceId = payload.deviceId,
-            deviceName = registrationState.deviceName,
+            deviceName = payload.deviceName,
             publicKey = payload.publicKey,
         )
 
@@ -114,6 +114,7 @@ internal class NamespaceRegistrationFromQrFlow(
             namespaceEntry = namespaceEntry,
             scannedDeviceId = payload.deviceId,
             scannedPublicKey = payload.publicKey,
+            scannedDeviceName = payload.deviceName,
         )
     }
 

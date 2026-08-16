@@ -51,9 +51,11 @@ internal class QrPayloadParser(
             }
 
             NAMESPACE_TYPE -> {
+                val deviceName = payload.deviceName?.trim().orEmpty()
                 val namespaceId = payload.namespaceId?.trim().orEmpty()
                 val namespaceName = payload.namespaceName?.trim().orEmpty()
                 val namespaceUrl = payload.namespaceUrl?.trim().orEmpty()
+                validateDeviceName(deviceName)
                 if (namespaceId.isEmpty()) {
                     throw RegistrationFailure.Validation("The scanned QR payload does not contain a namespaceId.")
                 }
@@ -70,6 +72,7 @@ internal class QrPayloadParser(
                 NamespaceQrPayload(
                     deviceId = deviceId,
                     publicKey = publicKey,
+                    deviceName = deviceName,
                     namespaceId = namespaceId,
                     namespaceName = namespaceName,
                     namespaceUrl = namespaceUrl,
