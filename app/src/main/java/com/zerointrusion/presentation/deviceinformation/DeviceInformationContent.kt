@@ -65,6 +65,12 @@ internal fun DeviceInformationContent(
         color = White,
     )
 
+    Text(
+        text = "Device name: ${model.deviceName.ifBlank { "(empty)" }}",
+        style = MaterialTheme.typography.bodyMedium,
+        color = White,
+    )
+
     errorMessage?.takeIf { it.isNotBlank() }?.let { message ->
         Text(
             text = message,

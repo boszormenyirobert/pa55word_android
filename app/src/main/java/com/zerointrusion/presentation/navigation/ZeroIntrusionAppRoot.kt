@@ -126,6 +126,7 @@ fun ZeroIntrusionAppRoot(
                     model = DeviceInformationUiModel(
                         accountId = appState.registrationState?.accountId.orEmpty(),
                         deviceId = appState.registrationState?.deviceId.orEmpty(),
+                        deviceName = appState.registrationState?.deviceName.orEmpty(),
                         namespaceName = appState.registrationState?.namespaceName.orEmpty(),
                         namespaceId = appState.registrationState?.namespaceId.orEmpty(),
                         namespaceUrl = appState.registrationState?.namespaceUrl.orEmpty(),
