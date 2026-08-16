@@ -2,6 +2,7 @@ package com.zerointrusion.presentation.namespaces
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -34,6 +35,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
@@ -153,12 +155,18 @@ private fun NamespaceCard(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
-                    color = White,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.weight(1f),
                 )
+                Spacer(modifier = Modifier.size(8.dp))
                 if (isGateway) {
                     Surface(
                         shape = RoundedCornerShape(999.dp),
@@ -198,11 +206,20 @@ private fun NamespaceCard(
                 )
             } else if (showDeleteConfirmation) {
                 Spacer(modifier = Modifier.size(4.dp))
-                Text(
-                    text = "Deleting this namespace ends the account registration under \"$title\". The credentials saved for the deregistration flow under this namespace will be permanently deleted. This action is final and cannot be undone.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = White,
-                )
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(BorderStroke(1.dp, ActionDeclineRed), RoundedCornerShape(14.dp)),
+                    shape = RoundedCornerShape(14.dp),
+                    color = ActionDeclineRed.copy(alpha = 0.16f),
+                ) {
+                    Text(
+                        text = "Deleting this namespace ends the account registration under \"$title\". The credentials saved for the deregistration flow under this namespace will be permanently deleted. This action is final and cannot be undone.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = White,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
                 Button(
                     onClick = onConfirmDelete,
                     shape = RoundedCornerShape(14.dp),
