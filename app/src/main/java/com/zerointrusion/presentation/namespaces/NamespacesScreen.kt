@@ -110,6 +110,7 @@ fun NamespacesScreen(
                         "Namespace URL: ${namespace.namespaceUrl}",
                         "Account ID: ${namespace.accountId}",
                         "Device ID: ${namespace.deviceId}",
+                        "Device name: ${namespace.deviceName.orEmpty()}",
                     ),
                     isGateway = isGateway,
                     showDeleteConfirmation = namespacePendingDelete == namespace,

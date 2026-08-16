@@ -6,6 +6,7 @@ data class NamespaceEntry(
     val namespaceUrl: String,
     val accountId: String,
     val deviceId: String,
+    val deviceName: String? = null,
     val publicKey: String? = null,
 )
 

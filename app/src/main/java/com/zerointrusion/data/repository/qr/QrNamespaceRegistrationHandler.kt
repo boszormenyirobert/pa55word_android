@@ -77,6 +77,7 @@ internal class QrNamespaceRegistrationHandler(
             device = DeviceDto(
                 deviceId = registrationState.deviceId,
                 publicKey = preparation.scannedPublicKey,
+                deviceName = preparation.scannedDeviceName,
                 deviceIdAdditional = preparation.scannedDeviceId,
             ),
             dek = DekDto(

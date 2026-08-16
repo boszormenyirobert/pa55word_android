@@ -8,6 +8,7 @@ sealed interface ScannedQrPayload {
 data class DeviceRegistrationQrPayload(
     override val deviceId: String,
     override val publicKey: String,
+    val deviceName: String,
 ) : ScannedQrPayload
 
 data class NamespaceQrPayload(

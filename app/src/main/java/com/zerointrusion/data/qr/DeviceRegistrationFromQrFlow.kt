@@ -10,6 +10,7 @@ internal data class QrRegistrationPreparation(
     val namespaceEntry: NamespaceEntry,
     val scannedDeviceId: String,
     val scannedPublicKey: String,
+    val scannedDeviceName: String? = null,
 )
 
 internal class DeviceRegistrationFromQrFlow(
@@ -25,6 +26,7 @@ internal class DeviceRegistrationFromQrFlow(
             namespaceUrl = registrationState.namespaceUrl,
             accountId = registrationState.accountId,
             deviceId = payload.deviceId,
+            deviceName = payload.deviceName,
             publicKey = payload.publicKey,
         )
         val mergedNamespaces = mergeNamespaces(
@@ -37,6 +39,7 @@ internal class DeviceRegistrationFromQrFlow(
             namespaceEntry = namespaceEntry,
             scannedDeviceId = payload.deviceId,
             scannedPublicKey = payload.publicKey,
+            scannedDeviceName = payload.deviceName,
         )
     }
 }

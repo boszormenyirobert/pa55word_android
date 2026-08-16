@@ -23,6 +23,7 @@ internal class QrPayloadParser(
         val type: String?,
         val deviceId: String?,
         val publicKey: String?,
+        val deviceName: String?,
         val namespaceId: String?,
         val namespaceName: String?,
         val namespaceUrl: String?,
@@ -38,10 +39,16 @@ internal class QrPayloadParser(
         validatePublicKey(publicKey)
 
         return when (type) {
-            DEVICE_REGISTRATION_TYPE -> DeviceRegistrationQrPayload(
-                deviceId = deviceId,
-                publicKey = publicKey,
-            )
+            DEVICE_REGISTRATION_TYPE -> {
+                val deviceName = payload.deviceName?.trim().orEmpty()
+                validateDeviceName(deviceName)
+
+                DeviceRegistrationQrPayload(
+                    deviceId = deviceId,
+                    publicKey = publicKey,
+                    deviceName = deviceName,
+                )
+            }
 
             NAMESPACE_TYPE -> {
                 val namespaceId = payload.namespaceId?.trim().orEmpty()
@@ -105,6 +112,12 @@ internal class QrPayloadParser(
         }
         if (publicKey.contains("BEGIN PUBLIC KEY") || publicKey.contains("END PUBLIC KEY")) {
             throw RegistrationFailure.Validation("The scanned QR payload publicKey must be Base64 DER data without PEM headers.")
+        }
+    }
+
+    private fun validateDeviceName(deviceName: String) {
+        if (deviceName.isEmpty()) {
+            throw RegistrationFailure.Validation("The scanned QR payload does not contain a deviceName.")
         }
     }
 }
