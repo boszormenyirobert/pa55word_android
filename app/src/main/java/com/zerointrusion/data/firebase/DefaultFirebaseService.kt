@@ -9,8 +9,7 @@ import com.zerointrusion.data.network.AccountErrorResponseDto
 import com.zerointrusion.data.network.FcmRegistrationRequestDto
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.security.SignatureService
-import com.zerointrusion.data.storage.RegistrationStateStore
-import com.zerointrusion.domain.RegistrationFailure
+import com.zerointrusion.domain.common.RegistrationFailure
 import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
@@ -20,7 +19,6 @@ import javax.inject.Singleton
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 
@@ -28,7 +26,6 @@ import kotlinx.coroutines.withContext
 class DefaultFirebaseService @Inject constructor(
     private val context: Context,
     private val registrationApi: RegistrationApi,
-    private val registrationStateStore: RegistrationStateStore,
     private val signatureService: SignatureService,
     private val gson: Gson,
 ) : FirebaseService {
@@ -57,13 +54,12 @@ class DefaultFirebaseService @Inject constructor(
     }
 
     override suspend fun registerFcmToken(
+        namespaceUrl: String,
         accountId: String,
         deviceId: String,
         fcmToken: String,
     ) {
         withContext(Dispatchers.IO) {
-            val namespaceUrl = registrationStateStore.observeState().first()?.namespaceUrl
-                ?: throw RegistrationFailure.Unexpected("FCM backend upload failed: registered namespace URL is unavailable.")
             val fcmUrl = buildFcmUrl(namespaceUrl)
 
             try {

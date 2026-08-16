@@ -1,5 +1,7 @@
-package com.zerointrusion.domain
+package com.zerointrusion.domain.registration
 
+import com.zerointrusion.domain.common.RegistrationFailure
+import com.zerointrusion.domain.namespaces.NamespaceFormValidation
 import java.net.URI
 import java.net.URISyntaxException
 import javax.inject.Inject
@@ -77,6 +79,8 @@ class RegistrationValidator @Inject constructor() {
         )
     }
 
+    fun isValidNamespaceId(namespaceId: String): Boolean = NAMESPACE_ID_REGEX.matches(namespaceId.trim())
+
     private fun isValidHttpUrl(value: String): Boolean = try {
         val uri = URI(value)
         val scheme = uri.scheme?.lowercase()
@@ -100,7 +104,7 @@ class RegistrationValidator @Inject constructor() {
         val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
         val PHONE_REGEX = Regex("^\\+?[0-9]{7,15}$")
         val DEVICE_ID_REGEX = Regex("^[A-Za-z0-9]{10}$")
-        val NAMESPACE_ID_REGEX = Regex("^[0-9a-f]{64}$")
+        val NAMESPACE_ID_REGEX = Regex("^[0-9a-f]{10}$")
         val BASE64_REGEX = Regex("^[A-Za-z0-9+/=]+$")
     }
 }

@@ -8,7 +8,7 @@ import androidx.fragment.app.FragmentActivity
 import com.zerointrusion.data.notification.PushNotificationGateway
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
-import com.zerointrusion.presentation.ZeroIntrusionAppRoot
+import com.zerointrusion.presentation.navigation.ZeroIntrusionAppRoot
 import com.zerointrusion.ui.theme.ZeroIntrusionTheme
 
 @AndroidEntryPoint

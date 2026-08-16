@@ -1,4 +1,4 @@
-package com.zerointrusion.domain
+package com.zerointrusion.domain.notification
 
 data class BackendPushNotification(
     val title: String,

@@ -89,12 +89,6 @@ interface RegistrationApi {
         @Body request: AccountRegistrationRequestDto,
     ): Response<AccountRegistrationResponseDto>
 
-    @GET
-    suspend fun fetchNamespaces(
-        @Url url: String,
-        @Header("x-signature") signature: String,
-    ): Response<ResponseBody>
-
     @POST
     suspend fun registerNamespace(
         @Url url: String,

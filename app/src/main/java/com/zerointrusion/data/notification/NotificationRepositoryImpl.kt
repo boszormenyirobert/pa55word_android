@@ -1,7 +1,7 @@
 package com.zerointrusion.data.notification
 
-import com.zerointrusion.domain.BackendPushNotification
-import com.zerointrusion.domain.NotificationRepository
+import com.zerointrusion.domain.notification.BackendPushNotification
+import com.zerointrusion.domain.notification.NotificationRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow

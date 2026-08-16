@@ -45,8 +45,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.zerointrusion.domain.BackendPushNotification
-import com.zerointrusion.presentation.NewDeviceRegistrationUiState
+import com.zerointrusion.domain.notification.BackendPushNotification
+import com.zerointrusion.presentation.app.QrNamespaceRegistrationUiState
 import com.zerointrusion.ui.theme.Blue
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ActionDeclineRed
@@ -62,12 +62,12 @@ fun PostLoginHomeScreen(
     email: String,
     notification: BackendPushNotification?,
     notificationError: String?,
-    newDeviceRegistrationState: NewDeviceRegistrationUiState,
+    qrNamespaceRegistrationState: QrNamespaceRegistrationUiState,
     onOpenDeviceInformation: () -> Unit,
     onOpenQrRead: () -> Unit,
     onOpenConnectedDevices: () -> Unit,
     onOpenNamespaces: () -> Unit,
-    onClearNewDeviceRegistrationState: () -> Unit,
+    onClearQrNamespaceRegistrationState: () -> Unit,
     onAllowNotification: () -> Unit,
     onDeclineNotification: () -> Unit,
     onDismissNotificationError: () -> Unit,
@@ -104,7 +104,7 @@ fun PostLoginHomeScreen(
         }
         if (granted && pendingQrNavigation) {
             pendingQrNavigation = false
-            onClearNewDeviceRegistrationState()
+            onClearQrNamespaceRegistrationState()
             onOpenQrRead()
         } else if (!granted) {
             pendingQrNavigation = false
@@ -231,7 +231,7 @@ fun PostLoginHomeScreen(
 
                     Button(
                         onClick = {
-                            onClearNewDeviceRegistrationState()
+                            onClearQrNamespaceRegistrationState()
                             if (cameraPermissionGranted) {
                                 cameraPermissionError = null
                                 onOpenQrRead()
@@ -270,18 +270,18 @@ fun PostLoginHomeScreen(
                 )
             }
 
-            when (newDeviceRegistrationState) {
-                NewDeviceRegistrationUiState.Idle -> Unit
-                NewDeviceRegistrationUiState.InProgress -> Text(
-                    text = "Registering scanned device...",
+            when (qrNamespaceRegistrationState) {
+                QrNamespaceRegistrationUiState.Idle -> Unit
+                QrNamespaceRegistrationUiState.InProgress -> Text(
+                    text = "Connecting scanned namespace...",
                     color = White,
                 )
-                is NewDeviceRegistrationUiState.Success -> Text(
-                    text = "New device registered: ${newDeviceRegistrationState.deviceId}",
+                is QrNamespaceRegistrationUiState.Success -> Text(
+                    text = "Namespace connected: ${qrNamespaceRegistrationState.namespaceName} (desktop: ${qrNamespaceRegistrationState.desktopDeviceId})",
                     color = com.zerointrusion.ui.theme.Green,
                 )
-                is NewDeviceRegistrationUiState.Error -> Text(
-                    text = newDeviceRegistrationState.message,
+                is QrNamespaceRegistrationUiState.Error -> Text(
+                    text = qrNamespaceRegistrationState.message,
                     color = ErrorTextLight,
                 )
             }

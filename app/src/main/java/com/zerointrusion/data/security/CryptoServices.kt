@@ -13,11 +13,11 @@ import com.google.gson.JsonNull
 import com.google.gson.JsonObject
 import com.google.gson.JsonPrimitive
 import com.zerointrusion.core.AppConstants
-import com.zerointrusion.domain.DekPayload
-import com.zerointrusion.domain.Device
-import com.zerointrusion.domain.Namespace
-import com.zerointrusion.domain.RegistrationFailure
-import com.zerointrusion.domain.RegistrationPayload
+import com.zerointrusion.domain.common.RegistrationFailure
+import com.zerointrusion.domain.registration.DekPayload
+import com.zerointrusion.domain.registration.Device
+import com.zerointrusion.domain.registration.Namespace
+import com.zerointrusion.domain.registration.RegistrationPayload
 import java.nio.charset.StandardCharsets
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
@@ -193,11 +193,10 @@ class DefaultNamespaceService @Inject constructor() : NamespaceService {
     override fun createNamespace(name: String, url: String): Namespace {
         val normalizedName = name.trim()
         val normalizedUrl = url.trim().trimEnd('/')
-        // The spec requires local namespaceId generation but does not define the source,
-        // so v1 derives it deterministically from the normalized namespace name and base URL.
+        // Keep namespace IDs deterministic while fitting the backend's shorter identifier format.
         val seed = "$normalizedName|$normalizedUrl"
         val digest = MessageDigest.getInstance("SHA-256").digest(seed.toByteArray(StandardCharsets.UTF_8))
-        val namespaceId = digest.joinToString(separator = "") { "%02x".format(it) }
+        val namespaceId = digest.joinToString(separator = "") { "%02x".format(it) }.take(10)
 
         return Namespace(
             namespaceId = namespaceId,

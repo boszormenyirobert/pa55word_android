@@ -4,7 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
-import com.zerointrusion.domain.BackendPushNotification
+import com.zerointrusion.domain.notification.BackendPushNotification
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -90,6 +90,10 @@ class NotificationIntentCodec @Inject constructor(
             KEY_ACCOUNT_ID_CAPITALIZED,
         )
         val deviceId = deliveredData.firstNonBlank(
+            EXTRA_REQUESTING_DEVICE_ID,
+            KEY_REQUESTING_DEVICE_ID,
+            KEY_REQUESTING_DEVICE_ID_SNAKE,
+            KEY_REQUESTING_DEVICE_ID_CAPITALIZED,
             EXTRA_DEVICE_ID,
             KEY_DEVICE_ID,
             KEY_DEVICE_ID_SNAKE,
@@ -119,6 +123,7 @@ class NotificationIntentCodec @Inject constructor(
         private const val EXTRA_TYPE = "push_type"
         private const val EXTRA_SCREEN = "push_screen"
         private const val EXTRA_ACCOUNT_ID = "push_account_id"
+        private const val EXTRA_REQUESTING_DEVICE_ID = "push_requesting_device_id"
         private const val EXTRA_DEVICE_ID = "push_device_id"
         private const val EXTRA_RECEIVED_AT = "push_received_at"
         private const val EXTRA_DATA_JSON = "push_data_json"
@@ -129,6 +134,9 @@ class NotificationIntentCodec @Inject constructor(
         private const val KEY_ACCOUNT_ID = "accountId"
         private const val KEY_ACCOUNT_ID_SNAKE = "account_id"
         private const val KEY_ACCOUNT_ID_CAPITALIZED = "accountID"
+        private const val KEY_REQUESTING_DEVICE_ID = "requestingDeviceId"
+        private const val KEY_REQUESTING_DEVICE_ID_SNAKE = "requesting_device_id"
+        private const val KEY_REQUESTING_DEVICE_ID_CAPITALIZED = "requestingDeviceID"
         private const val KEY_DEVICE_ID = "deviceId"
         private const val KEY_DEVICE_ID_SNAKE = "device_id"
         private const val KEY_DEVICE_ID_CAPITALIZED = "deviceID"

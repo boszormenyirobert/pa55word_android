@@ -7,7 +7,7 @@ import androidx.security.crypto.MasterKey
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.zerointrusion.core.AppConstants
-import com.zerointrusion.domain.NamespaceEntry
+import com.zerointrusion.domain.namespaces.NamespaceEntry
 import java.io.IOException
 import java.security.GeneralSecurityException
 import kotlinx.coroutines.Dispatchers

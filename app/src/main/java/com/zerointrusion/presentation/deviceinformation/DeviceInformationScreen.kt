@@ -1,21 +1,17 @@
-package com.zerointrusion.presentation.home
+package com.zerointrusion.presentation.deviceinformation
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -30,10 +26,7 @@ import com.zerointrusion.ui.theme.Yellow
 
 @Composable
 fun DeviceInformationScreen(
-    accountId: String,
-    deviceId: String,
-    namespaceName: String,
-    email: String,
+    model: DeviceInformationUiModel,
     onBack: () -> Unit,
 ) {
     Column(
@@ -54,26 +47,8 @@ fun DeviceInformationScreen(
             style = MaterialTheme.typography.headlineMedium,
             color = White,
         )
-        Text(
-            text = "Account ID: ${accountId.ifBlank { "(empty)" }}",
-            style = MaterialTheme.typography.bodyMedium,
-            color = White,
-        )
 
-        Card(
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = LightDark),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                InfoRow(label = "Device ID", value = deviceId)
-                InfoRow(label = "Namespace", value = namespaceName)
-                InfoRow(label = "Email", value = email)
-            }
-        }
+        DeviceInformationContent(model = model)
 
         OutlinedButton(
             onClick = onBack,
@@ -82,16 +57,5 @@ fun DeviceInformationScreen(
         ) {
             Text("Back", color = White)
         }
-    }
-}
-
-@Composable
-private fun InfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(text = label, color = White, style = MaterialTheme.typography.titleSmall)
-        Text(text = value.ifBlank { "(empty)" }, color = White, style = MaterialTheme.typography.bodyMedium)
     }
 }

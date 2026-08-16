@@ -13,7 +13,8 @@ import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.firebase.messaging.RemoteMessage
 import com.zerointrusion.MainActivity
 import com.zerointrusion.R
-import com.zerointrusion.domain.NotificationRepository
+import com.zerointrusion.domain.notification.BackendPushNotification
+import com.zerointrusion.domain.notification.NotificationRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,7 +41,7 @@ class PushNotificationGateway @Inject constructor(
         notificationRepository.publishNotification(notification)
     }
 
-    private fun showSystemNotification(notification: com.zerointrusion.domain.BackendPushNotification) {
+    private fun showSystemNotification(notification: BackendPushNotification) {
         createChannelIfNeeded()
 
         val intent = Intent(appContext, MainActivity::class.java).apply {

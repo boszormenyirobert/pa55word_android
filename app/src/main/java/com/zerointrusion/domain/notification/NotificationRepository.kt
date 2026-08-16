@@ -1,4 +1,4 @@
-package com.zerointrusion.domain
+package com.zerointrusion.domain.notification
 
 import kotlinx.coroutines.flow.Flow
 

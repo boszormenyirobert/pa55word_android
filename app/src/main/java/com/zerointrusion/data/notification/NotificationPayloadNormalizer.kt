@@ -1,7 +1,7 @@
 package com.zerointrusion.data.notification
 
 import com.google.firebase.messaging.RemoteMessage
-import com.zerointrusion.domain.BackendPushNotification
+import com.zerointrusion.domain.notification.BackendPushNotification
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,6 +20,9 @@ class NotificationPayloadNormalizer @Inject constructor() {
             KEY_ACCOUNT_ID_CAPITALIZED,
         )
         val deviceId = deliveredData.firstNonBlank(
+            KEY_REQUESTING_DEVICE_ID,
+            KEY_REQUESTING_DEVICE_ID_SNAKE,
+            KEY_REQUESTING_DEVICE_ID_CAPITALIZED,
             KEY_DEVICE_ID,
             KEY_DEVICE_ID_SNAKE,
             KEY_DEVICE_ID_CAPITALIZED,
@@ -49,6 +52,9 @@ class NotificationPayloadNormalizer @Inject constructor() {
         private const val KEY_ACCOUNT_ID = "accountId"
         private const val KEY_ACCOUNT_ID_SNAKE = "account_id"
         private const val KEY_ACCOUNT_ID_CAPITALIZED = "accountID"
+        private const val KEY_REQUESTING_DEVICE_ID = "requestingDeviceId"
+        private const val KEY_REQUESTING_DEVICE_ID_SNAKE = "requesting_device_id"
+        private const val KEY_REQUESTING_DEVICE_ID_CAPITALIZED = "requestingDeviceID"
         private const val KEY_DEVICE_ID = "deviceId"
         private const val KEY_DEVICE_ID_SNAKE = "device_id"
         private const val KEY_DEVICE_ID_CAPITALIZED = "deviceID"

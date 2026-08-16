@@ -1,4 +1,4 @@
-package com.zerointrusion.domain
+package com.zerointrusion.domain.registration
 
 data class Namespace(
     val namespaceId: String,
@@ -26,14 +26,6 @@ data class RegistrationPayload(
 
 data class RegistrationResult(
     val accountId: String,
-)
-
-data class NamespaceEntry(
-    val namespaceName: String,
-    val namespaceId: String,
-    val namespaceUrl: String,
-    val accountId: String,
-    val deviceId: String,
 )
 
 data class RegistrationState(
@@ -66,21 +58,4 @@ data class RegistrationFormValidation(
             phoneError == null &&
             namespaceNameError == null &&
             apiUrlError == null
-}
-
-data class NamespaceFormValidation(
-    val namespaceNameError: String? = null,
-    val namespaceUrlError: String? = null,
-) {
-    val isValid: Boolean =
-        namespaceNameError == null &&
-            namespaceUrlError == null
-}
-
-sealed class RegistrationFailure(message: String) : Exception(message) {
-    class Validation(message: String) : RegistrationFailure(message)
-    class Security(message: String) : RegistrationFailure(message)
-    class Network(message: String) : RegistrationFailure(message)
-    class Server(message: String) : RegistrationFailure(message)
-    class Unexpected(message: String) : RegistrationFailure(message)
 }

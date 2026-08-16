@@ -6,7 +6,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.google.gson.Gson
 import com.zerointrusion.core.AppConstants
-import com.zerointrusion.domain.RegistrationState
+import com.zerointrusion.domain.registration.RegistrationState
 import java.io.IOException
 import java.security.GeneralSecurityException
 import kotlinx.coroutines.Dispatchers

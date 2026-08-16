@@ -8,7 +8,11 @@ import com.zerointrusion.data.firebase.DefaultFirebaseService
 import com.zerointrusion.data.firebase.FirebaseService
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.notification.NotificationRepositoryImpl
-import com.zerointrusion.data.repository.DefaultRegistrationRepository
+import com.zerointrusion.data.repository.authentication.AuthenticationRepositoryImpl
+import com.zerointrusion.data.repository.connecteddevices.ConnectedDevicesRepositoryImpl
+import com.zerointrusion.data.repository.namespaces.NamespacesRepositoryImpl
+import com.zerointrusion.data.repository.qr.QrNamespaceRegistrationRepositoryImpl
+import com.zerointrusion.data.repository.registration.RegistrationRepositoryImpl
 import com.zerointrusion.data.security.AndroidKeyStoreService
 import com.zerointrusion.data.security.DekService
 import com.zerointrusion.data.security.DefaultDekService
@@ -23,8 +27,13 @@ import com.zerointrusion.data.storage.EncryptedNamespaceStore
 import com.zerointrusion.data.storage.NamespaceStore
 import com.zerointrusion.data.storage.EncryptedRegistrationStateStore
 import com.zerointrusion.data.storage.RegistrationStateStore
-import com.zerointrusion.domain.NotificationRepository
-import com.zerointrusion.domain.RegistrationRepository
+import com.zerointrusion.domain.notification.NotificationRepository
+import com.zerointrusion.domain.authentication.AuthenticationRepository
+import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
+import com.zerointrusion.domain.namespaces.NamespacesRepository
+import com.zerointrusion.domain.qr.QrNamespaceRegistrationRepository
+import com.zerointrusion.domain.registration.RegistrationRepository
+import com.zerointrusion.domain.registration.RegistrationValidator
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -145,10 +154,9 @@ object AppModule {
     fun provideFirebaseService(
         @ApplicationContext context: Context,
         registrationApi: RegistrationApi,
-        registrationStateStore: RegistrationStateStore,
         signatureService: SignatureService,
         gson: Gson,
-    ): FirebaseService = DefaultFirebaseService(context, registrationApi, registrationStateStore, signatureService, gson)
+    ): FirebaseService = DefaultFirebaseService(context, registrationApi, signatureService, gson)
 
     @Provides
     @Singleton
@@ -166,11 +174,10 @@ object AppModule {
         namespaceService: NamespaceService,
         dekService: DekService,
         signatureService: SignatureService,
-        namespaceStore: NamespaceStore,
         registrationStateStore: RegistrationStateStore,
-        validator: com.zerointrusion.domain.RegistrationValidator,
+        validator: RegistrationValidator,
         gson: Gson,
-    ): RegistrationRepository = DefaultRegistrationRepository(
+    ): RegistrationRepository = RegistrationRepositoryImpl(
         registrationApi = registrationApi,
         firebaseService = firebaseService,
         keyStoreService = keyStoreService,
@@ -178,9 +185,70 @@ object AppModule {
         namespaceService = namespaceService,
         dekService = dekService,
         signatureService = signatureService,
-        namespaceStore = namespaceStore,
         stateStore = registrationStateStore,
         validator = validator,
+        gson = gson,
+    )
+
+    @Provides
+    @Singleton
+    fun provideNamespacesRepository(
+        namespaceStore: NamespaceStore,
+    ): NamespacesRepository = NamespacesRepositoryImpl(
+        namespaceStore = namespaceStore,
+    )
+
+    @Provides
+    @Singleton
+    fun provideConnectedDevicesRepository(
+        registrationApi: RegistrationApi,
+        registrationStateStore: RegistrationStateStore,
+        signatureService: SignatureService,
+        gson: Gson,
+    ): ConnectedDevicesRepository = ConnectedDevicesRepositoryImpl(
+        registrationApi = registrationApi,
+        stateStore = registrationStateStore,
+        signatureService = signatureService,
+        gson = gson,
+    )
+
+    @Provides
+    @Singleton
+    fun provideQrNamespaceRegistrationRepository(
+        registrationApi: RegistrationApi,
+        keyStoreService: KeyStoreService,
+        namespaceStore: NamespaceStore,
+        registrationStateStore: RegistrationStateStore,
+        dekService: DekService,
+        signatureService: SignatureService,
+        validator: RegistrationValidator,
+        firebaseService: FirebaseService,
+        gson: Gson,
+    ): QrNamespaceRegistrationRepository = QrNamespaceRegistrationRepositoryImpl(
+        registrationApi = registrationApi,
+        keyStoreService = keyStoreService,
+        namespaceStore = namespaceStore,
+        stateStore = registrationStateStore,
+        dekService = dekService,
+        signatureService = signatureService,
+        validator = validator,
+        firebaseService = firebaseService,
+        gson = gson,
+    )
+
+    @Provides
+    @Singleton
+    fun provideAuthenticationRepository(
+        registrationApi: RegistrationApi,
+        namespaceStore: NamespaceStore,
+        registrationStateStore: RegistrationStateStore,
+        signatureService: SignatureService,
+        gson: Gson,
+    ): AuthenticationRepository = AuthenticationRepositoryImpl(
+        registrationApi = registrationApi,
+        namespaceStore = namespaceStore,
+        stateStore = registrationStateStore,
+        signatureService = signatureService,
         gson = gson,
     )
 }
