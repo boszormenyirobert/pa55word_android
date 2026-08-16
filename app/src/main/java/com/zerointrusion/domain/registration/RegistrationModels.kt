@@ -9,6 +9,7 @@ data class Namespace(
 data class Device(
     val deviceId: String,
     val publicKey: String,
+    val deviceName: String,
 )
 
 data class DekPayload(
@@ -31,6 +32,7 @@ data class RegistrationResult(
 data class RegistrationState(
     val accountId: String,
     val deviceId: String,
+    val deviceName: String,
     val namespaceName: String,
     val namespaceUrl: String,
     val namespaceId: String,

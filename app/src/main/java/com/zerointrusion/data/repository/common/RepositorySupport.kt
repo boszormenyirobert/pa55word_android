@@ -49,6 +49,7 @@ internal fun RegistrationPayload.toDto(): AccountRegistrationRequestDto = Accoun
     device = DeviceDto(
         deviceId = device.deviceId,
         publicKey = device.publicKey,
+        deviceName = device.deviceName,
     ),
     dek = DekDto(
         deviceId = dek.deviceId,

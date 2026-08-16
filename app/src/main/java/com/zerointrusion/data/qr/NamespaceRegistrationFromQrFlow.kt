@@ -66,6 +66,7 @@ internal class NamespaceRegistrationFromQrFlow(
             device = DeviceDto(
                 deviceId = registrationState.deviceId,
                 publicKey = encodedPhonePublicKey,
+                deviceName = registrationState.deviceName,
             ),
             dek = DekDto(
                 deviceId = registrationState.deviceId,

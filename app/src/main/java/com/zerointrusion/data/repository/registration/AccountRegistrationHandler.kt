@@ -104,6 +104,7 @@ internal class AccountRegistrationHandler(
                 val state = RegistrationState(
                     accountId = body.accountId,
                     deviceId = payload.device.deviceId,
+                    deviceName = payload.device.deviceName,
                     namespaceName = payload.namespace.name,
                     namespaceUrl = payload.namespace.url,
                     namespaceId = payload.namespace.namespaceId,

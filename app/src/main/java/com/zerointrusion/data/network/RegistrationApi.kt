@@ -17,6 +17,7 @@ data class NamespaceDto(
 data class DeviceDto(
     val deviceId: String,
     val publicKey: String,
+    val deviceName: String? = null,
     val deviceIdAdditional: String? = null,
 )
 

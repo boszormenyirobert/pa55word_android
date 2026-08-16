@@ -183,8 +183,21 @@ class DefaultDeviceService @Inject constructor() : DeviceService {
                 append(deviceAlphabet[secureRandom.nextInt(deviceAlphabet.length)])
             }
         }
+        val deviceName = buildDeviceName()
 
-        return Device(deviceId = deviceId, publicKey = encodedKey)
+        return Device(deviceId = deviceId, publicKey = encodedKey, deviceName = deviceName)
+    }
+
+    private fun buildDeviceName(): String {
+        val manufacturer = Build.MANUFACTURER?.trim().orEmpty()
+        val model = Build.MODEL?.trim().orEmpty()
+        return when {
+            manufacturer.isEmpty() && model.isEmpty() -> "Android device"
+            model.startsWith(manufacturer, ignoreCase = true) -> model
+            manufacturer.isEmpty() -> model
+            model.isEmpty() -> manufacturer
+            else -> "$manufacturer $model"
+        }
     }
 }
 
