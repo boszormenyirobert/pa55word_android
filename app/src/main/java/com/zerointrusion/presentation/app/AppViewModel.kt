@@ -125,6 +125,47 @@ class AppViewModel @Inject constructor(
         _uiState.update { it.copy(qrNamespaceRegistrationState = QrNamespaceRegistrationUiState.Idle) }
     }
 
+    fun setSelectedNamespace(namespace: NamespaceEntry) {
+        viewModelScope.launch {
+            runCatching { namespacesRepository.setSelectedNamespace(namespace) }
+                .onSuccess { state ->
+                    _uiState.update {
+                        it.copy(
+                            registrationState = state,
+                            namespaceSelectionErrorMessage = null,
+                        )
+                    }
+                }
+                .onFailure { throwable ->
+                    val message = (throwable as? RegistrationFailure)?.message
+                        ?: throwable.message
+                        ?: "Namespace selection failed."
+                    _uiState.update {
+                        it.copy(namespaceSelectionErrorMessage = message)
+                    }
+                }
+        }
+    }
+
+    fun deleteNamespace(namespace: NamespaceEntry) {
+        viewModelScope.launch {
+            runCatching { namespacesRepository.deleteNamespace(namespace) }
+                .onSuccess {
+                    _uiState.update {
+                        it.copy(namespaceManagementErrorMessage = null)
+                    }
+                }
+                .onFailure { throwable ->
+                    val message = (throwable as? RegistrationFailure)?.message
+                        ?: throwable.message
+                        ?: "Namespace delete failed."
+                    _uiState.update {
+                        it.copy(namespaceManagementErrorMessage = message)
+                    }
+                }
+        }
+    }
+
     fun loadConnectedDevices() {
         if (_uiState.value.connectedDevicesState is ConnectedDevicesUiState.InProgress) {
             return

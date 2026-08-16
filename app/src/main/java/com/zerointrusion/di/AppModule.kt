@@ -194,8 +194,10 @@ object AppModule {
     @Singleton
     fun provideNamespacesRepository(
         namespaceStore: NamespaceStore,
+        registrationStateStore: RegistrationStateStore,
     ): NamespacesRepository = NamespacesRepositoryImpl(
         namespaceStore = namespaceStore,
+        stateStore = registrationStateStore,
     )
 
     @Provides

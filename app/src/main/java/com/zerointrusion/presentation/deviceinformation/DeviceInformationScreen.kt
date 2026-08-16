@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
+import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
@@ -27,6 +28,9 @@ import com.zerointrusion.ui.theme.Yellow
 @Composable
 fun DeviceInformationScreen(
     model: DeviceInformationUiModel,
+    namespaces: List<NamespaceEntry>,
+    errorMessage: String?,
+    onNamespaceSelected: (NamespaceEntry) -> Unit,
     onBack: () -> Unit,
 ) {
     Column(
@@ -48,7 +52,12 @@ fun DeviceInformationScreen(
             color = White,
         )
 
-        DeviceInformationContent(model = model)
+        DeviceInformationContent(
+            model = model,
+            namespaces = namespaces,
+            errorMessage = errorMessage,
+            onNamespaceSelected = onNamespaceSelected,
+        )
 
         OutlinedButton(
             onClick = onBack,

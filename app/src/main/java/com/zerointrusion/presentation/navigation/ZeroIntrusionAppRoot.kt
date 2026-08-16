@@ -120,6 +120,9 @@ fun ZeroIntrusionAppRoot(
                         namespaceUrl = appState.registrationState?.namespaceUrl.orEmpty(),
                         email = appState.registrationState?.email.orEmpty(),
                     ),
+                    namespaces = appState.namespaces,
+                    errorMessage = appState.namespaceSelectionErrorMessage,
+                    onNamespaceSelected = appViewModel::setSelectedNamespace,
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -146,6 +149,12 @@ fun ZeroIntrusionAppRoot(
             composable(AppRoute.Namespaces.route) {
                 NamespacesScreen(
                     namespaces = appState.namespaces,
+                    gatewayAccountId = appState.registrationState?.accountId.orEmpty(),
+                    gatewayNamespaceId = appState.registrationState?.namespaceId.orEmpty(),
+                    gatewayNamespaceName = appState.registrationState?.namespaceName.orEmpty(),
+                    gatewayNamespaceUrl = appState.registrationState?.namespaceUrl.orEmpty(),
+                    errorMessage = appState.namespaceManagementErrorMessage,
+                    onDeleteNamespace = appViewModel::deleteNamespace,
                     onBack = { navController.popBackStack() },
                 )
             }

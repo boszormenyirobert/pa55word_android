@@ -48,6 +48,8 @@ data class AppUiState(
     val qrNamespaceRegistrationState: QrNamespaceRegistrationUiState = QrNamespaceRegistrationUiState.Idle,
     val connectedDevicesState: ConnectedDevicesUiState = ConnectedDevicesUiState.Idle,
     val namespaces: List<NamespaceEntry> = emptyList(),
+    val namespaceSelectionErrorMessage: String? = null,
+    val namespaceManagementErrorMessage: String? = null,
     val notificationOverlay: NotificationOverlayUiState = NotificationOverlayUiState(),
 ) {
     val currentRoute: String
