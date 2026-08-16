@@ -149,7 +149,9 @@ private fun NamespaceCard(
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = LightDark),
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(BorderStroke(2.dp, White.copy(alpha = 0.28f)), RoundedCornerShape(20.dp)),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
