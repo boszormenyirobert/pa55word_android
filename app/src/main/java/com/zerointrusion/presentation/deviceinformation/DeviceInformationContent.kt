@@ -24,6 +24,12 @@ internal fun DeviceInformationContent(model: DeviceInformationUiModel) {
         color = White,
     )
 
+    Text(
+        text = "Device ID: ${model.deviceId.ifBlank { "(empty)" }}",
+        style = MaterialTheme.typography.bodyMedium,
+        color = White,
+    )
+
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = LightDark),
@@ -33,11 +39,18 @@ internal fun DeviceInformationContent(model: DeviceInformationUiModel) {
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            DeviceInformationRow(label = "Device ID", value = model.deviceId)
-            DeviceInformationRow(label = "Namespace", value = model.namespaceName)
+            DeviceInformationRow(label = "Namespace Name", value = model.namespaceName)
+            DeviceInformationRow(label = "Namespace ID", value = model.namespaceId)
+            DeviceInformationRow(label = "Namespace URL", value = model.namespaceUrl)
             DeviceInformationRow(label = "Email", value = model.email)
         }
     }
+
+    Text(
+        text = "For a completely new desktop registration, this namespace is set as the default gateway. If this namespace is deleted later and the server is no longer reachable, please choose another namespace that can become the new default.",
+        style = MaterialTheme.typography.bodyMedium,
+        color = White,
+    )
 }
 
 @Composable

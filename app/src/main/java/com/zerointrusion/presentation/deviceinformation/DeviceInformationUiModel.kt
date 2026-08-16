@@ -4,5 +4,7 @@ data class DeviceInformationUiModel(
     val accountId: String,
     val deviceId: String,
     val namespaceName: String,
+    val namespaceId: String,
+    val namespaceUrl: String,
     val email: String,
 )

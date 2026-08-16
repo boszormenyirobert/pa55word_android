@@ -116,6 +116,8 @@ fun ZeroIntrusionAppRoot(
                         accountId = appState.registrationState?.accountId.orEmpty(),
                         deviceId = appState.registrationState?.deviceId.orEmpty(),
                         namespaceName = appState.registrationState?.namespaceName.orEmpty(),
+                        namespaceId = appState.registrationState?.namespaceId.orEmpty(),
+                        namespaceUrl = appState.registrationState?.namespaceUrl.orEmpty(),
                         email = appState.registrationState?.email.orEmpty(),
                     ),
                     onBack = { navController.popBackStack() },
