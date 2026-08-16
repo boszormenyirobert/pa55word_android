@@ -89,7 +89,14 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch {
             notificationRepository.observeNotification().collect { notification ->
                 _uiState.update { state ->
+                    val previousNotificationTimestamp = state.notificationOverlay.notification?.receivedAtEpochMillis
+                    val shouldForceHomeNavigation = notification != null && notification.receivedAtEpochMillis != previousNotificationTimestamp
                     state.copy(
+                        homeNavigationRequestKey = if (shouldForceHomeNavigation) {
+                            state.homeNavigationRequestKey + 1
+                        } else {
+                            state.homeNavigationRequestKey
+                        },
                         notificationOverlay = resolveNotificationOverlay(
                             notification = notification,
                             registrationState = state.registrationState,

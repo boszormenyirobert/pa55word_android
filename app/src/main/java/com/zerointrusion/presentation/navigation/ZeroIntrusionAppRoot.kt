@@ -45,6 +45,17 @@ fun ZeroIntrusionAppRoot(
         }
     }
 
+    LaunchedEffect(appState.homeNavigationRequestKey) {
+        if (appState.notificationOverlay.notification != null && navController.currentDestination?.route != AppRoute.Home.route) {
+            navController.navigate(AppRoute.Home.route) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    inclusive = true
+                }
+                launchSingleTop = true
+            }
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
