@@ -1,5 +1,6 @@
 package com.zerointrusion.presentation.app
 
+import com.zerointrusion.domain.authentication.ActiveDesktopSession
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.notification.BackendPushNotification
@@ -30,6 +31,17 @@ sealed class ConnectedDevicesUiState {
     data class Error(val message: String) : ConnectedDevicesUiState()
 }
 
+sealed class DesktopSessionsUiState {
+    data object Idle : DesktopSessionsUiState()
+    data object InProgress : DesktopSessionsUiState()
+    data class Success(
+        val sessions: List<ActiveDesktopSession>,
+        val revokingAttestationId: String? = null,
+        val message: String? = null,
+    ) : DesktopSessionsUiState()
+    data class Error(val message: String) : DesktopSessionsUiState()
+}
+
 data class NotificationOverlayUiState(
     val notification: BackendPushNotification? = null,
     val mismatchError: String? = null,
@@ -47,6 +59,7 @@ data class AppUiState(
     val fcmSyncState: FcmSyncUiState = FcmSyncUiState.Idle,
     val qrNamespaceRegistrationState: QrNamespaceRegistrationUiState = QrNamespaceRegistrationUiState.Idle,
     val connectedDevicesState: ConnectedDevicesUiState = ConnectedDevicesUiState.Idle,
+    val desktopSessionsState: DesktopSessionsUiState = DesktopSessionsUiState.Idle,
     val namespaces: List<NamespaceEntry> = emptyList(),
     val namespaceSelectionErrorMessage: String? = null,
     val namespaceManagementErrorMessage: String? = null,

@@ -7,6 +7,7 @@ import com.zerointrusion.data.repository.common.ACCOUNT_LOG_TAG
 import com.zerointrusion.data.repository.common.RootDeviceFetchSignaturePayload
 import com.zerointrusion.data.repository.common.buildConnectedDevicesUrl
 import com.zerointrusion.data.repository.common.mapNetworkException
+import com.zerointrusion.data.repository.common.newRequestNonce
 import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.domain.common.RegistrationFailure
@@ -34,15 +35,18 @@ class ConnectedDevicesRepositoryImpl(
         if (registrationState.deviceId.isBlank()) {
             throw RegistrationFailure.Validation("The stored registration state does not contain a valid deviceId.")
         }
+        val nonce = newRequestNonce()
 
         val requestUrl = buildConnectedDevicesUrl(
             baseUrl = registrationState.namespaceUrl,
             accountId = registrationState.accountId,
             deviceId = registrationState.deviceId,
+            nonce = nonce,
         )
         val signaturePayload = RootDeviceFetchSignaturePayload(
             accountId = registrationState.accountId,
             deviceId = registrationState.deviceId,
+            nonce = nonce,
         )
         val signaturePayloadJson = gson.toJson(signaturePayload)
         val signature = signatureService.signJsonString(signaturePayloadJson)

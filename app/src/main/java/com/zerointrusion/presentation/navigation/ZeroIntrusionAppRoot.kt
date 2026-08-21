@@ -14,6 +14,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.zerointrusion.domain.notification.NotificationDecision
 import com.zerointrusion.presentation.app.AppViewModel
+import com.zerointrusion.presentation.authentication.DesktopSessionsScreen
 import com.zerointrusion.presentation.auth.SecurityScreen
 import com.zerointrusion.presentation.common.LoadingScreen
 import com.zerointrusion.presentation.connecteddevices.ConnectedDevicesScreen
@@ -108,6 +109,9 @@ fun ZeroIntrusionAppRoot(
                     onOpenConnectedDevices = {
                         navController.navigate(AppRoute.ConnectedDevices.route)
                     },
+                    onOpenDesktopSessions = {
+                        navController.navigate(AppRoute.DesktopSessions.route)
+                    },
                     onOpenNamespaces = {
                         navController.navigate(AppRoute.Namespaces.route)
                     },
@@ -155,6 +159,19 @@ fun ZeroIntrusionAppRoot(
                     accountId = appState.registrationState?.accountId.orEmpty(),
                     state = appState.connectedDevicesState,
                     onRetry = appViewModel::loadConnectedDevices,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.DesktopSessions.route) {
+                LaunchedEffect(Unit) {
+                    appViewModel.loadDesktopSessions()
+                }
+                DesktopSessionsScreen(
+                    accountId = appState.registrationState?.accountId.orEmpty(),
+                    mobileDeviceId = appState.registrationState?.deviceId.orEmpty(),
+                    state = appState.desktopSessionsState,
+                    onRetry = appViewModel::loadDesktopSessions,
+                    onRevokeSession = appViewModel::revokeDesktopSession,
                     onBack = { navController.popBackStack() },
                 )
             }

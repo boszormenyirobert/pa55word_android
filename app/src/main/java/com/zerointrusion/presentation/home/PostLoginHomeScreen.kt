@@ -39,10 +39,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.zerointrusion.domain.notification.BackendPushNotification
@@ -66,6 +71,7 @@ fun PostLoginHomeScreen(
     onOpenDeviceInformation: () -> Unit,
     onOpenQrRead: () -> Unit,
     onOpenConnectedDevices: () -> Unit,
+    onOpenDesktopSessions: () -> Unit,
     onOpenNamespaces: () -> Unit,
     onClearQrNamespaceRegistrationState: () -> Unit,
     onAllowNotification: () -> Unit,
@@ -254,6 +260,13 @@ fun PostLoginHomeScreen(
                     }
 
                     Button(
+                        onClick = onOpenDesktopSessions,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Desktop sessions")
+                    }
+
+                    Button(
                         onClick = onOpenNamespaces,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -373,18 +386,19 @@ private fun NotificationStateBox(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
+                val payloadType = notification.data["type"].orEmpty()
                 Text("Incoming notification", color = White, style = MaterialTheme.typography.titleMedium)
-                Text("Title: ${notification.title.ifBlank { "(empty)" }}", color = White)
-                Text("Body: ${notification.body.ifBlank { "(empty)" }}", color = White)
-                Text("Type: ${notification.type.ifBlank { "(empty)" }}", color = White)
-                Text("Screen: ${notification.screen.ifBlank { "(empty)" }}", color = White)
-                Text("Account: ${notification.accountId.ifBlank { "(empty)" }}", color = White)
-                Text("Device: ${notification.deviceId.ifBlank { "(empty)" }}", color = White)
+                Text(
+                    text = payloadType.ifBlank { notification.type.ifBlank { notification.title.ifBlank { "(empty)" } } },
+                    color = White,
+                    style = MaterialTheme.typography.titleMedium,
+                )
 
-                if (notification.data.isNotEmpty()) {
-                    notification.data.forEach { (k, v) ->
-                        Text(text = "$k: $v", color = White, style = MaterialTheme.typography.bodySmall)
-                    }
+                val deviceName = notification.data["deviceName"].orEmpty()
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    NotificationDetailLine(label = "Device", value = deviceName)
+                    NotificationDetailLine(label = "Device id", value = notification.deviceId)
+                    NotificationDetailLine(label = "Account id", value = notification.accountId)
                 }
             }
 
@@ -406,4 +420,25 @@ private fun NotificationStateBox(
             }
         }
     }
+}
+
+@Composable
+private fun NotificationDetailLine(
+    label: String,
+    value: String,
+) {
+    if (value.isBlank()) {
+        return
+    }
+
+    Text(
+        text = buildAnnotatedString {
+            withStyle(style = SpanStyle(fontWeight = FontWeight.SemiBold)) {
+                append("$label: ")
+            }
+            append(value)
+        },
+        color = White,
+        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 24.sp),
+    )
 }

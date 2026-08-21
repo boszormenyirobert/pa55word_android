@@ -68,19 +68,6 @@ class NotificationIntentCodec @Inject constructor(
     private fun fromFirebaseLaunchIntent(intent: Intent): BackendPushNotification? {
         val extras = intent.extras ?: return null
         val deliveredData = extras.toStringMap()
-
-        val title = deliveredData.firstNonBlank(
-            EXTRA_TITLE,
-            KEY_TITLE,
-            KEY_GCM_NOTIFICATION_TITLE,
-            KEY_GCM_NOTIFICATION_TITLE_ALT,
-        ).ifBlank { "Push notification" }
-        val body = deliveredData.firstNonBlank(
-            EXTRA_BODY,
-            KEY_BODY,
-            KEY_GCM_NOTIFICATION_BODY,
-            KEY_GCM_NOTIFICATION_BODY_ALT,
-        )
         val type = deliveredData.firstNonBlank(EXTRA_TYPE, KEY_TYPE)
         val screen = deliveredData.firstNonBlank(EXTRA_SCREEN, KEY_SCREEN)
         val accountId = deliveredData.firstNonBlank(
@@ -98,6 +85,32 @@ class NotificationIntentCodec @Inject constructor(
             KEY_DEVICE_ID,
             KEY_DEVICE_ID_SNAKE,
             KEY_DEVICE_ID_CAPITALIZED,
+        )
+        val deviceName = deliveredData.firstNonBlank(
+            KEY_DEVICE_NAME,
+            KEY_DEVICE_NAME_SNAKE,
+            KEY_DEVICE_NAME_CAPITALIZED,
+        )
+        val title = deliveredData.notificationDisplayTitle(
+            fallbackTitle = deliveredData.firstNonBlank(
+                EXTRA_TITLE,
+                KEY_TITLE,
+                KEY_GCM_NOTIFICATION_TITLE,
+                KEY_GCM_NOTIFICATION_TITLE_ALT,
+            ),
+            type = type,
+        )
+        val body = deliveredData.notificationDisplayBody(
+            fallbackBody = deliveredData.firstNonBlank(
+                EXTRA_BODY,
+                KEY_BODY,
+                KEY_GCM_NOTIFICATION_BODY,
+                KEY_GCM_NOTIFICATION_BODY_ALT,
+            ),
+            type = type,
+            deviceName = deviceName,
+            deviceId = deviceId,
+            accountId = accountId,
         )
 
         if (title.isBlank() && body.isBlank() && accountId.isBlank() && deviceId.isBlank()) {
@@ -134,6 +147,9 @@ class NotificationIntentCodec @Inject constructor(
         private const val KEY_ACCOUNT_ID = "accountId"
         private const val KEY_ACCOUNT_ID_SNAKE = "account_id"
         private const val KEY_ACCOUNT_ID_CAPITALIZED = "accountID"
+        private const val KEY_DEVICE_NAME = "deviceName"
+        private const val KEY_DEVICE_NAME_SNAKE = "device_name"
+        private const val KEY_DEVICE_NAME_CAPITALIZED = "deviceName"
         private const val KEY_REQUESTING_DEVICE_ID = "requestingDeviceId"
         private const val KEY_REQUESTING_DEVICE_ID_SNAKE = "requesting_device_id"
         private const val KEY_REQUESTING_DEVICE_ID_CAPITALIZED = "requestingDeviceID"

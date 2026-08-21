@@ -10,10 +10,7 @@ class NotificationPayloadNormalizer @Inject constructor() {
 
     fun fromRemoteMessage(remoteMessage: RemoteMessage): BackendPushNotification? {
         val deliveredData = remoteMessage.data.toMap()
-        val title = remoteMessage.notification?.title ?: deliveredData[KEY_TITLE] ?: "Push notification"
-        val body = remoteMessage.notification?.body ?: deliveredData[KEY_BODY] ?: ""
         val type = deliveredData[KEY_TYPE].orEmpty()
-        val screen = deliveredData[KEY_SCREEN].orEmpty()
         val accountId = deliveredData.firstNonBlank(
             KEY_ACCOUNT_ID,
             KEY_ACCOUNT_ID_SNAKE,
@@ -27,6 +24,23 @@ class NotificationPayloadNormalizer @Inject constructor() {
             KEY_DEVICE_ID_SNAKE,
             KEY_DEVICE_ID_CAPITALIZED,
         )
+        val deviceName = deliveredData.firstNonBlank(
+            KEY_DEVICE_NAME,
+            KEY_DEVICE_NAME_SNAKE,
+            KEY_DEVICE_NAME_CAPITALIZED,
+        )
+        val title = deliveredData.notificationDisplayTitle(
+            fallbackTitle = remoteMessage.notification?.title ?: deliveredData[KEY_TITLE],
+            type = type,
+        )
+        val body = deliveredData.notificationDisplayBody(
+            fallbackBody = remoteMessage.notification?.body ?: deliveredData[KEY_BODY],
+            type = type,
+            deviceName = deviceName,
+            deviceId = deviceId,
+            accountId = accountId,
+        )
+        val screen = deliveredData[KEY_SCREEN].orEmpty()
 
         if (title.isBlank() && body.isBlank() && accountId.isBlank() && deviceId.isBlank()) {
             return null
@@ -52,6 +66,9 @@ class NotificationPayloadNormalizer @Inject constructor() {
         private const val KEY_ACCOUNT_ID = "accountId"
         private const val KEY_ACCOUNT_ID_SNAKE = "account_id"
         private const val KEY_ACCOUNT_ID_CAPITALIZED = "accountID"
+        private const val KEY_DEVICE_NAME = "deviceName"
+        private const val KEY_DEVICE_NAME_SNAKE = "device_name"
+        private const val KEY_DEVICE_NAME_CAPITALIZED = "deviceName"
         private const val KEY_REQUESTING_DEVICE_ID = "requestingDeviceId"
         private const val KEY_REQUESTING_DEVICE_ID_SNAKE = "requesting_device_id"
         private const val KEY_REQUESTING_DEVICE_ID_CAPITALIZED = "requestingDeviceID"

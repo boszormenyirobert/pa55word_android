@@ -12,6 +12,7 @@ import com.zerointrusion.data.qr.QrPayloadParser
 import com.zerointrusion.data.repository.common.QR_LOG_TAG
 import com.zerointrusion.data.repository.common.buildRootDeviceRegistrationUrl
 import com.zerointrusion.data.repository.common.mapNetworkException
+import com.zerointrusion.data.repository.common.newRequestNonce
 import com.zerointrusion.data.repository.common.serverFailure
 import com.zerointrusion.data.repository.registration.FcmTokenSynchronizer
 import com.zerointrusion.data.security.DekService
@@ -72,6 +73,7 @@ internal class QrNamespaceRegistrationHandler(
             storedEncDek = storedEncDek,
         )
         val reEncryptedDek = dekService.encryptDek(rawDek, preparation.scannedPublicKey)
+        val nonce = newRequestNonce()
         val desktopRegistrationDto = NewDeviceRegistrationDto(
             accountId = preparation.namespaceEntry.accountId,
             device = DeviceDto(
@@ -84,6 +86,7 @@ internal class QrNamespaceRegistrationHandler(
                 deviceId = preparation.scannedDeviceId,
                 encDek = reEncryptedDek,
             ),
+            nonce = nonce,
         )
         val submitSignature = signatureService.signJsonString(gson.toJson(desktopRegistrationDto))
         val submitUrl = buildRootDeviceRegistrationUrl(preparation.namespaceEntry.namespaceUrl)

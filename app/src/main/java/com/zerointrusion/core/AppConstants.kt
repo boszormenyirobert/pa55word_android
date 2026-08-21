@@ -11,5 +11,7 @@ object AppConstants {
 
     const val ROOT_DEVICE_ENDPOINT_PATH = "/api/v1/root-device"
     const val FCM_ENDPOINT_PATH = "/api/v1/fcm"
-    const val AUTHENTICATION_RESPONSE_ENDPOINT_PATH = "/api/v1/authentication/response"    
+    const val AUTHENTICATION_ENDPOINT_PATH = "/api/v1/authentication"
+    const val AUTHENTICATION_RESPONSE_ENDPOINT_PATH = AUTHENTICATION_ENDPOINT_PATH + "/response"
+    const val AUTHENTICATION_DIRECT_RESPONSE_ENDPOINT_PATH = AUTHENTICATION_RESPONSE_ENDPOINT_PATH + "/direct"
 }

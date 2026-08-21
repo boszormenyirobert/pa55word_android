@@ -21,6 +21,13 @@ class AuthenticationRepositoryImpl(
         signatureService = signatureService,
         gson = gson,
     )
+    private val authenticationSessionHandler = AuthenticationSessionHandler(
+        registrationApi = registrationApi,
+        namespaceStore = namespaceStore,
+        stateStore = stateStore,
+        signatureService = signatureService,
+        gson = gson,
+    )
 
     override suspend fun respondToAuthentication(
         notificationId: String,
@@ -32,5 +39,16 @@ class AuthenticationRepositoryImpl(
         accountId = accountId,
         deviceId = deviceId,
         approved = approved,
+    )
+
+    override suspend fun fetchActiveDesktopSessions() =
+        authenticationSessionHandler.fetchActiveDesktopSessions()
+
+    override suspend fun revokeDesktopSession(
+        attestationId: String,
+        desktopDeviceId: String,
+    ) = authenticationSessionHandler.revokeDesktopSession(
+        attestationId = attestationId,
+        desktopDeviceId = desktopDeviceId,
     )
 }

@@ -8,6 +8,7 @@ import com.zerointrusion.core.AppConstants
 import com.zerointrusion.data.network.AccountErrorResponseDto
 import com.zerointrusion.data.network.FcmRegistrationRequestDto
 import com.zerointrusion.data.network.RegistrationApi
+import com.zerointrusion.data.repository.common.newRequestNonce
 import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.domain.common.RegistrationFailure
 import java.io.IOException
@@ -61,12 +62,14 @@ class DefaultFirebaseService @Inject constructor(
     ) {
         withContext(Dispatchers.IO) {
             val fcmUrl = buildFcmUrl(namespaceUrl)
+            val nonce = newRequestNonce()
 
             try {
                 val requestPayload = FcmRegistrationRequestDto(
                     accountId = accountId,
                     deviceId = deviceId,
                     fcmToken = fcmToken,
+                    nonce = nonce,
                 )
                 val requestBodyJson = gson.toJson(requestPayload)
                 val signature = signatureService.signJsonString(requestBodyJson)

@@ -14,14 +14,31 @@ import java.net.ConnectException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.net.UnknownServiceException
+import java.util.UUID
 
 internal const val QR_LOG_TAG = "ZeroIntrusionQr"
 internal const val REG_LOG_TAG = "ZeroIntrusionRegistration"
 internal const val ACCOUNT_LOG_TAG = "ZeroIntrusionAccount"
+internal const val AUTHENTICATION_LOG_TAG = "ZeroIntrusionAuthentication"
 
 internal data class RootDeviceFetchSignaturePayload(
     val accountId: String,
     val deviceId: String,
+    val nonce: String,
+)
+
+internal data class AuthenticationSignedRequestPayload(
+    val accountId: String,
+    val deviceId: String,
+    val nonce: String,
+)
+
+internal data class AuthenticationSessionRevocationSignedRequestPayload(
+    val accountId: String,
+    val deviceId: String,
+    val desktopId: String,
+    val attestationId: String,
+    val nonce: String,
 )
 
 internal fun buildRegistrationUrl(baseUrl: String): String =
@@ -30,6 +47,28 @@ internal fun buildRegistrationUrl(baseUrl: String): String =
 internal fun buildAuthenticationResponseUrl(baseUrl: String): String =
     baseUrl.trim().trimEnd('/') + AppConstants.AUTHENTICATION_RESPONSE_ENDPOINT_PATH
 
+internal fun buildAuthenticationDirectResponseUrl(baseUrl: String): String =
+    baseUrl.trim().trimEnd('/') + AppConstants.AUTHENTICATION_DIRECT_RESPONSE_ENDPOINT_PATH
+
+internal fun buildAuthenticationSessionsUrl(
+    baseUrl: String,
+    accountId: String,
+    deviceId: String,
+    nonce: String,
+): String = baseUrl.trim().trimEnd('/') +
+    AppConstants.AUTHENTICATION_ENDPOINT_PATH + "/" + accountId.trim() +
+    "?deviceId=" + deviceId.trim() + "&nonce=" + nonce.trim()
+
+internal fun buildAuthenticationSessionRevocationUrl(
+    baseUrl: String,
+    accountId: String,
+    desktopDeviceId: String,
+    attestationId: String,
+    nonce: String,
+): String = baseUrl.trim().trimEnd('/') +
+    AppConstants.AUTHENTICATION_ENDPOINT_PATH + "/" + accountId.trim() + "/" +
+    desktopDeviceId.trim() + "/" + attestationId.trim() + "?nonce=" + nonce.trim()
+
 internal fun buildRootDeviceRegistrationUrl(baseUrl: String): String =
     baseUrl.trim().trimEnd('/') + AppConstants.ROOT_DEVICE_ENDPOINT_PATH
 
@@ -37,8 +76,12 @@ internal fun buildConnectedDevicesUrl(
     baseUrl: String,
     accountId: String,
     deviceId: String,
+    nonce: String,
 ): String = baseUrl.trim().trimEnd('/') +
-    AppConstants.REGISTRATION_ENDPOINT_PATH + "/" + accountId.trim() + "/" + deviceId.trim()
+    AppConstants.REGISTRATION_ENDPOINT_PATH + "/" + accountId.trim() + "/" + deviceId.trim() +
+    "?accountId=" + accountId.trim() + "&deviceId=" + deviceId.trim() + "&nonce=" + nonce.trim()
+
+internal fun newRequestNonce(): String = UUID.randomUUID().toString().replace("-", "")
 
 internal fun RegistrationPayload.toDto(): AccountRegistrationRequestDto = AccountRegistrationRequestDto(
     namespace = NamespaceDto(

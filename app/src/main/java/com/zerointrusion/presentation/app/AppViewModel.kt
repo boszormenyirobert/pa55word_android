@@ -3,6 +3,7 @@ package com.zerointrusion.presentation.app
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.zerointrusion.domain.authentication.ActiveDesktopSession
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.notification.BackendPushNotification
@@ -194,6 +195,90 @@ class AppViewModel @Inject constructor(
                         it.copy(connectedDevicesState = ConnectedDevicesUiState.Error(message))
                     }
                 }
+        }
+    }
+
+    fun loadDesktopSessions(message: String? = null) {
+        if (_uiState.value.desktopSessionsState is DesktopSessionsUiState.InProgress) {
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(desktopSessionsState = DesktopSessionsUiState.InProgress) }
+            runCatching { authenticationRepository.fetchActiveDesktopSessions() }
+                .onSuccess { sessions ->
+                    _uiState.update {
+                        it.copy(
+                            desktopSessionsState = DesktopSessionsUiState.Success(
+                                sessions = sessions,
+                                message = message,
+                            ),
+                        )
+                    }
+                }
+                .onFailure { throwable ->
+                    val failureMessage = (throwable as? RegistrationFailure)?.message
+                        ?: throwable.message
+                        ?: "Desktop sessions fetch failed."
+                    _uiState.update {
+                        it.copy(desktopSessionsState = DesktopSessionsUiState.Error(failureMessage))
+                    }
+                }
+        }
+    }
+
+    fun revokeDesktopSession(session: ActiveDesktopSession) {
+        val currentState = _uiState.value.desktopSessionsState as? DesktopSessionsUiState.Success ?: return
+        if (currentState.revokingAttestationId != null) {
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                desktopSessionsState = currentState.copy(
+                    revokingAttestationId = session.attestationId,
+                    message = null,
+                ),
+            )
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                authenticationRepository.revokeDesktopSession(
+                    attestationId = session.attestationId,
+                    desktopDeviceId = session.deviceId,
+                )
+            }.onSuccess { result ->
+                if (result.success) {
+                    _uiState.update { state ->
+                        val successState = state.desktopSessionsState as? DesktopSessionsUiState.Success
+                            ?: return@update state
+                        state.copy(
+                            desktopSessionsState = successState.copy(
+                                sessions = successState.sessions.filterNot { it.attestationId == result.attestationId },
+                                revokingAttestationId = null,
+                                message = null,
+                            ),
+                        )
+                    }
+                } else {
+                    loadDesktopSessions(message = "The selected desktop session was already changed on the backend. The list has been refreshed.")
+                }
+            }.onFailure { throwable ->
+                val failureMessage = (throwable as? RegistrationFailure)?.message
+                    ?: throwable.message
+                    ?: "Desktop session revoke failed."
+                _uiState.update { state ->
+                    val successState = state.desktopSessionsState as? DesktopSessionsUiState.Success
+                        ?: return@update state
+                    state.copy(
+                        desktopSessionsState = successState.copy(
+                            revokingAttestationId = null,
+                            message = failureMessage,
+                        ),
+                    )
+                }
+            }
         }
     }
 

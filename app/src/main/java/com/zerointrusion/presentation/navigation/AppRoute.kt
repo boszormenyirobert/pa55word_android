@@ -8,5 +8,6 @@ sealed class AppRoute(val route: String) {
     data object DeviceInformation : AppRoute("device-information")
     data object QrRead : AppRoute("qr-read")
     data object ConnectedDevices : AppRoute("connected-devices")
+    data object DesktopSessions : AppRoute("desktop-sessions")
     data object Namespaces : AppRoute("namespaces")
 }

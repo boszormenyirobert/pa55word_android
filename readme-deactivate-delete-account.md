@@ -1,0 +1,1 @@
+Irj egy "törlesi" mechanismusra egy implementacios tervet, de ez csak terve. Szerinted mi lenne a helyes folyamat ? A "Namespace" törlesi funkcio mar implementalva van. Szerintem ha egy user a "Teljes accountot "
