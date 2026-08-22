@@ -18,6 +18,8 @@ import com.zerointrusion.domain.qr.QrNamespaceRegistrationRepository
 import com.zerointrusion.domain.registration.RegistrationRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -42,6 +44,8 @@ class AppViewModel @Inject constructor(
     private var lastFcmSyncKey: String? = null
     private var fcmSyncInFlight: Boolean = false
     private var storedNamespaces: List<NamespaceEntry> = emptyList()
+    private var liveDesktopSessionsRefreshInFlight: Boolean = false
+    private var postApprovalSessionRefreshJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -213,6 +217,7 @@ class AppViewModel @Inject constructor(
                                 sessions = sessions,
                                 message = message,
                             ),
+                            liveDesktopSessions = sessions,
                         )
                     }
                 }
@@ -227,18 +232,45 @@ class AppViewModel @Inject constructor(
         }
     }
 
+    fun refreshLiveDesktopSessions() {
+        if (liveDesktopSessionsRefreshInFlight) {
+            return
+        }
+
+        liveDesktopSessionsRefreshInFlight = true
+        viewModelScope.launch {
+            runCatching { authenticationRepository.fetchActiveDesktopSessions() }
+                .onSuccess { sessions ->
+                    _uiState.update { state ->
+                        state.copy(
+                            liveDesktopSessions = sessions,
+                            desktopSessionsState = when (val desktopState = state.desktopSessionsState) {
+                                is DesktopSessionsUiState.Success -> desktopState.copy(sessions = sessions)
+                                else -> state.desktopSessionsState
+                            },
+                        )
+                    }
+                }
+                .onFailure {
+                    // Keep the last visible main-screen live-session state if a background refresh fails.
+                }
+            liveDesktopSessionsRefreshInFlight = false
+        }
+    }
+
     fun revokeDesktopSession(session: ActiveDesktopSession) {
-        val currentState = _uiState.value.desktopSessionsState as? DesktopSessionsUiState.Success ?: return
-        if (currentState.revokingAttestationId != null) {
+        val currentState = _uiState.value.desktopSessionsState as? DesktopSessionsUiState.Success
+        if (_uiState.value.liveDesktopSessionRevokingAttestationId != null || currentState?.revokingAttestationId != null) {
             return
         }
 
         _uiState.update {
             it.copy(
-                desktopSessionsState = currentState.copy(
+                liveDesktopSessionRevokingAttestationId = session.attestationId,
+                desktopSessionsState = currentState?.copy(
                     revokingAttestationId = session.attestationId,
                     message = null,
-                ),
+                ) ?: it.desktopSessionsState,
             )
         }
 
@@ -252,13 +284,14 @@ class AppViewModel @Inject constructor(
                 if (result.success) {
                     _uiState.update { state ->
                         val successState = state.desktopSessionsState as? DesktopSessionsUiState.Success
-                            ?: return@update state
                         state.copy(
-                            desktopSessionsState = successState.copy(
+                            liveDesktopSessions = state.liveDesktopSessions.filterNot { it.attestationId == result.attestationId },
+                            liveDesktopSessionRevokingAttestationId = null,
+                            desktopSessionsState = successState?.copy(
                                 sessions = successState.sessions.filterNot { it.attestationId == result.attestationId },
                                 revokingAttestationId = null,
                                 message = null,
-                            ),
+                            ) ?: state.desktopSessionsState,
                         )
                     }
                 } else {
@@ -270,12 +303,12 @@ class AppViewModel @Inject constructor(
                     ?: "Desktop session revoke failed."
                 _uiState.update { state ->
                     val successState = state.desktopSessionsState as? DesktopSessionsUiState.Success
-                        ?: return@update state
                     state.copy(
-                        desktopSessionsState = successState.copy(
+                        liveDesktopSessionRevokingAttestationId = null,
+                        desktopSessionsState = successState?.copy(
                             revokingAttestationId = null,
                             message = failureMessage,
-                        ),
+                        ) ?: state.desktopSessionsState,
                     )
                 }
             }
@@ -337,6 +370,13 @@ class AppViewModel @Inject constructor(
             }.onSuccess {
                 notificationRepository.clearNotification()
                 _uiState.update { it.copy(notificationOverlay = NotificationOverlayUiState()) }
+                if (approved) {
+                    postApprovalSessionRefreshJob?.cancel()
+                    postApprovalSessionRefreshJob = viewModelScope.launch {
+                        delay(2_000)
+                        refreshLiveDesktopSessions()
+                    }
+                }
             }.onFailure { throwable ->
                 Log.e(QR_LOG_TAG, "Authentication response failed: ${throwable.message}", throwable)
                 notificationRepository.clearNotification()

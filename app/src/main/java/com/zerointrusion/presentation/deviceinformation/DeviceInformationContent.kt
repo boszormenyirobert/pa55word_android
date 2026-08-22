@@ -16,6 +16,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,20 +55,8 @@ internal fun DeviceInformationContent(
     val hasPendingNamespaceChange = pendingNamespace != null && pendingNamespace != selectedNamespace
 
     Text(
-        text = "Account ID: ${model.accountId.ifBlank { "(empty)" }}",
-        style = MaterialTheme.typography.bodyMedium,
-        color = White,
-    )
-
-    Text(
-        text = "Device ID: ${model.deviceId.ifBlank { "(empty)" }}",
-        style = MaterialTheme.typography.bodyMedium,
-        color = White,
-    )
-
-    Text(
-        text = "Device name: ${model.deviceName.ifBlank { "(empty)" }}",
-        style = MaterialTheme.typography.bodyMedium,
+        text = "Root device name: ${model.deviceName.ifBlank { "(empty)" }}",
+        style = MaterialTheme.typography.headlineSmall,
         color = White,
     )
 
@@ -88,15 +77,18 @@ internal fun DeviceInformationContent(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            DeviceInformationRow(label = "Namespace Name", value = model.namespaceName)
-            DeviceInformationRow(label = "Namespace ID", value = model.namespaceId)
-            DeviceInformationRow(label = "Namespace URL", value = model.namespaceUrl)
-            DeviceInformationRow(label = "Email", value = model.email)
+            Text(
+                text = "Backup connection device",
+                style = MaterialTheme.typography.titleMedium,
+                color = White,
+            )
+            DeviceInformationRow(label = "Name", value = model.namespaceName)
+            DeviceInformationRow(label = "URL", value = model.namespaceUrl)
         }
     }
 
     Text(
-        text = "For a completely new desktop registration, this namespace is set as the default gateway. If this namespace is deleted later and the server is no longer reachable, please choose another namespace that can become the new default.",
+        text = "A valid namespace must always be set here so the option to add a new Desktop as an end root-device remains available. If the current namespace is no longer valid or reachable, select another valid namespace first.",
         style = MaterialTheme.typography.bodyMedium,
         color = White,
     )
@@ -114,7 +106,10 @@ internal fun DeviceInformationContent(
                 ExposedDropdownMenuDefaults.TrailingIcon(expanded = isExpanded)
             },
             modifier = Modifier
-                .menuAnchor()
+                .menuAnchor(
+                    type = MenuAnchorType.PrimaryNotEditable,
+                    enabled = namespaces.isNotEmpty(),
+                )
                 .fillMaxWidth(),
         )
 

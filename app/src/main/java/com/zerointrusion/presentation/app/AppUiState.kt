@@ -60,6 +60,8 @@ data class AppUiState(
     val qrNamespaceRegistrationState: QrNamespaceRegistrationUiState = QrNamespaceRegistrationUiState.Idle,
     val connectedDevicesState: ConnectedDevicesUiState = ConnectedDevicesUiState.Idle,
     val desktopSessionsState: DesktopSessionsUiState = DesktopSessionsUiState.Idle,
+    val liveDesktopSessions: List<ActiveDesktopSession> = emptyList(),
+    val liveDesktopSessionRevokingAttestationId: String? = null,
     val namespaces: List<NamespaceEntry> = emptyList(),
     val namespaceSelectionErrorMessage: String? = null,
     val namespaceManagementErrorMessage: String? = null,

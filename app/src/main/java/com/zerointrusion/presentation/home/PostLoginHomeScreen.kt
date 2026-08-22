@@ -10,9 +10,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -26,11 +28,17 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +58,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.zerointrusion.domain.authentication.ActiveDesktopSession
+import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.notification.BackendPushNotification
 import com.zerointrusion.presentation.app.QrNamespaceRegistrationUiState
 import com.zerointrusion.ui.theme.Blue
@@ -59,21 +69,25 @@ import com.zerointrusion.ui.theme.ErrorTextLight
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
 import com.zerointrusion.ui.theme.Yellow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 @Composable
 fun PostLoginHomeScreen(
     deviceId: String,
     namespaceName: String,
     email: String,
+    namespaces: List<NamespaceEntry>,
+    liveDesktopSessions: List<ActiveDesktopSession>,
+    liveDesktopSessionRevokingAttestationId: String?,
     notification: BackendPushNotification?,
     notificationError: String?,
     qrNamespaceRegistrationState: QrNamespaceRegistrationUiState,
-    onOpenDeviceInformation: () -> Unit,
+    onOpenSettings: () -> Unit,
     onOpenQrRead: () -> Unit,
-    onOpenConnectedDevices: () -> Unit,
-    onOpenDesktopSessions: () -> Unit,
-    onOpenNamespaces: () -> Unit,
     onClearQrNamespaceRegistrationState: () -> Unit,
+    onRefreshLiveDesktopSessions: () -> Unit,
+    onRevokeDesktopSession: (ActiveDesktopSession) -> Unit,
     onAllowNotification: () -> Unit,
     onDeclineNotification: () -> Unit,
     onDismissNotificationError: () -> Unit,
@@ -146,6 +160,14 @@ fun PostLoginHomeScreen(
         notificationsEnabled = notificationManager.areNotificationsEnabled()
     }
 
+    LaunchedEffect(Unit) {
+        onRefreshLiveDesktopSessions()
+        while (isActive) {
+            delay(15_000)
+            onRefreshLiveDesktopSessions()
+        }
+    }
+
     val hasNotification = notification != null
 
     Box(
@@ -166,15 +188,31 @@ fun PostLoginHomeScreen(
                 .padding(bottom = 98.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(
-                text = "Home",
-                style = MaterialTheme.typography.headlineMedium,
-                color = White,
-            )
-            Text(
-                text = "Active namespace: ${namespaceName.ifBlank { "(empty)" }}",
-                style = MaterialTheme.typography.bodyLarge,
-                color = White,
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Home",
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = White,
+                )
+                IconButton(onClick = onOpenSettings) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Open settings",
+                        tint = White,
+                    )
+                }
+            }
+
+            LiveDesktopSessionsCard(
+                sessions = liveDesktopSessions,
+                namespaces = namespaces,
+                fallbackServerName = namespaceName,
+                revokingAttestationId = liveDesktopSessionRevokingAttestationId,
+                onRevokeDesktopSession = onRevokeDesktopSession,
             )
 
             if (!notificationsEnabled || !notificationsPermissionGranted) {
@@ -200,7 +238,6 @@ fun PostLoginHomeScreen(
                             onClick = {
                                 notificationsEnabled = notificationManager.areNotificationsEnabled()
                                 if (
-                                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
                                     !notificationsPermissionGranted
                                 ) {
                                     hasRequestedNotificationPermission = true
@@ -229,13 +266,6 @@ fun PostLoginHomeScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Button(
-                        onClick = onOpenDeviceInformation,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Device information")
-                    }
-
-                    Button(
                         onClick = {
                             onClearQrNamespaceRegistrationState()
                             if (cameraPermissionGranted) {
@@ -252,26 +282,6 @@ fun PostLoginHomeScreen(
                         Text("Qr-Read")
                     }
 
-                    Button(
-                        onClick = onOpenConnectedDevices,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Connected devices")
-                    }
-
-                    Button(
-                        onClick = onOpenDesktopSessions,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Desktop sessions")
-                    }
-
-                    Button(
-                        onClick = onOpenNamespaces,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Namespaces")
-                    }
                 }
             }
 
@@ -339,6 +349,107 @@ fun PostLoginHomeScreen(
                 ),
             ) {
                 Text("Decline")
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveDesktopSessionsCard(
+    sessions: List<ActiveDesktopSession>,
+    namespaces: List<NamespaceEntry>,
+    fallbackServerName: String,
+    revokingAttestationId: String?,
+    onRevokeDesktopSession: (ActiveDesktopSession) -> Unit,
+) {
+    val deviceNamesById = remember(namespaces) {
+        namespaces
+            .asReversed()
+            .associate { namespace ->
+                namespace.deviceId to namespace.deviceName.orEmpty()
+            }
+    }
+
+    Card(
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = LightDark),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text = "Desktop sessions",
+                style = MaterialTheme.typography.titleLarge,
+                color = White,
+            )
+
+            if (sessions.isEmpty()) {
+                Text(
+                    text = "No live desktop sessions.",
+                    color = White,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                sessions.forEach { session ->
+                    val resolvedServerName = deviceNamesById[session.deviceId]
+                        .takeIf { !it.isNullOrBlank() }
+                        ?: fallbackServerName.ifBlank { session.deviceId }
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Dark.copy(alpha = 0.36f)),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text(
+                                text = resolvedServerName,
+                                color = White,
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = Yellow.copy(alpha = 0.18f),
+                                    border = BorderStroke(1.dp, Yellow),
+                                ) {
+                                    Text(
+                                        text = "live session",
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                        color = Yellow,
+                                        style = MaterialTheme.typography.labelLarge,
+                                    )
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = if (revokingAttestationId == session.attestationId) {
+                                        ActionDeclineRed.copy(alpha = 0.45f)
+                                    } else {
+                                        ActionDeclineRed
+                                    },
+                                    modifier = Modifier.clickable(
+                                        enabled = revokingAttestationId != session.attestationId,
+                                        onClick = { onRevokeDesktopSession(session) },
+                                    ),
+                                ) {
+                                    Text(
+                                        if (revokingAttestationId == session.attestationId) "Revoking..." else "Revoke session",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = White.copy(alpha = if (revokingAttestationId == session.attestationId) 0.8f else 1f),
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

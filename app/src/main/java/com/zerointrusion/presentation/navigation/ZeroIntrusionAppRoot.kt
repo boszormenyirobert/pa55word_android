@@ -23,6 +23,9 @@ import com.zerointrusion.presentation.deviceinformation.DeviceInformationUiModel
 import com.zerointrusion.presentation.home.PostLoginHomeScreen
 import com.zerointrusion.presentation.namespaces.NamespacesScreen
 import com.zerointrusion.presentation.qrread.QrReadScreen
+import com.zerointrusion.presentation.settings.RecoveryConnectionScreen
+import com.zerointrusion.presentation.settings.SettingsScreen
+import com.zerointrusion.presentation.settings.SettingsConnectedDevicesScreen
 import com.zerointrusion.presentation.registration.RegistrationScreen
 import com.zerointrusion.presentation.registration.RegistrationViewModel
 
@@ -97,25 +100,21 @@ fun ZeroIntrusionAppRoot(
                     deviceId = appState.registrationState?.deviceId.orEmpty(),
                     namespaceName = appState.registrationState?.namespaceName.orEmpty(),
                     email = appState.registrationState?.email.orEmpty(),
+                    namespaces = appState.namespaces,
+                    liveDesktopSessions = appState.liveDesktopSessions,
+                    liveDesktopSessionRevokingAttestationId = appState.liveDesktopSessionRevokingAttestationId,
                     notification = appState.notificationOverlay.notification,
                     notificationError = appState.notificationOverlay.mismatchError,
                     qrNamespaceRegistrationState = appState.qrNamespaceRegistrationState,
-                    onOpenDeviceInformation = {
-                        navController.navigate(AppRoute.DeviceInformation.route)
+                    onOpenSettings = {
+                        navController.navigate(AppRoute.Settings.route)
                     },
                     onOpenQrRead = {
                         navController.navigate(AppRoute.QrRead.route)
                     },
-                    onOpenConnectedDevices = {
-                        navController.navigate(AppRoute.ConnectedDevices.route)
-                    },
-                    onOpenDesktopSessions = {
-                        navController.navigate(AppRoute.DesktopSessions.route)
-                    },
-                    onOpenNamespaces = {
-                        navController.navigate(AppRoute.Namespaces.route)
-                    },
                     onClearQrNamespaceRegistrationState = appViewModel::clearQrNamespaceRegistrationState,
+                    onRefreshLiveDesktopSessions = appViewModel::refreshLiveDesktopSessions,
+                    onRevokeDesktopSession = appViewModel::revokeDesktopSession,
                     onAllowNotification = {
                         appViewModel.onNotificationDecision(NotificationDecision.Accept)
                     },
@@ -123,6 +122,45 @@ fun ZeroIntrusionAppRoot(
                         appViewModel.onNotificationDecision(NotificationDecision.Decline)
                     },
                     onDismissNotificationError = appViewModel::dismissNotificationMismatch,
+                )
+            }
+            composable(AppRoute.Settings.route) {
+                SettingsScreen(
+                    onOpenConnectedDevices = {
+                        navController.navigate(AppRoute.SettingsConnectedDevices.route)
+                    },
+                    onOpenRecoveryConnection = {
+                        navController.navigate(AppRoute.RecoveryConnection.route)
+                    },
+                    onOpenDeviceInformation = {
+                        navController.navigate(AppRoute.DeviceInformation.route)
+                    },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.RecoveryConnection.route) {
+                RecoveryConnectionScreen(
+                    email = appState.registrationState?.email.orEmpty(),
+                    phone = appState.registrationState?.phone.orEmpty(),
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.SettingsConnectedDevices.route) {
+                SettingsConnectedDevicesScreen(
+                    deviceInformation = DeviceInformationUiModel(
+                        accountId = appState.registrationState?.accountId.orEmpty(),
+                        deviceId = appState.registrationState?.deviceId.orEmpty(),
+                        deviceName = appState.registrationState?.deviceName.orEmpty(),
+                        namespaceName = appState.registrationState?.namespaceName.orEmpty(),
+                        namespaceId = appState.registrationState?.namespaceId.orEmpty(),
+                        namespaceUrl = appState.registrationState?.namespaceUrl.orEmpty(),
+                        email = appState.registrationState?.email.orEmpty(),
+                    ),
+                    namespaces = appState.namespaces,
+                    liveDesktopSessions = appState.liveDesktopSessions,
+                    namespaceManagementErrorMessage = appState.namespaceManagementErrorMessage,
+                    onDeleteNamespace = appViewModel::deleteNamespace,
+                    onBack = { navController.popBackStack() },
                 )
             }
             composable(AppRoute.DeviceInformation.route) {
