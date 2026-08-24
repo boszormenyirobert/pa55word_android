@@ -11,3 +11,5 @@
 - 09-qr-read.md
 - 10-api-catalog.md
 - 11-local-storage.md
+- 12-desktop-tray-design.md
+- 13-api-nonce-matrix.md

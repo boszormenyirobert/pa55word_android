@@ -72,6 +72,12 @@ internal fun buildAuthenticationSessionRevocationUrl(
 internal fun buildRootDeviceRegistrationUrl(baseUrl: String): String =
     baseUrl.trim().trimEnd('/') + AppConstants.ROOT_DEVICE_ENDPOINT_PATH
 
+internal fun buildRootDeviceFetchUrl(
+    baseUrl: String,
+    nonce: String,
+): String = baseUrl.trim().trimEnd('/') +
+    AppConstants.ROOT_DEVICE_ENDPOINT_PATH + "?nonce=" + nonce.trim()
+
 internal fun buildConnectedDevicesUrl(
     baseUrl: String,
     accountId: String,
@@ -83,7 +89,7 @@ internal fun buildConnectedDevicesUrl(
 
 internal fun newRequestNonce(): String = UUID.randomUUID().toString().replace("-", "")
 
-internal fun RegistrationPayload.toDto(): AccountRegistrationRequestDto = AccountRegistrationRequestDto(
+internal fun RegistrationPayload.toDto(nonce: String): AccountRegistrationRequestDto = AccountRegistrationRequestDto(
     namespace = NamespaceDto(
         namespaceId = namespace.namespaceId,
         name = namespace.name,
@@ -100,6 +106,7 @@ internal fun RegistrationPayload.toDto(): AccountRegistrationRequestDto = Accoun
     ),
     email = email,
     phone = phone,
+    nonce = nonce,
 )
 
 internal fun serverFailure(

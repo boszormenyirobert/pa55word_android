@@ -11,6 +11,7 @@ import com.zerointrusion.data.network.DeviceDto
 import com.zerointrusion.data.network.NamespaceDto
 import com.zerointrusion.data.network.NamespaceRegistrationRequestDto
 import com.zerointrusion.data.network.RegistrationApi
+import com.zerointrusion.data.repository.common.newRequestNonce
 import com.zerointrusion.data.security.KeyStoreService
 import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.data.storage.NamespaceStore
@@ -57,6 +58,7 @@ internal class NamespaceRegistrationFromQrFlow(
 
         val encodedPhonePublicKey = Base64.encodeToString(keyStoreService.getPublicKey().encoded, Base64.NO_WRAP)
         val phoneRegistrationUrl = buildRegistrationUrl(normalizedNamespaceUrl)
+        val phoneRegistrationNonce = newRequestNonce()
         val phoneRegistrationRequest = AccountRegistrationRequestDto(
             namespace = NamespaceDto(
                 namespaceId = namespaceId,
@@ -74,6 +76,7 @@ internal class NamespaceRegistrationFromQrFlow(
             ),
             email = registrationState.email,
             phone = registrationState.phone,
+            nonce = phoneRegistrationNonce,
         )
 
         val phoneRegistrationResponse = try {

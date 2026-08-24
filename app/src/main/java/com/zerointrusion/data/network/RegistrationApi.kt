@@ -51,6 +51,7 @@ data class AccountRegistrationRequestDto(
     val dek: DekDto,
     val email: String,
     val phone: String,
+    val nonce: String,
 )
 
 data class AccountRegistrationResponseDto(
@@ -64,6 +65,7 @@ data class NamespaceRegistrationRequestDto(
     val namespaceId: String,
     val name: String,
     val url: String,
+    val nonce: String,
 )
 
 data class AccountErrorResponseDto(

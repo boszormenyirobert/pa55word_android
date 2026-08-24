@@ -6,6 +6,7 @@ import com.zerointrusion.data.network.AccountErrorResponseDto
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.repository.common.REG_LOG_TAG
 import com.zerointrusion.data.repository.common.buildRegistrationUrl
+import com.zerointrusion.data.repository.common.newRequestNonce
 import com.zerointrusion.data.repository.common.toDto
 import com.zerointrusion.data.security.DekService
 import com.zerointrusion.data.security.DeviceService
@@ -57,6 +58,7 @@ internal class AccountRegistrationHandler(
                 val device = deviceService.createDevice(publicKey)
                 val namespace = namespaceService.createNamespace(input.namespaceName, input.apiUrl)
                 val dek = dekService.createEncryptedDek(publicKey, device.deviceId)
+                val nonce = newRequestNonce()
                 val payload = RegistrationPayload(
                     namespace = namespace,
                     device = device,
@@ -66,7 +68,7 @@ internal class AccountRegistrationHandler(
                 )
 
                 validator.validatePayload(payload)
-                signatureService.signPayload(payload)
+                val request = payload.toDto(nonce)
 
                 Log.d(
                     REG_LOG_TAG,
@@ -75,7 +77,7 @@ internal class AccountRegistrationHandler(
 
                 val response = registrationApi.registerAccount(
                     url = registrationUrl,
-                    request = payload.toDto(),
+                    request = request,
                 )
 
                 Log.d(REG_LOG_TAG, "REG response received. http=${response.code()} url=$registrationUrl")

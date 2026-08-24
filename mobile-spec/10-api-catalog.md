@@ -12,7 +12,7 @@ Unsigned requests:
 Signed requests:
 - `POST /api/v1/namespace`
 - `POST /api/v1/fcm`
-- `GET /api/v1/root-device`
+- `GET /api/v1/root-device?nonce={nonce}`
 - `POST /api/v1/root-device`
 - `POST /api/v1/authentication/response`
 - `POST /api/v1/authentication/response/direct`
@@ -47,7 +47,8 @@ Request payload shape:
     "encDek": "string"
   },
   "email": "string",
-  "phone": "string"
+  "phone": "string",
+  "nonce": "string"
 }
 ```
 
@@ -77,7 +78,8 @@ Request payload shape:
   "deviceId": "string",
   "namespaceId": "string",
   "name": "string",
-  "url": "string"
+  "url": "string",
+  "nonce": "string"
 }
 ```
 
@@ -88,7 +90,8 @@ Signed payload shape:
   "deviceId": "string",
   "namespaceId": "string",
   "name": "string",
-  "url": "string"
+  "url": "string",
+  "nonce": "string"
 }
 ```
 
@@ -130,7 +133,7 @@ Signed payload shape:
 Response payload shape:
 - `HTTP 200/204` with empty body.
 
-## GET /api/v1/root-device
+## GET /api/v1/root-device?nonce={nonce}
 
 Used by:
 - Retrofit endpoint is defined, but no current call site was found in the app code.
@@ -144,8 +147,17 @@ Signed header:
 HTTP request body:
 - None.
 
+Query parameters:
+- `nonce`
+
 Signed payload shape:
-- Not determined from a live call site because the endpoint is currently unused.
+```json
+{
+  "accountId": "string",
+  "deviceId": "string",
+  "nonce": "string"
+}
+```
 
 Response payload shape:
 ```json

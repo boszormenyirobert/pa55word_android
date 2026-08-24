@@ -35,13 +35,14 @@ Request shape:
     "encDek": "string"
   },
   "email": "string",
-  "phone": "string"
+  "phone": "string",
+  "nonce": "string"
 }
 ```
 
 Signed:
 - No.
-- The app creates a local signature as a validation step, but that signature is not sent with this request.
+- The request carries `nonce` in the payload, but it does not send an `x-signature` header.
 
 Response shape:
 ```json

@@ -51,13 +51,14 @@ Phone registration request from QR shape:
     "encDek": "string"
   },
   "email": "string",
-  "phone": "string"
+  "phone": "string",
+  "nonce": "string"
 }
 ```
 
 Signed:
 - No.
-- The app sends the request body without a transmitted signature header.
+- The app sends the request body with a payload `nonce`, but without a transmitted signature header.
 
 Phone registration response shape:
 ```json
