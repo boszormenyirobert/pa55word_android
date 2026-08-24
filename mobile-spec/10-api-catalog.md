@@ -96,7 +96,21 @@ Signed payload shape:
 ```
 
 Response payload shape:
-- `HTTP 200/204` with empty body.
+```json
+{
+  "authorized": true,
+  "status": "authorized",
+  "notificationId": "string",
+  "session": {},
+  "attestationId": {
+    "attestationId": "string"
+  }
+}
+```
+
+Notes:
+- `attestationId` may be `null` when the request is rejected or no attestation was created.
+- Some backend variants may return only `HTTP 204` with no body.
 
 ## POST /api/v1/fcm
 
@@ -131,7 +145,20 @@ Signed payload shape:
 ```
 
 Response payload shape:
-- `HTTP 200/204` with empty body.
+```json
+{
+  "authorized": true,
+  "status": "authorized",
+  "notificationId": "string",
+  "attestation": {
+    "attestationId": "string"
+  }
+}
+```
+
+Notes:
+- `attestation` is omitted or `null` when the request is rejected.
+- Some backend variants may return only `HTTP 204` with no body.
 
 ## GET /api/v1/root-device?nonce={nonce}
 

@@ -1,6 +1,7 @@
 package com.zerointrusion.presentation.app
 
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
+import com.zerointrusion.domain.authentication.NamespaceAuthenticationResult
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.notification.BackendPushNotification
@@ -46,6 +47,7 @@ data class NotificationOverlayUiState(
     val notification: BackendPushNotification? = null,
     val mismatchError: String? = null,
     val canRespond: Boolean = false,
+    val namespaceResults: List<NamespaceAuthenticationResult> = emptyList(),
 ) {
     val isVisible: Boolean = notification != null
 }

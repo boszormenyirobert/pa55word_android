@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -59,6 +60,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
+import com.zerointrusion.domain.authentication.NamespaceAuthenticationResult
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.notification.BackendPushNotification
 import com.zerointrusion.presentation.app.QrNamespaceRegistrationUiState
@@ -66,6 +68,7 @@ import com.zerointrusion.ui.theme.Blue
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ActionDeclineRed
 import com.zerointrusion.ui.theme.ErrorTextLight
+import com.zerointrusion.ui.theme.Green
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
 import com.zerointrusion.ui.theme.Yellow
@@ -82,6 +85,7 @@ fun PostLoginHomeScreen(
     liveDesktopSessionRevokingAttestationId: String?,
     notification: BackendPushNotification?,
     notificationError: String?,
+    authenticationNamespaceResults: List<NamespaceAuthenticationResult>,
     qrNamespaceRegistrationState: QrNamespaceRegistrationUiState,
     onOpenSettings: () -> Unit,
     onOpenQrRead: () -> Unit,
@@ -210,6 +214,7 @@ fun PostLoginHomeScreen(
             LiveDesktopSessionsCard(
                 sessions = liveDesktopSessions,
                 namespaces = namespaces,
+                authenticationNamespaceResults = authenticationNamespaceResults,
                 fallbackServerName = namespaceName,
                 revokingAttestationId = liveDesktopSessionRevokingAttestationId,
                 onRevokeDesktopSession = onRevokeDesktopSession,
@@ -358,6 +363,7 @@ fun PostLoginHomeScreen(
 private fun LiveDesktopSessionsCard(
     sessions: List<ActiveDesktopSession>,
     namespaces: List<NamespaceEntry>,
+    authenticationNamespaceResults: List<NamespaceAuthenticationResult>,
     fallbackServerName: String,
     revokingAttestationId: String?,
     onRevokeDesktopSession: (ActiveDesktopSession) -> Unit,
@@ -384,6 +390,19 @@ private fun LiveDesktopSessionsCard(
                 style = MaterialTheme.typography.titleLarge,
                 color = White,
             )
+
+            if (sessions.isNotEmpty() && authenticationNamespaceResults.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Authentication namespace results",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = White,
+                    )
+                    authenticationNamespaceResults.forEach { result ->
+                        NamespaceAuthenticationStatusRow(result = result)
+                    }
+                }
+            }
 
             if (sessions.isEmpty()) {
                 Text(
@@ -450,6 +469,45 @@ private fun LiveDesktopSessionsCard(
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NamespaceAuthenticationStatusRow(
+    result: NamespaceAuthenticationResult,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(10.dp)
+                .background(
+                    color = if (result.success) Green else ActionDeclineRed,
+                    shape = RoundedCornerShape(999.dp),
+                ),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                text = result.namespaceName,
+                color = White,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                text = "${result.namespaceId} • ${result.namespaceUrl}",
+                color = White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            result.message?.takeIf { it.isNotBlank() }?.let { message ->
+                Text(
+                    text = message,
+                    color = if (result.success) Green else ErrorTextLight,
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
         }
     }

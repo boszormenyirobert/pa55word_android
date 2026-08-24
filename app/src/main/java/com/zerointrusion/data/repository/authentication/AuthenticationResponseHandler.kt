@@ -2,6 +2,7 @@ package com.zerointrusion.data.repository.authentication
 
 import android.util.Log
 import com.google.gson.Gson
+import com.google.gson.JsonElement
 import com.zerointrusion.data.network.AuthenticationAttestationEnvelopeDto
 import com.zerointrusion.data.network.AuthenticationResponseRequestDto
 import com.zerointrusion.data.network.RegistrationApi
@@ -11,6 +12,8 @@ import com.zerointrusion.data.repository.common.buildAuthenticationResponseUrl
 import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.data.storage.NamespaceStore
 import com.zerointrusion.data.storage.RegistrationStateStore
+import com.zerointrusion.domain.authentication.AuthenticationResponseResult
+import com.zerointrusion.domain.authentication.NamespaceAuthenticationResult
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.registration.RegistrationState
@@ -32,7 +35,7 @@ internal class AuthenticationResponseHandler(
         accountId: String,
         deviceId: String,
         approved: Boolean,
-    ) = withContext(Dispatchers.IO) {
+    ): AuthenticationResponseResult = withContext(Dispatchers.IO) {
         val registrationState = stateStore.observeState().first()
             ?: throw RegistrationFailure.Validation("No registered account is stored on this device.")
 
@@ -43,7 +46,7 @@ internal class AuthenticationResponseHandler(
                 "No locally stored namespace matches deviceId=$deviceId and accountId=$accountId for authentication response.",
             )
         val responseNamespaces = availableNamespaces
-            .distinctBy { it.namespaceUrl.trim().trimEnd('/') + "|" + it.namespaceId }
+            .distinctBy { it.storageIdentity() }
         if (responseNamespaces.isEmpty()) {
             throw RegistrationFailure.Validation(
                 "No locally stored namespace URL is available for authentication response.",
@@ -53,8 +56,15 @@ internal class AuthenticationResponseHandler(
 
         val issuedAtEpochSeconds = Instant.now().epochSecond
         val expiryEpochSeconds = issuedAtEpochSeconds + MAX_ATTESTATION_LIFETIME_SECONDS
-        val failures = mutableListOf<String>()
-        responseNamespaces.forEach { namespaceEntry ->
+        val namespaceOutcomes = responseNamespaces.map { namespaceEntry ->
+            fun failureOutcome(message: String) = NamespaceResponseOutcome(
+                namespaceEntry = namespaceEntry,
+                authenticationResult = namespaceEntry.toAuthenticationResult(
+                    success = false,
+                    message = message,
+                ),
+            )
+
             val requestPayload = AuthenticationResponseRequestDto(
                 notificationId = notificationId,
                 accountId = namespaceEntry.accountId,
@@ -92,18 +102,73 @@ internal class AuthenticationResponseHandler(
                     )
                 }
             } catch (exception: Exception) {
-                failures += mapFailureMessage(responseUrl, exception)
-                return@forEach
+                return@map failureOutcome(mapFailureMessage(responseUrl, exception))
             }
 
             if (!response.isSuccessful) {
                 val errorBody = response.errorBody()?.string()
-                failures += errorBody ?: "Authentication response failed with HTTP ${response.code()} at $responseUrl."
+                return@map failureOutcome(
+                    errorBody ?: "Authentication response failed with HTTP ${response.code()} at $responseUrl.",
+                )
+            }
+            NamespaceResponseOutcome(
+                namespaceEntry = namespaceEntry,
+                authenticationResult = namespaceEntry.toAuthenticationResult(success = true),
+                attestationId = response.body().extractAttestationId(),
+            )
+        }
+
+        persistAttestationIds(
+            existingNamespaces = availableNamespaces,
+            namespaceOutcomes = namespaceOutcomes,
+        )
+
+        val namespaceResults = namespaceOutcomes.map { it.authenticationResult }
+
+        val result = AuthenticationResponseResult(namespaceResults = namespaceResults)
+
+        if (!result.hasAnySuccess) {
+            throw RegistrationFailure.Server(
+                namespaceResults.joinToString(separator = " | ") { it.message ?: "Authentication response failed." },
+            )
+        }
+
+        result
+    }
+
+    private suspend fun persistAttestationIds(
+        existingNamespaces: List<NamespaceEntry>,
+        namespaceOutcomes: List<NamespaceResponseOutcome>,
+    ) {
+        val successfulOutcomes = namespaceOutcomes.filter { outcome ->
+            outcome.attestationId
+                ?.trim()
+                ?.isNotEmpty() == true
+        }
+
+        if (successfulOutcomes.isEmpty()) {
+            return
+        }
+
+        val updatedNamespaces = existingNamespaces.map { namespaceEntry ->
+            val matchingOutcome = successfulOutcomes.firstOrNull { outcome ->
+                outcome.namespaceEntry.storageIdentity() == namespaceEntry.storageIdentity()
+            } ?: return@map namespaceEntry
+
+            val attestationId = matchingOutcome.attestationId
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?: return@map namespaceEntry
+
+            if (namespaceEntry.attestationId == attestationId) {
+                namespaceEntry
+            } else {
+                namespaceEntry.copy(attestationId = attestationId)
             }
         }
 
-        if (failures.isNotEmpty()) {
-            throw RegistrationFailure.Server(failures.joinToString(separator = " | "))
+        if (updatedNamespaces != existingNamespaces) {
+            namespaceStore.saveNamespaces(updatedNamespaces)
         }
     }
 
@@ -114,6 +179,55 @@ internal class AuthenticationResponseHandler(
         exception: Exception,
     ): String = com.zerointrusion.data.repository.common.mapNetworkException(url, exception).message
         ?: "Authentication response failed at $url."
+
+    private fun NamespaceEntry.toAuthenticationResult(
+        success: Boolean,
+        message: String? = null,
+    ) = NamespaceAuthenticationResult(
+        namespaceId = namespaceId,
+        namespaceName = namespaceName,
+        namespaceUrl = namespaceUrl,
+        success = success,
+        message = message,
+    )
+
+    private fun NamespaceEntry.storageIdentity(): String = listOf(
+        accountId.trim().lowercase(),
+        deviceId.trim().lowercase(),
+        namespaceId.trim().lowercase(),
+        namespaceUrl.trim().trimEnd('/').lowercase(),
+    ).joinToString(separator = "|")
+
+    private fun com.zerointrusion.data.network.AuthenticationResponseDto?.extractAttestationId(): String? {
+        val nestedAttestationId = this?.attestation?.attestationId
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+        if (nestedAttestationId != null) {
+            return nestedAttestationId
+        }
+
+        return this?.attestationId.extractAttestationId()
+    }
+
+    private fun JsonElement?.extractAttestationId(): String? {
+        val element = this ?: return null
+        return when {
+            element.isJsonNull -> null
+            element.isJsonPrimitive -> element.asString.trim().takeIf { it.isNotEmpty() }
+            element.isJsonObject -> element.asJsonObject.get("attestationId")
+                ?.takeIf { !it.isJsonNull }
+                ?.asString
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+            else -> null
+        }
+    }
+
+    private data class NamespaceResponseOutcome(
+        val namespaceEntry: NamespaceEntry,
+        val authenticationResult: NamespaceAuthenticationResult,
+        val attestationId: String? = null,
+    )
 
     private companion object {
         const val MAX_ATTESTATION_LIFETIME_SECONDS = 7200L

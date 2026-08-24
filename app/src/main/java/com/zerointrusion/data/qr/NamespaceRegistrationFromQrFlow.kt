@@ -56,6 +56,11 @@ internal class NamespaceRegistrationFromQrFlow(
         val normalizedNamespaceUrl = payload.namespaceUrl.trim().trimEnd('/')
         val namespaceId = payload.namespaceId.trim()
 
+        ensureNamespaceIsNotRegistered(
+            namespaceId = namespaceId,
+            namespaceUrl = normalizedNamespaceUrl,
+        )
+
         val encodedPhonePublicKey = Base64.encodeToString(keyStoreService.getPublicKey().encoded, Base64.NO_WRAP)
         val phoneRegistrationUrl = buildRegistrationUrl(normalizedNamespaceUrl)
         val phoneRegistrationNonce = newRequestNonce()
@@ -121,17 +126,42 @@ internal class NamespaceRegistrationFromQrFlow(
         )
     }
 
+    private suspend fun ensureNamespaceIsNotRegistered(
+        namespaceId: String,
+        namespaceUrl: String,
+    ) {
+        val existingNamespaces = namespaceStore.observeNamespaces().first()
+        val alreadyRegistered = existingNamespaces.any { namespace ->
+            namespace.matchesNamespace(namespaceId, namespaceUrl)
+        }
+
+        if (alreadyRegistered) {
+            throw RegistrationFailure.Validation(
+                "This namespace is already registered on this device.",
+            )
+        }
+    }
+
     private suspend fun saveNamespace(
         namespaceEntry: NamespaceEntry,
     ): List<NamespaceEntry> {
         val existingNamespaces = namespaceStore.observeNamespaces().first()
-        val mergedNamespaces = mergeNamespaces(
-            existingNamespaces = existingNamespaces,
-            newNamespace = namespaceEntry,
-        )
+        val mergedNamespaces = existingNamespaces
+            .filterNot { namespace ->
+                namespace.matchesNamespace(namespaceEntry.namespaceId, namespaceEntry.namespaceUrl)
+            }
+            .plus(namespaceEntry)
+            .sortedBy { it.namespaceName.lowercase() }
         namespaceStore.saveNamespaces(mergedNamespaces)
         return mergedNamespaces
     }
+
+    private fun NamespaceEntry.matchesNamespace(
+        namespaceId: String,
+        namespaceUrl: String,
+    ): Boolean =
+        this.namespaceId.trim().lowercase() == namespaceId.trim().lowercase() &&
+            this.namespaceUrl.trim().trimEnd('/').lowercase() == namespaceUrl.trim().trimEnd('/').lowercase()
 
     private suspend fun registerNamespaceLink(
         requestUrl: String,
@@ -203,8 +233,7 @@ internal fun mergeNamespaces(
     .plus(newNamespace)
     .associateBy { namespace ->
         namespace.namespaceId.trim().lowercase() +
-            "|" + namespace.namespaceUrl.trim().trimEnd('/').lowercase() +
-            "|" + namespace.deviceId.trim().lowercase()
+            "|" + namespace.namespaceUrl.trim().trimEnd('/').lowercase()
     }
     .values
     .sortedBy { it.namespaceName.lowercase() }

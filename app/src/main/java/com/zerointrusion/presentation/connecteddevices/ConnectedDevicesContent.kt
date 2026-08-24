@@ -143,6 +143,38 @@ private fun ConnectedNamespaceRow(namespace: ConnectedDeviceNamespace) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
+                    text = "Desktop ID:",
+                    color = White,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = namespace.deviceId,
+                    color = White,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = "Namespace ID:",
+                    color = White,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = namespace.namespaceId,
+                    color = White,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
                     text = "URL:",
                     color = White,
                     style = MaterialTheme.typography.labelLarge,

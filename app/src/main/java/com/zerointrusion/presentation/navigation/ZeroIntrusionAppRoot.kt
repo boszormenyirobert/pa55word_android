@@ -105,6 +105,7 @@ fun ZeroIntrusionAppRoot(
                     liveDesktopSessionRevokingAttestationId = appState.liveDesktopSessionRevokingAttestationId,
                     notification = appState.notificationOverlay.notification,
                     notificationError = appState.notificationOverlay.mismatchError,
+                    authenticationNamespaceResults = appState.notificationOverlay.namespaceResults,
                     qrNamespaceRegistrationState = appState.qrNamespaceRegistrationState,
                     onOpenSettings = {
                         navController.navigate(AppRoute.Settings.route)
@@ -182,10 +183,14 @@ fun ZeroIntrusionAppRoot(
             }
             composable(AppRoute.QrRead.route) {
                 QrReadScreen(
-                    onBack = { navController.popBackStack() },
+                    qrNamespaceRegistrationState = appState.qrNamespaceRegistrationState,
+                    onClearQrNamespaceRegistrationState = appViewModel::clearQrNamespaceRegistrationState,
+                    onBack = {
+                        appViewModel.clearQrNamespaceRegistrationState()
+                        navController.popBackStack()
+                    },
                     onPayloadScanned = { payload ->
                         appViewModel.registerNamespaceFromQr(payload)
-                        navController.popBackStack()
                     },
                 )
             }

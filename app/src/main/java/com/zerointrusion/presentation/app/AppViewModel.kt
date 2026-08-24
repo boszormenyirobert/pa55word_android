@@ -367,9 +367,15 @@ class AppViewModel @Inject constructor(
                     deviceId = notification.deviceId,
                     approved = approved,
                 )
-            }.onSuccess {
+            }.onSuccess { result ->
                 notificationRepository.clearNotification()
-                _uiState.update { it.copy(notificationOverlay = NotificationOverlayUiState()) }
+                _uiState.update {
+                    it.copy(
+                        notificationOverlay = NotificationOverlayUiState(
+                            namespaceResults = result.namespaceResults,
+                        ),
+                    )
+                }
                 if (approved) {
                     postApprovalSessionRefreshJob?.cancel()
                     postApprovalSessionRefreshJob = viewModelScope.launch {
@@ -386,6 +392,7 @@ class AppViewModel @Inject constructor(
                             notification = notification,
                             mismatchError = throwable.message ?: "Failed to send authentication response.",
                             canRespond = false,
+                            namespaceResults = emptyList(),
                         ),
                     )
                 }

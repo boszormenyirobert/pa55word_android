@@ -18,6 +18,9 @@ import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
 import com.zerointrusion.domain.authentication.DesktopSessionRevocationResult
 import com.zerointrusion.domain.common.RegistrationFailure
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -88,58 +91,85 @@ internal class AuthenticationSessionHandler(
             )
         }
 
-        var lastSuccessResponse: AuthenticationSessionRevocationResponseDto? = null
-        val failures = mutableListOf<String>()
-        requestNamespaces.forEach { namespaceEntry ->
-            val nonce = newNonce()
-            val requestPayload = AuthenticationSessionRevocationResponseRequestDto(
-                accountId = namespaceEntry.accountId,
-                deviceId = registrationState.deviceId,
-                desktopId = namespaceEntry.deviceId,
-                attestationId = normalizedAttestationId,
-                nonce = nonce,
-            )
-            val requestUrl = buildAuthenticationSessionRevocationUrl(
-                baseUrl = namespaceEntry.namespaceUrl,
-                accountId = namespaceEntry.accountId,
-                desktopDeviceId = namespaceEntry.deviceId,
-                attestationId = normalizedAttestationId,
-                nonce = nonce,
-            )
-            val requestBodyJson = buildRevocationRequestBodyJson(requestPayload)
-            val signature = signatureService.signJsonString(requestBodyJson)
-            Log.d(AUTHENTICATION_LOG_TAG, "AUTH session revoke start. url=$requestUrl")
-            val response = try {
-                registrationApi.revokeAuthenticationSession(
-                    url = requestUrl,
-                    signature = signature,
-                    request = requestPayload,
-                )
-            } catch (exception: Exception) {
-                Log.e(AUTHENTICATION_LOG_TAG, "AUTH session revoke failed before HTTP response. url=$requestUrl", exception)
-                failures += mapNetworkException(requestUrl, exception).message
-                    ?: "Desktop session revoke failed at $requestUrl."
-                return@forEach
-            }
-
-            if (!response.isSuccessful) {
-                Log.e(AUTHENTICATION_LOG_TAG, "AUTH session revoke failed. http=${response.code()} url=$requestUrl")
-                failures += serverFailure(gson, response.errorBody()?.charStream(), response.code(), requestUrl).message
-                    ?: "Desktop session revoke failed at $requestUrl."
-                return@forEach
-            }
-
-            lastSuccessResponse = response.body()
-                ?: AuthenticationSessionRevocationResponseDto(success = true, attestationId = normalizedAttestationId)
+        val outcomes = coroutineScope {
+            requestNamespaces.map { namespaceEntry ->
+                async {
+                    revokeNamespaceSession(
+                        namespaceEntry = namespaceEntry,
+                        mobileDeviceId = registrationState.deviceId,
+                    )
+                }
+            }.awaitAll()
         }
+
+        val failures = outcomes.mapNotNull { it.failureMessage }
 
         if (failures.isNotEmpty()) {
             throw RegistrationFailure.Server(failures.joinToString(separator = " | "))
         }
 
+        val lastSuccessResponse = outcomes.mapNotNull { it.response }.lastOrNull()
+
         (lastSuccessResponse
             ?: AuthenticationSessionRevocationResponseDto(success = true, attestationId = normalizedAttestationId))
             .toDomain(normalizedAttestationId)
+    }
+
+    private suspend fun revokeNamespaceSession(
+        namespaceEntry: com.zerointrusion.domain.namespaces.NamespaceEntry,
+        mobileDeviceId: String,
+    ): NamespaceRevocationOutcome {
+        val namespaceAttestationId = namespaceEntry.attestationId
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: return NamespaceRevocationOutcome(
+                failureMessage = "Desktop session revoke failed for ${namespaceEntry.namespaceName}: no namespace attestationId is stored for ${namespaceEntry.namespaceUrl}.",
+            )
+
+        val nonce = newNonce()
+        val requestPayload = AuthenticationSessionRevocationResponseRequestDto(
+            accountId = namespaceEntry.accountId,
+            deviceId = mobileDeviceId,
+            desktopId = namespaceEntry.deviceId,
+            attestationId = namespaceAttestationId,
+            nonce = nonce,
+        )
+        val requestUrl = buildAuthenticationSessionRevocationUrl(
+            baseUrl = namespaceEntry.namespaceUrl,
+            accountId = namespaceEntry.accountId,
+            desktopDeviceId = namespaceEntry.deviceId,
+            attestationId = namespaceAttestationId,
+            nonce = nonce,
+        )
+        val requestBodyJson = buildRevocationRequestBodyJson(requestPayload)
+        val signature = signatureService.signJsonString(requestBodyJson)
+        Log.d(AUTHENTICATION_LOG_TAG, "AUTH session revoke start. url=$requestUrl")
+        val response = try {
+            registrationApi.revokeAuthenticationSession(
+                url = requestUrl,
+                signature = signature,
+                request = requestPayload,
+            )
+        } catch (exception: Exception) {
+            Log.e(AUTHENTICATION_LOG_TAG, "AUTH session revoke failed before HTTP response. url=$requestUrl", exception)
+            return NamespaceRevocationOutcome(
+                failureMessage = mapNetworkException(requestUrl, exception).message
+                    ?: "Desktop session revoke failed at $requestUrl.",
+            )
+        }
+
+        if (!response.isSuccessful) {
+            Log.e(AUTHENTICATION_LOG_TAG, "AUTH session revoke failed. http=${response.code()} url=$requestUrl")
+            return NamespaceRevocationOutcome(
+                failureMessage = serverFailure(gson, response.errorBody()?.charStream(), response.code(), requestUrl).message
+                    ?: "Desktop session revoke failed at $requestUrl.",
+            )
+        }
+
+        return NamespaceRevocationOutcome(
+            response = response.body()
+                ?: AuthenticationSessionRevocationResponseDto(success = true, attestationId = namespaceAttestationId),
+        )
     }
 
     private suspend fun requireRegistrationState() = stateStore.observeState().first()
@@ -192,4 +222,9 @@ internal class AuthenticationSessionHandler(
         append(gson.toJson(payload.nonce))
         append('}')
     }
+
+    private data class NamespaceRevocationOutcome(
+        val response: AuthenticationSessionRevocationResponseDto? = null,
+        val failureMessage: String? = null,
+    )
 }

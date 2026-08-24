@@ -2,6 +2,7 @@ package com.zerointrusion.data.repository.qr
 
 import android.util.Log
 import com.google.gson.Gson
+import com.zerointrusion.data.network.AccountErrorResponseDto
 import com.zerointrusion.data.network.DekDto
 import com.zerointrusion.data.network.DeviceDto
 import com.zerointrusion.data.network.NewDeviceRegistrationDto
@@ -100,7 +101,14 @@ internal class QrNamespaceRegistrationHandler(
 
         if (!submitResponse.isSuccessful) {
             Log.e(QR_LOG_TAG, "Desktop registration submit returned HTTP ${submitResponse.code()} for $submitUrl")
-            throw serverFailure(gson, submitResponse.errorBody()?.charStream(), submitResponse.code(), submitUrl)
+            val backendError = submitResponse.errorBody()?.charStream()?.use {
+                runCatching { gson.fromJson(it, AccountErrorResponseDto::class.java) }.getOrNull()
+            }
+            throw mapDesktopRegistrationFailure(
+                statusCode = submitResponse.code(),
+                url = submitUrl,
+                backendError = backendError,
+            )
         }
 
         Log.d(QR_LOG_TAG, "Desktop registration submit success. url=$submitUrl scannedDeviceId=${preparation.scannedDeviceId}")
@@ -152,5 +160,35 @@ internal class QrNamespaceRegistrationHandler(
                 )
             }
         }
+    }
+
+    private fun mapDesktopRegistrationFailure(
+        statusCode: Int,
+        url: String,
+        backendError: AccountErrorResponseDto?,
+    ): RegistrationFailure {
+        val backendMessage = backendError?.message?.trim().orEmpty()
+        val backendCode = backendError?.internalCode?.trim().orEmpty()
+        val duplicateConflict = statusCode == 409 ||
+            backendMessage.contains("already", ignoreCase = true) ||
+            backendMessage.contains("exists", ignoreCase = true) ||
+            backendMessage.contains("registered", ignoreCase = true) ||
+            backendMessage.contains("duplicate", ignoreCase = true) ||
+            backendMessage.contains("conflict", ignoreCase = true) ||
+            backendCode.contains("already", ignoreCase = true) ||
+            backendCode.contains("exists", ignoreCase = true) ||
+            backendCode.contains("registered", ignoreCase = true) ||
+            backendCode.contains("duplicate", ignoreCase = true) ||
+            backendCode.contains("conflict", ignoreCase = true)
+
+        if (duplicateConflict) {
+            return RegistrationFailure.Validation(
+                "This desktop device is already registered on the server for the scanned namespace.",
+            )
+        }
+
+        return RegistrationFailure.Server(
+            backendMessage.ifBlank { "Request failed with HTTP $statusCode at $url." },
+        )
     }
 }

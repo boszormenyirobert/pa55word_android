@@ -20,6 +20,11 @@ internal class DeviceRegistrationFromQrFlow(
         registrationState: RegistrationState,
         payload: DeviceRegistrationQrPayload,
     ): QrRegistrationPreparation {
+        ensureNamespaceIsNotRegistered(
+            namespaceId = registrationState.namespaceId,
+            namespaceUrl = registrationState.namespaceUrl,
+        )
+
         val namespaceEntry = NamespaceEntry(
             namespaceName = registrationState.namespaceName,
             namespaceId = registrationState.namespaceId,
@@ -41,5 +46,21 @@ internal class DeviceRegistrationFromQrFlow(
             scannedPublicKey = payload.publicKey,
             scannedDeviceName = payload.deviceName,
         )
+    }
+
+    private suspend fun ensureNamespaceIsNotRegistered(
+        namespaceId: String,
+        namespaceUrl: String,
+    ) {
+        val alreadyRegistered = namespaceStore.observeNamespaces().first().any { namespace ->
+            namespace.namespaceId.trim().lowercase() == namespaceId.trim().lowercase() &&
+                namespace.namespaceUrl.trim().trimEnd('/').lowercase() == namespaceUrl.trim().trimEnd('/').lowercase()
+        }
+
+        if (alreadyRegistered) {
+            throw com.zerointrusion.domain.common.RegistrationFailure.Validation(
+                "This desktop device is already registered for the current namespace.",
+            )
+        }
     }
 }

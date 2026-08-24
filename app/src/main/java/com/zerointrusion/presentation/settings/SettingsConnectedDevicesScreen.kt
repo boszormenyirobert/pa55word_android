@@ -305,6 +305,13 @@ private fun NamespaceConnectionCard(
                 modifier = Modifier.fillMaxWidth(),
             )
 
+            Text(
+                text = "Namespace ID: ${namespace.namespaceId}",
+                color = White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
             if (showDeleteConfirmation) {
                 Surface(
                     modifier = Modifier

@@ -36,11 +36,12 @@ class EncryptedNamespaceStore @Inject constructor(
     override fun observeNamespaces(): Flow<List<NamespaceEntry>> = stateFlow.asStateFlow()
 
     override suspend fun saveNamespaces(namespaces: List<NamespaceEntry>) {
+        val normalizedNamespaces = normalizeNamespaces(namespaces)
         withContext(Dispatchers.IO) {
             encryptedPreferences.edit()
-                .putString(AppConstants.ENCRYPTED_PREFS_NAMESPACES_KEY, gson.toJson(namespaces))
+                .putString(AppConstants.ENCRYPTED_PREFS_NAMESPACES_KEY, gson.toJson(normalizedNamespaces))
                 .apply()
-            stateFlow.value = namespaces
+            stateFlow.value = normalizedNamespaces
         }
     }
 
@@ -65,8 +66,25 @@ class EncryptedNamespaceStore @Inject constructor(
         val rawNamespaces = encryptedPreferences.getString(AppConstants.ENCRYPTED_PREFS_NAMESPACES_KEY, null)
             ?: return emptyList()
         val listType = object : TypeToken<List<NamespaceEntry>>() {}.type
-        return gson.fromJson<List<NamespaceEntry>>(rawNamespaces, listType).orEmpty()
+        val parsedNamespaces = gson.fromJson<List<NamespaceEntry>>(rawNamespaces, listType).orEmpty()
+        val normalizedNamespaces = normalizeNamespaces(parsedNamespaces)
+
+        if (normalizedNamespaces != parsedNamespaces) {
+            encryptedPreferences.edit()
+                .putString(AppConstants.ENCRYPTED_PREFS_NAMESPACES_KEY, gson.toJson(normalizedNamespaces))
+                .apply()
+        }
+
+        return normalizedNamespaces
     }
+
+    private fun normalizeNamespaces(namespaces: List<NamespaceEntry>): List<NamespaceEntry> = namespaces
+        .associateBy { namespace ->
+            namespace.namespaceId.trim().lowercase() +
+                "|" + namespace.namespaceUrl.trim().trimEnd('/').lowercase()
+        }
+        .values
+        .sortedBy { it.namespaceName.lowercase() }
 
     private fun openEncryptedPreferences() = try {
         createEncryptedPreferences()

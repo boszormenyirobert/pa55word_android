@@ -88,26 +88,39 @@ internal class ConnectedDevicesResponseParser(
 
     fun summarize(groups: List<ConnectedDeviceGroup>): String = groups.joinToString(separator = "; ") { group ->
         val namespaces = group.namespaces.joinToString(separator = ", ") { namespace ->
-            "${namespace.namespaceName} (${namespace.namespaceUrl})"
+            buildString {
+                append(namespace.namespaceName)
+                append(" [")
+                append(namespace.namespaceId)
+                append("] (")
+                append(namespace.namespaceUrl)
+                append(')')
+                append(" deviceId=")
+                append(namespace.deviceId)
+            }
         }.ifEmpty { "no namespaces" }
         "accountId=${group.accountId}, deviceId=${group.deviceId}, namespaces=[$namespaces]"
     }
 
     private fun List<ConnectedNamespaceDto>.toConnectedNamespaces(): List<ConnectedDeviceNamespace> = mapNotNull { namespaceDto ->
+        val deviceId = namespaceDto.deviceId?.trim().orEmpty()
+        val namespaceId = namespaceDto.namespaceId?.trim().orEmpty()
         val namespaceName = listOf(namespaceDto.name, namespaceDto.namespace)
             .firstOrNull { !it.isNullOrBlank() }
             ?.trim()
             .orEmpty()
         val namespaceUrl = namespaceDto.url?.trim().orEmpty()
 
-        if (namespaceName.isEmpty() || namespaceUrl.isEmpty()) {
+        if (deviceId.isEmpty() || namespaceId.isEmpty() || namespaceName.isEmpty() || namespaceUrl.isEmpty()) {
             return@mapNotNull null
         }
 
         ConnectedDeviceNamespace(
+            namespaceId = namespaceId,
             namespaceName = namespaceName,
             namespaceUrl = namespaceUrl,
+            deviceId = deviceId,
         )
-    }.distinctBy { it.namespaceName.lowercase() + "|" + it.namespaceUrl.lowercase() }
+    }.distinctBy { it.namespaceId.lowercase() + "|" + it.namespaceUrl.lowercase() }
         .sortedBy { it.namespaceName.lowercase() }
 }

@@ -42,7 +42,10 @@ import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
+import com.zerointrusion.presentation.app.QrNamespaceRegistrationUiState
 import com.zerointrusion.ui.theme.Dark
+import com.zerointrusion.ui.theme.ErrorTextLight
+import com.zerointrusion.ui.theme.Green
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
 import java.util.concurrent.Executors
@@ -52,6 +55,8 @@ private const val QR_ROUTE_LOG_TAG = "ZeroIntrusionQr"
 
 @Composable
 fun QrReadScreen(
+    qrNamespaceRegistrationState: QrNamespaceRegistrationUiState,
+    onClearQrNamespaceRegistrationState: () -> Unit,
     onBack: () -> Unit,
     onPayloadScanned: (String) -> Unit,
 ) {
@@ -69,6 +74,7 @@ fun QrReadScreen(
 
     DisposableEffect(barcodeScanner, cameraExecutor) {
         onDispose {
+            onClearQrNamespaceRegistrationState()
             barcodeScanner.close()
             cameraExecutor.shutdown()
         }
@@ -135,6 +141,25 @@ fun QrReadScreen(
                     Text(
                         text = scannerError.orEmpty(),
                         color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+
+                when (qrNamespaceRegistrationState) {
+                    QrNamespaceRegistrationUiState.Idle -> Unit
+                    QrNamespaceRegistrationUiState.InProgress -> Text(
+                        text = "Connecting scanned namespace...",
+                        color = White,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    is QrNamespaceRegistrationUiState.Success -> Text(
+                        text = "Namespace connected: ${qrNamespaceRegistrationState.namespaceName} (desktop: ${qrNamespaceRegistrationState.desktopDeviceId})",
+                        color = Green,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    is QrNamespaceRegistrationUiState.Error -> Text(
+                        text = qrNamespaceRegistrationState.message,
+                        color = ErrorTextLight,
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }

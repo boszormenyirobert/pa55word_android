@@ -1,5 +1,6 @@
 package com.zerointrusion.data.network
 
+import com.google.gson.JsonElement
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -99,6 +100,18 @@ data class AuthenticationAttestationEnvelopeDto(
     val nonce: String,
 )
 
+data class AuthenticationAttestationDto(
+    val attestationId: String? = null,
+)
+
+data class AuthenticationResponseDto(
+    val authorized: Boolean? = null,
+    val status: String? = null,
+    val notificationId: String? = null,
+    val attestationId: JsonElement? = null,
+    val attestation: AuthenticationAttestationDto? = null,
+)
+
 data class AuthenticationSessionDto(
     val attestationId: String,
     val deviceId: String,
@@ -158,14 +171,14 @@ interface RegistrationApi {
         @Url url: String,
         @Header("x-signature") signature: String,
         @Body request: AuthenticationResponseRequestDto,
-    ): Response<Unit>
+    ): Response<AuthenticationResponseDto>
 
     @POST
     suspend fun sendAuthenticationDirectResponse(
         @Url url: String,
         @Header("x-signature") signature: String,
         @Body request: AuthenticationResponseRequestDto,
-    ): Response<Unit>
+    ): Response<AuthenticationResponseDto>
 
     @GET
     suspend fun fetchAuthenticationSessions(
