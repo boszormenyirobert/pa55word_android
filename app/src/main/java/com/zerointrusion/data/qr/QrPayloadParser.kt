@@ -21,7 +21,7 @@ internal class QrPayloadParser(
 
     private data class RawQrRegistrationPayload(
         val type: String?,
-        val deviceId: String?,
+        val desktopDeviceId: String?,
         val publicKey: String?,
         val deviceName: String?,
         val namespaceId: String?,
@@ -32,10 +32,10 @@ internal class QrPayloadParser(
     fun parse(qrPayload: String): ScannedQrPayload {
         val payload = parseRawPayload(qrPayload)
         val type = payload.type?.trim().orEmpty()
-        val deviceId = payload.deviceId?.trim().orEmpty()
+        val desktopDeviceId = payload.desktopDeviceId?.trim().orEmpty()
         val publicKey = payload.publicKey?.trim().orEmpty()
 
-        validateDeviceId(deviceId)
+        validateDesktopDeviceId(desktopDeviceId)
         validatePublicKey(publicKey)
 
         return when (type) {
@@ -44,7 +44,7 @@ internal class QrPayloadParser(
                 validateDeviceName(deviceName)
 
                 DeviceRegistrationQrPayload(
-                    deviceId = deviceId,
+                    desktopDeviceId = desktopDeviceId,
                     publicKey = publicKey,
                     deviceName = deviceName,
                 )
@@ -70,7 +70,7 @@ internal class QrPayloadParser(
                 }
 
                 NamespaceQrPayload(
-                    deviceId = deviceId,
+                    desktopDeviceId = desktopDeviceId,
                     publicKey = publicKey,
                     deviceName = deviceName,
                     namespaceId = namespaceId,
@@ -100,12 +100,12 @@ internal class QrPayloadParser(
         return payload ?: throw RegistrationFailure.Validation("The scanned QR code is empty or unreadable.")
     }
 
-    private fun validateDeviceId(deviceId: String) {
-        if (deviceId.isEmpty()) {
-            throw RegistrationFailure.Validation("The scanned QR payload does not contain a deviceId.")
+    private fun validateDesktopDeviceId(desktopDeviceId: String) {
+        if (desktopDeviceId.isEmpty()) {
+            throw RegistrationFailure.Validation("The scanned QR payload does not contain a desktopDeviceId.")
         }
-        if (!DEVICE_ID_REGEX.matches(deviceId)) {
-            throw RegistrationFailure.Validation("The scanned QR payload deviceId must be exactly 10 alphanumeric characters.")
+        if (!DEVICE_ID_REGEX.matches(desktopDeviceId)) {
+            throw RegistrationFailure.Validation("The scanned QR payload desktopDeviceId must be exactly 10 alphanumeric characters.")
         }
     }
 

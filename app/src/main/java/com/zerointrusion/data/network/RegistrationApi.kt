@@ -1,6 +1,7 @@
 package com.zerointrusion.data.network
 
 import com.google.gson.JsonElement
+import com.google.gson.annotations.SerializedName
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -14,13 +15,14 @@ data class NamespaceDto(
     val namespaceId: String,
     val name: String,
     val url: String,
+    val root: Boolean? = null,
 )
 
 data class DeviceDto(
     val deviceId: String,
     val publicKey: String,
     val deviceName: String? = null,
-    val deviceIdAdditional: String? = null,
+    val desktopDeviceId: String? = null,
 )
 
 data class DekDto(
@@ -30,9 +32,21 @@ data class DekDto(
 
 data class NewDeviceRegistrationDto(
     val accountId: String,
-    val device: DeviceDto,
-    val dek: DekDto,
+    val device: NewDeviceRegistrationDeviceDto,
+    val dek: NewDeviceRegistrationDekDto,
     val nonce: String,
+)
+
+data class NewDeviceRegistrationDeviceDto(
+    val mobileDeviceId: String,
+    val publicKey: String,
+    val deviceName: String? = null,
+    val desktopDeviceId: String,
+)
+
+data class NewDeviceRegistrationDekDto(
+    val desktopDeviceId: String,
+    val encDek: String,
 )
 
 data class RootDeviceDekResponseDto(
@@ -48,11 +62,24 @@ data class RootDeviceDekDto(
 
 data class AccountRegistrationRequestDto(
     val namespace: NamespaceDto,
-    val device: DeviceDto,
-    val dek: DekDto,
+    val device: AccountRegistrationDeviceDto,
+    val dek: AccountRegistrationDekDto,
     val email: String,
     val phone: String,
     val nonce: String,
+)
+
+data class AccountRegistrationDeviceDto(
+    @SerializedName("mobileDeviceId")
+    val mobileDeviceId: String,
+    val publicKey: String,
+    val deviceName: String? = null,
+)
+
+data class AccountRegistrationDekDto(
+    @SerializedName("mobileDeviceId")
+    val mobileDeviceId: String,
+    val encDek: String,
 )
 
 data class AccountRegistrationResponseDto(
@@ -62,7 +89,9 @@ data class AccountRegistrationResponseDto(
 
 data class NamespaceRegistrationRequestDto(
     val accountId: String,
-    val deviceId: String,
+    val foreignAccountId: String,
+    val mobileDeviceId: String,
+    val desktopDeviceId: String,
     val namespaceId: String,
     val name: String,
     val url: String,
@@ -77,7 +106,7 @@ data class AccountErrorResponseDto(
 
 data class FcmRegistrationRequestDto(
     val accountId: String,
-    val deviceId: String,
+    val mobileDeviceId: String,
     val fcmToken: String,
     val nonce: String,
 )
@@ -85,15 +114,15 @@ data class FcmRegistrationRequestDto(
 data class AuthenticationResponseRequestDto(
     val notificationId: String,
     val accountId: String,
-    val deviceId: String,
+    val mobileDeviceId: String,
     val approved: Boolean,
     val nonce: String,
     val envelop: AuthenticationAttestationEnvelopeDto,
 )
 
 data class AuthenticationAttestationEnvelopeDto(
-    val desktopId: String,
-    val deviceId: String,
+    val desktopDeviceId: String,
+    val mobileDeviceId: String,
     val namespaces: List<String>,
     val iat: Long,
     val exp: Long,
@@ -137,7 +166,7 @@ interface RegistrationApi {
     suspend fun registerAccount(
         @Url url: String,
         @Body request: AccountRegistrationRequestDto,
-    ): Response<AccountRegistrationResponseDto>
+    ): Response<ResponseBody>
 
     @POST
     suspend fun registerNamespace(

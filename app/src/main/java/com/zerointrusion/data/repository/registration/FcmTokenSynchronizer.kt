@@ -27,7 +27,7 @@ internal class FcmTokenSynchronizer(
             firebaseService.registerFcmToken(
                 namespaceUrl = state.namespaceUrl,
                 accountId = state.accountId,
-                deviceId = state.deviceId,
+                mobileDeviceId = state.mobileDeviceId,
                 fcmToken = currentFcmToken,
             )
         } catch (exception: Exception) {
@@ -77,7 +77,7 @@ internal class FcmTokenSynchronizer(
             firebaseService.registerFcmToken(
                 namespaceUrl = namespaceEntry.namespaceUrl,
                 accountId = namespaceEntry.accountId,
-                deviceId = registrationState.deviceId,
+                mobileDeviceId = registrationState.mobileDeviceId,
                 fcmToken = currentFcmToken,
             )
         }.onSuccess {

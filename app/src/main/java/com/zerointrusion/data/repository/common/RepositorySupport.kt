@@ -3,12 +3,7 @@ package com.zerointrusion.data.repository.common
 import com.google.gson.Gson
 import com.zerointrusion.core.AppConstants
 import com.zerointrusion.data.network.AccountErrorResponseDto
-import com.zerointrusion.data.network.AccountRegistrationRequestDto
-import com.zerointrusion.data.network.DekDto
-import com.zerointrusion.data.network.DeviceDto
-import com.zerointrusion.data.network.NamespaceDto
 import com.zerointrusion.domain.common.RegistrationFailure
-import com.zerointrusion.domain.registration.RegistrationPayload
 import java.io.IOException
 import java.net.ConnectException
 import java.net.SocketTimeoutException
@@ -29,7 +24,7 @@ internal data class RootDeviceFetchSignaturePayload(
 
 internal data class AuthenticationSignedRequestPayload(
     val accountId: String,
-    val deviceId: String,
+    val mobileDeviceId: String,
     val nonce: String,
 )
 
@@ -53,11 +48,11 @@ internal fun buildAuthenticationDirectResponseUrl(baseUrl: String): String =
 internal fun buildAuthenticationSessionsUrl(
     baseUrl: String,
     accountId: String,
-    deviceId: String,
+    mobileDeviceId: String,
     nonce: String,
 ): String = baseUrl.trim().trimEnd('/') +
     AppConstants.AUTHENTICATION_ENDPOINT_PATH + "/" + accountId.trim() +
-    "?deviceId=" + deviceId.trim() + "&nonce=" + nonce.trim()
+    "?mobileDeviceId=" + mobileDeviceId.trim() + "&nonce=" + nonce.trim()
 
 internal fun buildAuthenticationSessionRevocationUrl(
     baseUrl: String,
@@ -81,33 +76,49 @@ internal fun buildRootDeviceFetchUrl(
 internal fun buildConnectedDevicesUrl(
     baseUrl: String,
     accountId: String,
-    deviceId: String,
+    mobileDeviceId: String,
     nonce: String,
 ): String = baseUrl.trim().trimEnd('/') +
-    AppConstants.REGISTRATION_ENDPOINT_PATH + "/" + accountId.trim() + "/" + deviceId.trim() +
-    "?accountId=" + accountId.trim() + "&deviceId=" + deviceId.trim() + "&nonce=" + nonce.trim()
+    AppConstants.REGISTRATION_ENDPOINT_PATH + "/" + accountId.trim() + "/" + mobileDeviceId.trim() +
+    "?nonce=" + nonce.trim()
+
+internal fun buildSignedAccountMobileDeviceNonceJson(
+    gson: Gson,
+    accountId: String,
+    mobileDeviceId: String,
+    nonce: String,
+): String = buildString {
+    append('{')
+    append("\"accountId\":")
+    append(gson.toJson(accountId))
+    append(',')
+    append("\"mobileDeviceId\":")
+    append(gson.toJson(mobileDeviceId))
+    append(',')
+    append("\"nonce\":")
+    append(gson.toJson(nonce))
+    append('}')
+}
+
+internal fun buildSignedAccountDeviceNonceJson(
+    gson: Gson,
+    accountId: String,
+    deviceId: String,
+    nonce: String,
+): String = buildString {
+    append('{')
+    append("\"accountId\":")
+    append(gson.toJson(accountId))
+    append(',')
+    append("\"deviceId\":")
+    append(gson.toJson(deviceId))
+    append(',')
+    append("\"nonce\":")
+    append(gson.toJson(nonce))
+    append('}')
+}
 
 internal fun newRequestNonce(): String = UUID.randomUUID().toString().replace("-", "")
-
-internal fun RegistrationPayload.toDto(nonce: String): AccountRegistrationRequestDto = AccountRegistrationRequestDto(
-    namespace = NamespaceDto(
-        namespaceId = namespace.namespaceId,
-        name = namespace.name,
-        url = namespace.url,
-    ),
-    device = DeviceDto(
-        deviceId = device.deviceId,
-        publicKey = device.publicKey,
-        deviceName = device.deviceName,
-    ),
-    dek = DekDto(
-        deviceId = dek.deviceId,
-        encDek = dek.encDek,
-    ),
-    email = email,
-    phone = phone,
-    nonce = nonce,
-)
 
 internal fun serverFailure(
     gson: Gson,

@@ -43,6 +43,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
+import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.presentation.deviceinformation.DeviceInformationUiModel
 import com.zerointrusion.ui.theme.ActionDeclineRed
@@ -56,6 +57,7 @@ import com.zerointrusion.ui.theme.Yellow
 fun SettingsConnectedDevicesScreen(
     deviceInformation: DeviceInformationUiModel,
     namespaces: List<NamespaceEntry>,
+    connectedDeviceGroups: List<ConnectedDeviceGroup>,
     liveDesktopSessions: List<ActiveDesktopSession>,
     namespaceManagementErrorMessage: String?,
     onDeleteNamespace: (NamespaceEntry) -> Unit,
@@ -85,6 +87,7 @@ fun SettingsConnectedDevicesScreen(
         ConnectedDevicesSettingsContent(
             deviceInformation = deviceInformation,
             namespaces = namespaces,
+            connectedDeviceGroups = connectedDeviceGroups,
             liveDesktopSessions = liveDesktopSessions,
             namespaceManagementErrorMessage = namespaceManagementErrorMessage,
             namespacePendingDelete = namespacePendingDelete,
@@ -110,21 +113,73 @@ fun SettingsConnectedDevicesScreen(
     }
 }
 
+internal data class SettingsConnectedDeviceGroupUiModel(
+    val deviceId: String,
+    val deviceLabel: String,
+    val namespaces: List<NamespaceEntry>,
+    val hasLiveSession: Boolean,
+)
+
+internal fun buildSettingsConnectedDeviceGroups(
+    namespaces: List<NamespaceEntry>,
+    connectedDeviceGroups: List<ConnectedDeviceGroup>,
+    liveDesktopSessions: List<ActiveDesktopSession>,
+): List<SettingsConnectedDeviceGroupUiModel> {
+    val namespacesByDeviceId = namespaces.groupBy { it.desktopDeviceId.trim() }
+    val sessionsByDeviceId = liveDesktopSessions.groupBy { it.deviceId.trim() }
+    val deviceIdsInDisplayOrder = linkedSetOf<String>()
+
+    connectedDeviceGroups.forEach { group ->
+        val deviceId = group.deviceId.trim()
+        if (deviceId.isNotEmpty()) {
+            deviceIdsInDisplayOrder += deviceId
+        }
+    }
+
+    namespacesByDeviceId.keys.filter { it.isNotEmpty() }.sorted().forEach { deviceId ->
+        deviceIdsInDisplayOrder += deviceId
+    }
+
+    sessionsByDeviceId.keys.filter { it.isNotEmpty() }.sorted().forEach { deviceId ->
+        deviceIdsInDisplayOrder += deviceId
+    }
+
+    return deviceIdsInDisplayOrder.map { deviceId ->
+        val deviceNamespaces = namespacesByDeviceId[deviceId].orEmpty()
+            .sortedWith(compareBy({ it.namespaceName.lowercase() }, { it.namespaceUrl.lowercase() }))
+        val matchingSessions = sessionsByDeviceId[deviceId].orEmpty()
+        val deviceLabel = deviceNamespaces.firstNotNullOfOrNull { namespace ->
+            namespace.deviceName?.trim()?.takeIf { it.isNotEmpty() }
+        } ?: matchingSessions.firstNotNullOfOrNull { session ->
+            session.deviceName.trim().takeIf { it.isNotEmpty() }
+        } ?: deviceId
+
+        SettingsConnectedDeviceGroupUiModel(
+            deviceId = deviceId,
+            deviceLabel = deviceLabel,
+            namespaces = deviceNamespaces,
+            hasLiveSession = matchingSessions.isNotEmpty(),
+        )
+    }.sortedWith(compareBy({ it.deviceLabel.lowercase() }, { it.deviceId.lowercase() }))
+}
+
 @Composable
 private fun ConnectedDevicesSettingsContent(
     deviceInformation: DeviceInformationUiModel,
     namespaces: List<NamespaceEntry>,
+    connectedDeviceGroups: List<ConnectedDeviceGroup>,
     liveDesktopSessions: List<ActiveDesktopSession>,
     namespaceManagementErrorMessage: String?,
     namespacePendingDelete: NamespaceEntry?,
     onDeleteClick: (NamespaceEntry) -> Unit,
     onConfirmDelete: (NamespaceEntry) -> Unit,
 ) {
-    val groupedNamespaces = remember(namespaces) {
-        namespaces
-            .groupBy { namespace -> namespace.deviceName?.takeIf { it.isNotBlank() } ?: namespace.deviceId }
-            .toList()
-            .sortedBy { it.first }
+    val groupedDevices = remember(namespaces, connectedDeviceGroups, liveDesktopSessions) {
+        buildSettingsConnectedDeviceGroups(
+            namespaces = namespaces,
+            connectedDeviceGroups = connectedDeviceGroups,
+            liveDesktopSessions = liveDesktopSessions,
+        )
     }
 
     namespaceManagementErrorMessage?.takeIf { it.isNotBlank() }?.let { message ->
@@ -135,7 +190,7 @@ private fun ConnectedDevicesSettingsContent(
         )
     }
 
-    if (groupedNamespaces.isEmpty()) {
+    if (groupedDevices.isEmpty()) {
         Text(
             text = "No connected devices stored yet.",
             color = White,
@@ -145,11 +200,7 @@ private fun ConnectedDevicesSettingsContent(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        groupedNamespaces.forEach { (group, deviceNamespaces) ->
-            val hasLiveSession = liveDesktopSessions.any { session ->
-                deviceNamespaces.any { namespace -> namespace.deviceId == session.deviceId }
-            }
-
+        groupedDevices.forEach { group ->
             Card(
                 shape = RoundedCornerShape(20.dp),
                 colors = CardDefaults.cardColors(containerColor = Dark.copy(alpha = 0.36f)),
@@ -178,13 +229,13 @@ private fun ConnectedDevicesSettingsContent(
                                     color = White.copy(alpha = 0.72f),
                                 )
                                 Text(
-                                    text = group,
+                                    text = group.deviceLabel,
                                     style = MaterialTheme.typography.titleMedium,
                                     color = White,
                                 )
                             }
 
-                            if (hasLiveSession) {
+                            if (group.hasLiveSession) {
                                 LiveSessionBadge()
                             }
                         }
@@ -195,26 +246,37 @@ private fun ConnectedDevicesSettingsContent(
                         verticalArrangement = Arrangement.spacedBy(0.dp),
                     )
                     {
-                        deviceNamespaces.forEachIndexed { index, namespace ->
-                            NamespaceConnectionCard(
-                                namespace = namespace,
-                                isGateway = namespace.accountId == deviceInformation.accountId &&
-                                    namespace.namespaceId == deviceInformation.namespaceId &&
-                                    namespace.namespaceName == deviceInformation.namespaceName &&
-                                    namespace.namespaceUrl == deviceInformation.namespaceUrl,
-                                showDeleteConfirmation = namespacePendingDelete == namespace,
-                                isFirst = index == 0,
-                                onDeleteClick = { onDeleteClick(namespace) },
-                                onConfirmDelete = { onConfirmDelete(namespace) },
+                        if (group.namespaces.isEmpty()) {
+                            Text(
+                                text = "No stored namespace connections for this device.",
+                                color = White.copy(alpha = 0.82f),
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 2.dp),
                             )
-                            if (index != deviceNamespaces.lastIndex) {
-                                HorizontalDivider(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(start = 26.dp, top = 10.dp, bottom = 10.dp),
-                                    thickness = 1.dp,
-                                    color = White.copy(alpha = 0.18f),
+                        } else {
+                            group.namespaces.forEachIndexed { index, namespace ->
+                                NamespaceConnectionCard(
+                                    namespace = namespace,
+                                    isGateway = namespace.accountId == deviceInformation.accountId &&
+                                        namespace.namespaceId == deviceInformation.namespaceId &&
+                                        namespace.namespaceName == deviceInformation.namespaceName &&
+                                        namespace.namespaceUrl == deviceInformation.namespaceUrl,
+                                    showDeleteConfirmation = namespacePendingDelete == namespace,
+                                    isFirst = index == 0,
+                                    onDeleteClick = { onDeleteClick(namespace) },
+                                    onConfirmDelete = { onConfirmDelete(namespace) },
                                 )
+                                if (index != group.namespaces.lastIndex) {
+                                    HorizontalDivider(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 26.dp, top = 10.dp, bottom = 10.dp),
+                                        thickness = 1.dp,
+                                        color = White.copy(alpha = 0.18f),
+                                    )
+                                }
                             }
                         }
                     }

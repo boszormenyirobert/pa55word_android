@@ -10,13 +10,13 @@ import com.zerointrusion.core.AppConstants
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import java.io.IOException
 import java.security.GeneralSecurityException
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
-import javax.inject.Singleton
 
 interface NamespaceStore {
     fun observeNamespaces(): Flow<List<NamespaceEntry>>
@@ -30,7 +30,6 @@ class EncryptedNamespaceStore @Inject constructor(
     private val gson: Gson,
 ) : NamespaceStore {
     private val encryptedPreferences = openEncryptedPreferences()
-
     private val stateFlow = MutableStateFlow(readNamespacesSafely())
 
     override fun observeNamespaces(): Flow<List<NamespaceEntry>> = stateFlow.asStateFlow()

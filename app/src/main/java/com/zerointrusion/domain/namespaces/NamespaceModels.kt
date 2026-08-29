@@ -5,10 +5,11 @@ data class NamespaceEntry(
     val namespaceId: String,
     val namespaceUrl: String,
     val accountId: String,
-    val deviceId: String,
+    val desktopDeviceId: String,
     val attestationId: String? = null,
     val deviceName: String? = null,
     val publicKey: String? = null,
+    val foreignAccountId: String? = null,
 )
 
 data class NamespaceFormValidation(

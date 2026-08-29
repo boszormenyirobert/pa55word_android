@@ -1,10 +1,10 @@
 package com.zerointrusion.data.repository.namespaces
 
-import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.data.storage.NamespaceStore
+import com.zerointrusion.data.storage.RegistrationStateStore
+import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.namespaces.NamespacesRepository
-import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.registration.RegistrationState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -37,7 +37,7 @@ class NamespacesRepositoryImpl(
             namespaceUrl = namespace.namespaceUrl,
         )
         stateStore.save(updatedState)
-        updatedState
+        return@withContext updatedState
     }
 
     override suspend fun deleteNamespace(namespace: NamespaceEntry) = withContext(Dispatchers.IO) {
@@ -59,7 +59,7 @@ class NamespacesRepositoryImpl(
                 storedNamespace.namespaceId == namespace.namespaceId &&
                 storedNamespace.namespaceName == namespace.namespaceName &&
                 storedNamespace.namespaceUrl == namespace.namespaceUrl &&
-                storedNamespace.deviceId == namespace.deviceId
+                storedNamespace.desktopDeviceId == namespace.desktopDeviceId
         }
         namespaceStore.saveNamespaces(updatedNamespaces)
     }

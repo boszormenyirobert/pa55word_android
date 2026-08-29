@@ -6,13 +6,13 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ProcessLifecycleOwner
 import com.google.firebase.messaging.RemoteMessage
 import com.zerointrusion.MainActivity
-import com.zerointrusion.R
 import com.zerointrusion.domain.notification.BackendPushNotification
 import com.zerointrusion.domain.notification.NotificationRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -30,6 +30,10 @@ class PushNotificationGateway @Inject constructor(
 
     fun handleRemoteMessage(remoteMessage: RemoteMessage) {
         val notification = normalizer.fromRemoteMessage(remoteMessage) ?: return
+        Log.d(
+            NOTIFICATION_LOG_TAG,
+            "Normalized remote notification: title=${notification.title}, body=${notification.body}, type=${notification.type}, screen=${notification.screen}, accountId=${notification.accountId}, mobileDeviceId=${notification.mobileDeviceId}, desktopDeviceId=${notification.desktopDeviceId}, data=${notification.data}",
+        )
         notificationRepository.publishNotification(notification)
         if (!isAppInForeground()) {
             showSystemNotification(notification)
@@ -38,6 +42,10 @@ class PushNotificationGateway @Inject constructor(
 
     fun handleIntent(intent: Intent?) {
         val notification = intentCodec.fromIntent(intent) ?: return
+        Log.d(
+            NOTIFICATION_LOG_TAG,
+            "Notification restored from intent: title=${notification.title}, body=${notification.body}, type=${notification.type}, screen=${notification.screen}, accountId=${notification.accountId}, mobileDeviceId=${notification.mobileDeviceId}, desktopDeviceId=${notification.desktopDeviceId}, data=${notification.data}",
+        )
         notificationRepository.publishNotification(notification)
     }
 
@@ -57,7 +65,7 @@ class PushNotificationGateway @Inject constructor(
         )
 
         val systemNotification = NotificationCompat.Builder(appContext, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(notification.title)
             .setContentText(notification.body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(notification.body))
@@ -88,6 +96,7 @@ class PushNotificationGateway @Inject constructor(
     }
 
     companion object {
+        private const val NOTIFICATION_LOG_TAG = "ZeroIntrusionNotification"
         private const val CHANNEL_ID = "zero_intrusion_backend_push"
         private const val CHANNEL_NAME = "Backend Push Notifications"
     }

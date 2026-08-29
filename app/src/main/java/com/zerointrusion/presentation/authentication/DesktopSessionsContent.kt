@@ -95,6 +95,7 @@ private fun DesktopSessionCard(
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            SessionField(label = "Namespace", value = session.namespaceName)
             SessionField(label = "Desktop device ID", value = session.deviceId)
             SessionField(label = "Attestation ID", value = session.attestationId)
             SessionField(label = "Issued at", value = session.issuedAt.toDisplayTimestamp())

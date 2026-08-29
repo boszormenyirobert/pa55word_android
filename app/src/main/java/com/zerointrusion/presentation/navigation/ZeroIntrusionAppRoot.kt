@@ -13,6 +13,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.zerointrusion.domain.notification.NotificationDecision
+import com.zerointrusion.presentation.app.QrNamespaceRegistrationUiState
 import com.zerointrusion.presentation.app.AppViewModel
 import com.zerointrusion.presentation.authentication.DesktopSessionsScreen
 import com.zerointrusion.presentation.auth.SecurityScreen
@@ -22,12 +23,19 @@ import com.zerointrusion.presentation.deviceinformation.DeviceInformationScreen
 import com.zerointrusion.presentation.deviceinformation.DeviceInformationUiModel
 import com.zerointrusion.presentation.home.PostLoginHomeScreen
 import com.zerointrusion.presentation.namespaces.NamespacesScreen
+import com.zerointrusion.presentation.qrread.QrNamespaceDeviceSelectionScreen
 import com.zerointrusion.presentation.qrread.QrReadScreen
 import com.zerointrusion.presentation.settings.RecoveryConnectionScreen
 import com.zerointrusion.presentation.settings.SettingsScreen
 import com.zerointrusion.presentation.settings.SettingsConnectedDevicesScreen
 import com.zerointrusion.presentation.registration.RegistrationScreen
 import com.zerointrusion.presentation.registration.RegistrationViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+
+private const val SHARED_ACCOUNT_DETAILS_POLL_INTERVAL_MILLIS = 30_000L
+
+private val EMPTY_CONNECTED_DEVICE_GROUPS = emptyList<com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup>()
 
 @Composable
 fun ZeroIntrusionAppRoot(
@@ -57,6 +65,29 @@ fun ZeroIntrusionAppRoot(
                 }
                 launchSingleTop = true
             }
+        }
+    }
+
+    LaunchedEffect(appState.qrNamespaceRegistrationState) {
+        if (
+            appState.qrNamespaceRegistrationState is QrNamespaceRegistrationUiState.AwaitingDeviceSelection &&
+            navController.currentDestination?.route != AppRoute.QrNamespaceDeviceSelection.route
+        ) {
+            navController.navigate(AppRoute.QrNamespaceDeviceSelection.route)
+        }
+    }
+
+    LaunchedEffect(appState.isAuthenticated, appState.isRegistered) {
+        if (!appState.isAuthenticated || !appState.isRegistered) {
+            return@LaunchedEffect
+        }
+
+        appViewModel.refreshAccountDetailsSnapshot()
+        appViewModel.refreshLiveDesktopSessions()
+        while (isActive) {
+            delay(SHARED_ACCOUNT_DETAILS_POLL_INTERVAL_MILLIS)
+            appViewModel.refreshAccountDetailsSnapshot()
+            appViewModel.refreshLiveDesktopSessions()
         }
     }
 
@@ -105,7 +136,6 @@ fun ZeroIntrusionAppRoot(
                     liveDesktopSessionRevokingAttestationId = appState.liveDesktopSessionRevokingAttestationId,
                     notification = appState.notificationOverlay.notification,
                     notificationError = appState.notificationOverlay.mismatchError,
-                    authenticationNamespaceResults = appState.notificationOverlay.namespaceResults,
                     qrNamespaceRegistrationState = appState.qrNamespaceRegistrationState,
                     onOpenSettings = {
                         navController.navigate(AppRoute.Settings.route)
@@ -114,7 +144,6 @@ fun ZeroIntrusionAppRoot(
                         navController.navigate(AppRoute.QrRead.route)
                     },
                     onClearQrNamespaceRegistrationState = appViewModel::clearQrNamespaceRegistrationState,
-                    onRefreshLiveDesktopSessions = appViewModel::refreshLiveDesktopSessions,
                     onRevokeDesktopSession = appViewModel::revokeDesktopSession,
                     onAllowNotification = {
                         appViewModel.onNotificationDecision(NotificationDecision.Accept)
@@ -158,6 +187,9 @@ fun ZeroIntrusionAppRoot(
                         email = appState.registrationState?.email.orEmpty(),
                     ),
                     namespaces = appState.namespaces,
+                    connectedDeviceGroups = (appState.connectedDevicesState as? com.zerointrusion.presentation.app.ConnectedDevicesUiState.Success)
+                        ?.groups
+                        ?: EMPTY_CONNECTED_DEVICE_GROUPS,
                     liveDesktopSessions = appState.liveDesktopSessions,
                     namespaceManagementErrorMessage = appState.namespaceManagementErrorMessage,
                     onDeleteNamespace = appViewModel::deleteNamespace,
@@ -194,10 +226,17 @@ fun ZeroIntrusionAppRoot(
                     },
                 )
             }
+            composable(AppRoute.QrNamespaceDeviceSelection.route) {
+                QrNamespaceDeviceSelectionScreen(
+                    qrNamespaceRegistrationState = appState.qrNamespaceRegistrationState,
+                    onConnectedDeviceSelected = appViewModel::confirmQrNamespaceDeviceSelection,
+                    onBack = {
+                        appViewModel.clearQrNamespaceRegistrationState()
+                        navController.popBackStack()
+                    },
+                )
+            }
             composable(AppRoute.ConnectedDevices.route) {
-                LaunchedEffect(Unit) {
-                    appViewModel.loadConnectedDevices()
-                }
                 ConnectedDevicesScreen(
                     accountId = appState.registrationState?.accountId.orEmpty(),
                     state = appState.connectedDevicesState,

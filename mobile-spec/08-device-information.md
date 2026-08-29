@@ -27,7 +27,7 @@ Validation and constraints:
 
 Data source:
 - Root device information comes from the current stored registration state.
-- Namespace options come from local stored namespace state.
+- Namespace options come from local stored namespace state. That local namespace state can be refreshed from the account details API response.
 
 Payloads:
 - None. Uses local stored namespace state only.

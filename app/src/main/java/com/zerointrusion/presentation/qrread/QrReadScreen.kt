@@ -74,7 +74,6 @@ fun QrReadScreen(
 
     DisposableEffect(barcodeScanner, cameraExecutor) {
         onDispose {
-            onClearQrNamespaceRegistrationState()
             barcodeScanner.close()
             cameraExecutor.shutdown()
         }
@@ -147,6 +146,7 @@ fun QrReadScreen(
 
                 when (qrNamespaceRegistrationState) {
                     QrNamespaceRegistrationUiState.Idle -> Unit
+                    is QrNamespaceRegistrationUiState.AwaitingDeviceSelection -> Unit
                     QrNamespaceRegistrationUiState.InProgress -> Text(
                         text = "Connecting scanned namespace...",
                         color = White,

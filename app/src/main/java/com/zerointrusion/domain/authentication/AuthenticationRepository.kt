@@ -1,8 +1,12 @@
 package com.zerointrusion.domain.authentication
 
 data class ActiveDesktopSession(
+    val accountId: String,
     val attestationId: String,
     val deviceId: String,
+    val deviceName: String,
+    val namespaceName: String,
+    val namespaceUrl: String,
     val issuedAt: String,
     val expiresAt: String,
 )
@@ -32,13 +36,18 @@ interface AuthenticationRepository {
         notificationId: String,
         accountId: String,
         deviceId: String,
+        requestingDeviceId: String,
         approved: Boolean,
+        namespaceId: String? = null,
+        namespaceUrl: String? = null,
     ): AuthenticationResponseResult
 
-    suspend fun fetchActiveDesktopSessions(): List<ActiveDesktopSession>
+    suspend fun fetchActiveDesktopSessions(
+        namespaceId: String? = null,
+        namespaceUrl: String? = null,
+    ): List<ActiveDesktopSession>
 
     suspend fun revokeDesktopSession(
-        attestationId: String,
-        desktopDeviceId: String,
+        session: ActiveDesktopSession,
     ): DesktopSessionRevocationResult
 }

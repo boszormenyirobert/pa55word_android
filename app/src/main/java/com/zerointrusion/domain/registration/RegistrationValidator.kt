@@ -41,7 +41,7 @@ class RegistrationValidator @Inject constructor() {
     }
 
     fun validatePayload(payload: RegistrationPayload) {
-        if (!DEVICE_ID_REGEX.matches(payload.device.deviceId)) {
+        if (!DEVICE_ID_REGEX.matches(payload.device.mobileDeviceId)) {
             throw RegistrationFailure.Validation("Generated device ID is invalid.")
         }
 
@@ -49,7 +49,7 @@ class RegistrationValidator @Inject constructor() {
             throw RegistrationFailure.Validation("Generated namespace ID is invalid.")
         }
 
-        if (payload.dek.deviceId != payload.device.deviceId) {
+        if (payload.dek.mobileDeviceId != payload.device.mobileDeviceId) {
             throw RegistrationFailure.Validation("Encrypted DEK does not match the device ID.")
         }
 

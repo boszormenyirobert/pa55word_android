@@ -56,7 +56,7 @@ interface NamespaceService {
 }
 
 interface DekService {
-    fun createEncryptedDek(publicKey: PublicKey, deviceId: String): DekPayload
+    fun createEncryptedDek(publicKey: PublicKey, mobileDeviceId: String): DekPayload
 
     fun decryptDek(encDek: String): ByteArray
 
@@ -178,14 +178,14 @@ class DefaultDeviceService @Inject constructor() : DeviceService {
 
     override fun createDevice(publicKey: PublicKey): Device {
         val encodedKey = Base64.encodeToString(publicKey.encoded, Base64.NO_WRAP)
-        val deviceId = buildString(10) {
+        val mobileDeviceId = buildString(10) {
             repeat(10) {
                 append(deviceAlphabet[secureRandom.nextInt(deviceAlphabet.length)])
             }
         }
         val deviceName = buildDeviceName()
 
-        return Device(deviceId = deviceId, publicKey = encodedKey, deviceName = deviceName)
+        return Device(mobileDeviceId = mobileDeviceId, publicKey = encodedKey, deviceName = deviceName)
     }
 
     private fun buildDeviceName(): String {
@@ -244,13 +244,13 @@ class DefaultDekService @Inject constructor(
     @Volatile
     private var resolvedOaepMode: OaepCompatibilityMode? = null
 
-    override fun createEncryptedDek(publicKey: PublicKey, deviceId: String): DekPayload {
+    override fun createEncryptedDek(publicKey: PublicKey, mobileDeviceId: String): DekPayload {
         val rawDek = ByteArray(32).also(secureRandom::nextBytes)
         val mode = resolveOaepCompatibilityMode()
         val encrypted = encryptWithMode(rawDek, publicKey, mode)
 
         return DekPayload(
-            deviceId = deviceId,
+            mobileDeviceId = mobileDeviceId,
             encDek = Base64.encodeToString(encrypted, Base64.NO_WRAP),
         )
     }

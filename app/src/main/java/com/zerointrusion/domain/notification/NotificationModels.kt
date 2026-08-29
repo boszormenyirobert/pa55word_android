@@ -6,7 +6,8 @@ data class BackendPushNotification(
     val type: String,
     val screen: String,
     val accountId: String,
-    val deviceId: String,
+    val mobileDeviceId: String,
+    val desktopDeviceId: String,
     val data: Map<String, String>,
     val receivedAtEpochMillis: Long,
 )

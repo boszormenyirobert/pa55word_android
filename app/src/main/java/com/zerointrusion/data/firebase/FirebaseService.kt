@@ -7,7 +7,7 @@ interface FirebaseService {
     suspend fun registerFcmToken(
         namespaceUrl: String,
         accountId: String,
-        deviceId: String,
+        mobileDeviceId: String,
         fcmToken: String,
     )
 }

@@ -10,5 +10,6 @@ data class ConnectedDeviceNamespace(
 data class ConnectedDeviceGroup(
     val accountId: String,
     val deviceId: String,
+    val deviceName: String? = null,
     val namespaces: List<ConnectedDeviceNamespace>,
 )

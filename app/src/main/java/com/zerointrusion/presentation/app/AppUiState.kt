@@ -17,6 +17,10 @@ sealed class FcmSyncUiState {
 
 sealed class QrNamespaceRegistrationUiState {
     data object Idle : QrNamespaceRegistrationUiState()
+    data class AwaitingDeviceSelection(
+        val namespaceName: String,
+        val deviceOptions: List<QrNamespaceDeviceOption>,
+    ) : QrNamespaceRegistrationUiState()
     data object InProgress : QrNamespaceRegistrationUiState()
     data class Success(
         val namespaceName: String,
@@ -24,6 +28,11 @@ sealed class QrNamespaceRegistrationUiState {
     ) : QrNamespaceRegistrationUiState()
     data class Error(val message: String) : QrNamespaceRegistrationUiState()
 }
+
+data class QrNamespaceDeviceOption(
+    val deviceId: String,
+    val deviceName: String,
+)
 
 sealed class ConnectedDevicesUiState {
     data object Idle : ConnectedDevicesUiState()

@@ -9,7 +9,10 @@ import com.zerointrusion.data.firebase.FirebaseService
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.notification.NotificationRepositoryImpl
 import com.zerointrusion.data.repository.authentication.AuthenticationRepositoryImpl
+import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
+import com.zerointrusion.data.repository.connecteddevices.AccountDetailsSnapshotFetcher
 import com.zerointrusion.data.repository.connecteddevices.ConnectedDevicesRepositoryImpl
+import com.zerointrusion.data.repository.connecteddevices.InMemoryAccountDetailsStateHolder
 import com.zerointrusion.data.repository.namespaces.NamespacesRepositoryImpl
 import com.zerointrusion.data.repository.qr.QrNamespaceRegistrationRepositoryImpl
 import com.zerointrusion.data.repository.registration.RegistrationRepositoryImpl
@@ -151,6 +154,30 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideAccountDetailsStateHolder(
+        stateHolder: InMemoryAccountDetailsStateHolder,
+    ): AccountDetailsStateHolder = stateHolder
+
+    @Provides
+    @Singleton
+    fun provideAccountDetailsSnapshotFetcher(
+        registrationApi: RegistrationApi,
+        registrationStateStore: RegistrationStateStore,
+        accountDetailsStateHolder: AccountDetailsStateHolder,
+        dekService: DekService,
+        signatureService: SignatureService,
+        gson: Gson,
+    ): AccountDetailsSnapshotFetcher = AccountDetailsSnapshotFetcher(
+        registrationApi = registrationApi,
+        stateStore = registrationStateStore,
+        accountDetailsStateHolder = accountDetailsStateHolder,
+        dekService = dekService,
+        signatureService = signatureService,
+        gson = gson,
+    )
+
+    @Provides
+    @Singleton
     fun provideFirebaseService(
         @ApplicationContext context: Context,
         registrationApi: RegistrationApi,
@@ -173,7 +200,6 @@ object AppModule {
         deviceService: DeviceService,
         namespaceService: NamespaceService,
         dekService: DekService,
-        signatureService: SignatureService,
         registrationStateStore: RegistrationStateStore,
         validator: RegistrationValidator,
         gson: Gson,
@@ -184,7 +210,6 @@ object AppModule {
         deviceService = deviceService,
         namespaceService = namespaceService,
         dekService = dekService,
-        signatureService = signatureService,
         stateStore = registrationStateStore,
         validator = validator,
         gson = gson,
@@ -203,15 +228,13 @@ object AppModule {
     @Provides
     @Singleton
     fun provideConnectedDevicesRepository(
-        registrationApi: RegistrationApi,
-        registrationStateStore: RegistrationStateStore,
-        signatureService: SignatureService,
-        gson: Gson,
+        accountDetailsSnapshotFetcher: AccountDetailsSnapshotFetcher,
+        accountDetailsStateHolder: AccountDetailsStateHolder,
+        namespaceStore: NamespaceStore,
     ): ConnectedDevicesRepository = ConnectedDevicesRepositoryImpl(
-        registrationApi = registrationApi,
-        stateStore = registrationStateStore,
-        signatureService = signatureService,
-        gson = gson,
+        accountDetailsSnapshotFetcher = accountDetailsSnapshotFetcher,
+        accountDetailsStateHolder = accountDetailsStateHolder,
+        namespaceStore = namespaceStore,
     )
 
     @Provides
@@ -219,20 +242,20 @@ object AppModule {
     fun provideQrNamespaceRegistrationRepository(
         registrationApi: RegistrationApi,
         keyStoreService: KeyStoreService,
-        namespaceStore: NamespaceStore,
         registrationStateStore: RegistrationStateStore,
         dekService: DekService,
         signatureService: SignatureService,
+        connectedDevicesRepository: ConnectedDevicesRepository,
         validator: RegistrationValidator,
         firebaseService: FirebaseService,
         gson: Gson,
     ): QrNamespaceRegistrationRepository = QrNamespaceRegistrationRepositoryImpl(
         registrationApi = registrationApi,
         keyStoreService = keyStoreService,
-        namespaceStore = namespaceStore,
         stateStore = registrationStateStore,
         dekService = dekService,
         signatureService = signatureService,
+        connectedDevicesRepository = connectedDevicesRepository,
         validator = validator,
         firebaseService = firebaseService,
         gson = gson,
@@ -242,15 +265,17 @@ object AppModule {
     @Singleton
     fun provideAuthenticationRepository(
         registrationApi: RegistrationApi,
-        namespaceStore: NamespaceStore,
+        accountDetailsStateHolder: AccountDetailsStateHolder,
         registrationStateStore: RegistrationStateStore,
         signatureService: SignatureService,
         gson: Gson,
+        connectedDevicesRepository: ConnectedDevicesRepository,
     ): AuthenticationRepository = AuthenticationRepositoryImpl(
         registrationApi = registrationApi,
-        namespaceStore = namespaceStore,
+        accountDetailsStateHolder = accountDetailsStateHolder,
         stateStore = registrationStateStore,
         signatureService = signatureService,
         gson = gson,
+        connectedDevicesRepository = connectedDevicesRepository,
     )
 }

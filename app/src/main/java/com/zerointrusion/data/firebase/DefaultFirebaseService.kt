@@ -57,7 +57,7 @@ class DefaultFirebaseService @Inject constructor(
     override suspend fun registerFcmToken(
         namespaceUrl: String,
         accountId: String,
-        deviceId: String,
+        mobileDeviceId: String,
         fcmToken: String,
     ) {
         withContext(Dispatchers.IO) {
@@ -67,12 +67,13 @@ class DefaultFirebaseService @Inject constructor(
             try {
                 val requestPayload = FcmRegistrationRequestDto(
                     accountId = accountId,
-                    deviceId = deviceId,
+                    mobileDeviceId = mobileDeviceId,
                     fcmToken = fcmToken,
                     nonce = nonce,
                 )
                 val requestBodyJson = gson.toJson(requestPayload)
                 val signature = signatureService.signJsonString(requestBodyJson)
+                android.util.Log.d("ZeroIntrusionRegistration", "HTTP POST $fcmUrl payload=$requestBodyJson")
 
                 val response = registrationApi.registerFcmToken(
                     url = fcmUrl,

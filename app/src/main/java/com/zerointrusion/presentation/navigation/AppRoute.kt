@@ -10,6 +10,7 @@ sealed class AppRoute(val route: String) {
     data object RecoveryConnection : AppRoute("recovery-connection")
     data object DeviceInformation : AppRoute("device-information")
     data object QrRead : AppRoute("qr-read")
+    data object QrNamespaceDeviceSelection : AppRoute("qr-namespace-device-selection")
     data object ConnectedDevices : AppRoute("connected-devices")
     data object DesktopSessions : AppRoute("desktop-sessions")
     data object Namespaces : AppRoute("namespaces")

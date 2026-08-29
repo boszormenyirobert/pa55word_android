@@ -20,7 +20,8 @@ class NotificationIntentCodec @Inject constructor(
         intent.putExtra(EXTRA_TYPE, notification.type)
         intent.putExtra(EXTRA_SCREEN, notification.screen)
         intent.putExtra(EXTRA_ACCOUNT_ID, notification.accountId)
-        intent.putExtra(EXTRA_DEVICE_ID, notification.deviceId)
+        intent.putExtra(EXTRA_MOBILE_DEVICE_ID, notification.mobileDeviceId)
+        intent.putExtra(EXTRA_DESKTOP_DEVICE_ID, notification.desktopDeviceId)
         intent.putExtra(EXTRA_RECEIVED_AT, notification.receivedAtEpochMillis)
         intent.putExtra(EXTRA_DATA_JSON, gson.toJson(notification.data))
     }
@@ -43,13 +44,14 @@ class NotificationIntentCodec @Inject constructor(
         val type = intent.getStringExtra(EXTRA_TYPE).orEmpty()
         val screen = intent.getStringExtra(EXTRA_SCREEN).orEmpty()
         val accountId = intent.getStringExtra(EXTRA_ACCOUNT_ID).orEmpty()
-        val deviceId = intent.getStringExtra(EXTRA_DEVICE_ID).orEmpty()
+        val mobileDeviceId = intent.getStringExtra(EXTRA_MOBILE_DEVICE_ID).orEmpty()
+        val desktopDeviceId = intent.getStringExtra(EXTRA_DESKTOP_DEVICE_ID).orEmpty()
         val receivedAt = intent.getLongExtra(EXTRA_RECEIVED_AT, System.currentTimeMillis())
         val rawData = intent.getStringExtra(EXTRA_DATA_JSON).orEmpty()
         val mapType = object : TypeToken<Map<String, String>>() {}.type
         val data = runCatching { gson.fromJson<Map<String, String>>(rawData, mapType) }.getOrDefault(emptyMap())
 
-        if (title.isBlank() && body.isBlank() && accountId.isBlank() && deviceId.isBlank()) {
+        if (title.isBlank() && body.isBlank() && accountId.isBlank() && mobileDeviceId.isBlank()) {
             return null
         }
 
@@ -59,7 +61,8 @@ class NotificationIntentCodec @Inject constructor(
             type = type,
             screen = screen,
             accountId = accountId,
-            deviceId = deviceId,
+            mobileDeviceId = mobileDeviceId,
+            desktopDeviceId = desktopDeviceId,
             data = data,
             receivedAtEpochMillis = receivedAt,
         )
@@ -76,11 +79,21 @@ class NotificationIntentCodec @Inject constructor(
             KEY_ACCOUNT_ID_SNAKE,
             KEY_ACCOUNT_ID_CAPITALIZED,
         )
-        val deviceId = deliveredData.firstNonBlank(
+        val desktopDeviceId = deliveredData.firstNonBlank(
+            EXTRA_DESKTOP_DEVICE_ID,
+            KEY_DESKTOP_DEVICE_ID,
+            KEY_DESKTOP_DEVICE_ID_SNAKE,
+            KEY_DESKTOP_DEVICE_ID_CAPITALIZED,
             EXTRA_REQUESTING_DEVICE_ID,
             KEY_REQUESTING_DEVICE_ID,
             KEY_REQUESTING_DEVICE_ID_SNAKE,
             KEY_REQUESTING_DEVICE_ID_CAPITALIZED,
+        )
+        val mobileDeviceId = deliveredData.firstNonBlank(
+            EXTRA_MOBILE_DEVICE_ID,
+            KEY_MOBILE_DEVICE_ID,
+            KEY_MOBILE_DEVICE_ID_SNAKE,
+            KEY_MOBILE_DEVICE_ID_CAPITALIZED,
             EXTRA_DEVICE_ID,
             KEY_DEVICE_ID,
             KEY_DEVICE_ID_SNAKE,
@@ -109,11 +122,11 @@ class NotificationIntentCodec @Inject constructor(
             ),
             type = type,
             deviceName = deviceName,
-            deviceId = deviceId,
+            deviceId = desktopDeviceId,
             accountId = accountId,
         )
 
-        if (title.isBlank() && body.isBlank() && accountId.isBlank() && deviceId.isBlank()) {
+        if (title.isBlank() && body.isBlank() && accountId.isBlank() && mobileDeviceId.isBlank()) {
             return null
         }
 
@@ -123,7 +136,8 @@ class NotificationIntentCodec @Inject constructor(
             type = type,
             screen = screen,
             accountId = accountId,
-            deviceId = deviceId,
+            mobileDeviceId = mobileDeviceId,
+            desktopDeviceId = desktopDeviceId,
             data = deliveredData,
             receivedAtEpochMillis = System.currentTimeMillis(),
         )
@@ -136,7 +150,9 @@ class NotificationIntentCodec @Inject constructor(
         private const val EXTRA_TYPE = "push_type"
         private const val EXTRA_SCREEN = "push_screen"
         private const val EXTRA_ACCOUNT_ID = "push_account_id"
+        private const val EXTRA_DESKTOP_DEVICE_ID = "push_desktop_device_id"
         private const val EXTRA_REQUESTING_DEVICE_ID = "push_requesting_device_id"
+        private const val EXTRA_MOBILE_DEVICE_ID = "push_mobile_device_id"
         private const val EXTRA_DEVICE_ID = "push_device_id"
         private const val EXTRA_RECEIVED_AT = "push_received_at"
         private const val EXTRA_DATA_JSON = "push_data_json"
@@ -150,9 +166,15 @@ class NotificationIntentCodec @Inject constructor(
         private const val KEY_DEVICE_NAME = "deviceName"
         private const val KEY_DEVICE_NAME_SNAKE = "device_name"
         private const val KEY_DEVICE_NAME_CAPITALIZED = "deviceName"
+        private const val KEY_DESKTOP_DEVICE_ID = "desktopDeviceId"
+        private const val KEY_DESKTOP_DEVICE_ID_SNAKE = "desktop_device_id"
+        private const val KEY_DESKTOP_DEVICE_ID_CAPITALIZED = "desktopDeviceID"
         private const val KEY_REQUESTING_DEVICE_ID = "requestingDeviceId"
         private const val KEY_REQUESTING_DEVICE_ID_SNAKE = "requesting_device_id"
         private const val KEY_REQUESTING_DEVICE_ID_CAPITALIZED = "requestingDeviceID"
+        private const val KEY_MOBILE_DEVICE_ID = "mobileDeviceId"
+        private const val KEY_MOBILE_DEVICE_ID_SNAKE = "mobile_device_id"
+        private const val KEY_MOBILE_DEVICE_ID_CAPITALIZED = "mobileDeviceID"
         private const val KEY_DEVICE_ID = "deviceId"
         private const val KEY_DEVICE_ID_SNAKE = "device_id"
         private const val KEY_DEVICE_ID_CAPITALIZED = "deviceID"

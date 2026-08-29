@@ -16,10 +16,18 @@ class NotificationPayloadNormalizer @Inject constructor() {
             KEY_ACCOUNT_ID_SNAKE,
             KEY_ACCOUNT_ID_CAPITALIZED,
         )
-        val deviceId = deliveredData.firstNonBlank(
+        val desktopDeviceId = deliveredData.firstNonBlank(
+            KEY_DESKTOP_DEVICE_ID,
+            KEY_DESKTOP_DEVICE_ID_SNAKE,
+            KEY_DESKTOP_DEVICE_ID_CAPITALIZED,
             KEY_REQUESTING_DEVICE_ID,
             KEY_REQUESTING_DEVICE_ID_SNAKE,
             KEY_REQUESTING_DEVICE_ID_CAPITALIZED,
+        )
+        val mobileDeviceId = deliveredData.firstNonBlank(
+            KEY_MOBILE_DEVICE_ID,
+            KEY_MOBILE_DEVICE_ID_SNAKE,
+            KEY_MOBILE_DEVICE_ID_CAPITALIZED,
             KEY_DEVICE_ID,
             KEY_DEVICE_ID_SNAKE,
             KEY_DEVICE_ID_CAPITALIZED,
@@ -37,12 +45,12 @@ class NotificationPayloadNormalizer @Inject constructor() {
             fallbackBody = remoteMessage.notification?.body ?: deliveredData[KEY_BODY],
             type = type,
             deviceName = deviceName,
-            deviceId = deviceId,
+            deviceId = desktopDeviceId,
             accountId = accountId,
         )
         val screen = deliveredData[KEY_SCREEN].orEmpty()
 
-        if (title.isBlank() && body.isBlank() && accountId.isBlank() && deviceId.isBlank()) {
+        if (title.isBlank() && body.isBlank() && accountId.isBlank() && mobileDeviceId.isBlank()) {
             return null
         }
 
@@ -52,7 +60,8 @@ class NotificationPayloadNormalizer @Inject constructor() {
             type = type,
             screen = screen,
             accountId = accountId,
-            deviceId = deviceId,
+            mobileDeviceId = mobileDeviceId,
+            desktopDeviceId = desktopDeviceId,
             data = deliveredData,
             receivedAtEpochMillis = System.currentTimeMillis(),
         )
@@ -69,9 +78,15 @@ class NotificationPayloadNormalizer @Inject constructor() {
         private const val KEY_DEVICE_NAME = "deviceName"
         private const val KEY_DEVICE_NAME_SNAKE = "device_name"
         private const val KEY_DEVICE_NAME_CAPITALIZED = "deviceName"
+        private const val KEY_DESKTOP_DEVICE_ID = "desktopDeviceId"
+        private const val KEY_DESKTOP_DEVICE_ID_SNAKE = "desktop_device_id"
+        private const val KEY_DESKTOP_DEVICE_ID_CAPITALIZED = "desktopDeviceID"
         private const val KEY_REQUESTING_DEVICE_ID = "requestingDeviceId"
         private const val KEY_REQUESTING_DEVICE_ID_SNAKE = "requesting_device_id"
         private const val KEY_REQUESTING_DEVICE_ID_CAPITALIZED = "requestingDeviceID"
+        private const val KEY_MOBILE_DEVICE_ID = "mobileDeviceId"
+        private const val KEY_MOBILE_DEVICE_ID_SNAKE = "mobile_device_id"
+        private const val KEY_MOBILE_DEVICE_ID_CAPITALIZED = "mobileDeviceID"
         private const val KEY_DEVICE_ID = "deviceId"
         private const val KEY_DEVICE_ID_SNAKE = "device_id"
         private const val KEY_DEVICE_ID_CAPITALIZED = "deviceID"

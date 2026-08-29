@@ -2,53 +2,66 @@ package com.zerointrusion.data.repository.authentication
 
 import com.google.gson.Gson
 import com.zerointrusion.data.network.RegistrationApi
+import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
 import com.zerointrusion.data.security.SignatureService
-import com.zerointrusion.data.storage.NamespaceStore
 import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.domain.authentication.AuthenticationRepository
+import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
 
 class AuthenticationRepositoryImpl(
     registrationApi: RegistrationApi,
-    namespaceStore: NamespaceStore,
+    accountDetailsStateHolder: AccountDetailsStateHolder,
     stateStore: RegistrationStateStore,
     signatureService: SignatureService,
     gson: Gson,
+    connectedDevicesRepository: ConnectedDevicesRepository,
 ) : AuthenticationRepository {
     private val authenticationResponseHandler = AuthenticationResponseHandler(
         registrationApi = registrationApi,
-        namespaceStore = namespaceStore,
+        accountDetailsStateHolder = accountDetailsStateHolder,
         stateStore = stateStore,
         signatureService = signatureService,
         gson = gson,
+        connectedDevicesRepository = connectedDevicesRepository,
     )
     private val authenticationSessionHandler = AuthenticationSessionHandler(
         registrationApi = registrationApi,
-        namespaceStore = namespaceStore,
+        accountDetailsStateHolder = accountDetailsStateHolder,
         stateStore = stateStore,
         signatureService = signatureService,
         gson = gson,
+        connectedDevicesRepository = connectedDevicesRepository,
     )
 
     override suspend fun respondToAuthentication(
         notificationId: String,
         accountId: String,
         deviceId: String,
+        requestingDeviceId: String,
         approved: Boolean,
+        namespaceId: String?,
+        namespaceUrl: String?,
     ) = authenticationResponseHandler.respondToAuthentication(
         notificationId = notificationId,
         accountId = accountId,
         deviceId = deviceId,
+        requestingDeviceId = requestingDeviceId,
         approved = approved,
+        namespaceId = namespaceId,
+        namespaceUrl = namespaceUrl,
     )
 
-    override suspend fun fetchActiveDesktopSessions() =
-        authenticationSessionHandler.fetchActiveDesktopSessions()
+    override suspend fun fetchActiveDesktopSessions(
+        namespaceId: String?,
+        namespaceUrl: String?,
+    ) = authenticationSessionHandler.fetchActiveDesktopSessions(
+        namespaceId = namespaceId,
+        namespaceUrl = namespaceUrl,
+    )
 
     override suspend fun revokeDesktopSession(
-        attestationId: String,
-        desktopDeviceId: String,
+        session: com.zerointrusion.domain.authentication.ActiveDesktopSession,
     ) = authenticationSessionHandler.revokeDesktopSession(
-        attestationId = attestationId,
-        desktopDeviceId = desktopDeviceId,
+        session = session,
     )
 }

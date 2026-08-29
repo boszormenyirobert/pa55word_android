@@ -18,7 +18,7 @@ Signed requests:
 - `POST /api/v1/authentication/response/direct`
 - `GET /api/v1/authentication/{accountId}?deviceId={deviceId}&nonce={nonce}`
 - `DELETE /api/v1/authentication/{accountId}/{desktopDeviceId}/{attestationId}?nonce={nonce}`
-- `GET /api/v1/account/{accountId}/{deviceId}?accountId={accountId}&deviceId={deviceId}&nonce={nonce}`
+- `GET /api/v1/account/{accountId}/{mobileDeviceId}?nonce={nonce}`
 
 ## POST /api/v1/account
 
@@ -29,7 +29,7 @@ Used by:
 Signed:
 - No.
 
-Request payload shape:
+Request payload shape for initial phone registration:
 ```json
 {
   "namespace": {
@@ -48,9 +48,12 @@ Request payload shape:
   },
   "email": "string",
   "phone": "string",
+  "root": true,
   "nonce": "string"
 }
 ```
+
+QR namespace flow uses the same payload shape except it does not send the `root` field.
 
 Response payload shape:
 ```json
@@ -75,7 +78,9 @@ Request payload shape:
 ```json
 {
   "accountId": "string",
-  "deviceId": "string",
+  "foreignAccountId": "string",
+  "mobileDeviceId": "string",
+  "desktopDeviceId": "string",
   "namespaceId": "string",
   "name": "string",
   "url": "string",
@@ -87,13 +92,18 @@ Signed payload shape:
 ```json
 {
   "accountId": "string",
-  "deviceId": "string",
+  "foreignAccountId": "string",
+  "mobileDeviceId": "string",
+  "desktopDeviceId": "string",
   "namespaceId": "string",
   "name": "string",
   "url": "string",
   "nonce": "string"
 }
 ```
+
+Notes:
+- In the QR namespace reverse-link request, `foreignAccountId` is sent as an empty string.
 
 Response payload shape:
 ```json
@@ -128,7 +138,7 @@ Request payload shape:
 ```json
 {
   "accountId": "string",
-  "deviceId": "string",
+  "mobileDeviceId": "string",
   "fcmToken": "string",
   "nonce": "string"
 }
@@ -138,7 +148,7 @@ Signed payload shape:
 ```json
 {
   "accountId": "string",
-  "deviceId": "string",
+  "mobileDeviceId": "string",
   "fcmToken": "string",
   "nonce": "string"
 }
@@ -217,10 +227,10 @@ Request payload shape:
     "deviceId": "string",
     "publicKey": "string",
     "deviceName": "string",
-    "deviceIdAdditional": "string"
+    "desktopDeviceId": "string"
   },
   "dek": {
-    "deviceId": "string",
+    "desktopDeviceId": "string",
     "encDek": "string"
   },
   "nonce": "string"
@@ -235,10 +245,10 @@ Signed payload shape:
     "deviceId": "string",
     "publicKey": "string",
     "deviceName": "string",
-    "deviceIdAdditional": "string"
+    "desktopDeviceId": "string"
   },
   "dek": {
-    "deviceId": "string",
+    "desktopDeviceId": "string",
     "encDek": "string"
   },
   "nonce": "string"
@@ -264,11 +274,11 @@ Request payload shape:
 {
   "notificationId": "string",
   "accountId": "string",
-  "deviceId": "string",
+  "mobileDeviceId": "string",
   "approved": true,
   "nonce": "string",
   "envelop": {
-    "desktopId": "string",
+    "desktopDeviceId": "string",
     "deviceId": "string",
     "namespaces": ["namespaceId"],
     "iat": 0,
@@ -283,11 +293,11 @@ Signed payload shape:
 {
   "notificationId": "string",
   "accountId": "string",
-  "deviceId": "string",
+  "mobileDeviceId": "string",
   "approved": true,
   "nonce": "string",
   "envelop": {
-    "desktopId": "string",
+    "desktopDeviceId": "string",
     "deviceId": "string",
     "namespaces": ["namespaceId"],
     "iat": 0,
@@ -303,7 +313,7 @@ Response payload shape:
 ## POST /api/v1/authentication/response/direct
 
 Used by:
-- Authentication approval or denial mirrored to other locally known namespace base URLs that do not own the incoming notification target.
+- No current mobile call site. Authentication approval or denial is sent only to the namespace that matches the incoming notification target.
 
 Signed:
 - Yes.
@@ -316,12 +326,12 @@ Request payload shape:
 {
   "notificationId": "string",
   "accountId": "string",
-  "deviceId": "string",
+  "mobileDeviceId": "string",
   "approved": true,
   "nonce": "string",
   "envelop": {
-    "desktopId": "string",
-    "deviceId": "string",
+    "desktopDeviceId": "string",
+    "mobileDeviceId": "string",
     "namespaces": ["namespaceId"],
     "iat": 0,
     "exp": 0,
@@ -335,12 +345,12 @@ Signed payload shape:
 {
   "notificationId": "string",
   "accountId": "string",
-  "deviceId": "string",
+  "mobileDeviceId": "string",
   "approved": true,
   "nonce": "string",
   "envelop": {
-    "desktopId": "string",
-    "deviceId": "string",
+    "desktopDeviceId": "string",
+    "mobileDeviceId": "string",
     "namespaces": ["namespaceId"],
     "iat": 0,
     "exp": 0,
@@ -352,11 +362,12 @@ Signed payload shape:
 Response payload shape:
 - `HTTP 200/204` with empty body.
 
-## GET /api/v1/authentication/{accountId}?deviceId={deviceId}&nonce={nonce}
+## GET /api/v1/authentication/{accountId}?mobileDeviceId={mobileDeviceId}&nonce={nonce}
 
 Used by:
 - Home live desktop-session polling.
 - Dedicated desktop sessions route.
+- Called once per locally known namespace base URL; the client merges successful responses into a single in-memory live-session list.
 
 Signed:
 - Yes.
@@ -371,7 +382,7 @@ Signed payload shape:
 ```json
 {
   "accountId": "string",
-  "deviceId": "string",
+  "mobileDeviceId": "string",
   "nonce": "string"
 }
 ```
@@ -387,6 +398,11 @@ Response payload shape:
   }
 ]
 ```
+
+Client-side handling notes:
+- The response body does not contain `namespaceName`.
+- The Android client annotates each returned session with the local namespace name that corresponds to the namespace URL used for that request.
+- Responses are merged and deduplicated by `attestationId` before they are exposed to the UI.
 
 ## DELETE /api/v1/authentication/{accountId}/{desktopDeviceId}/{attestationId}?nonce={nonce}
 
@@ -430,7 +446,7 @@ Response payload shape:
 }
 ```
 
-## GET /api/v1/account/{accountId}/{deviceId}?accountId={accountId}&deviceId={deviceId}&nonce={nonce}
+## GET /api/v1/account/{accountId}/{mobileDeviceId}?nonce={nonce}
 
 Used by:
 - Dedicated backend-driven connected-devices route.
@@ -448,7 +464,7 @@ Signed payload shape:
 ```json
 {
   "accountId": "string",
-  "deviceId": "string",
+  "mobileDeviceId": "string",
   "nonce": "string"
 }
 ```
@@ -463,23 +479,29 @@ Response payload shape:
       "devices": [
         {
           "accountId": "string",
-          "deviceId": "string"
-        }
-      ],
-      "namespaces": [
-        {
-          "accountId": "string",
           "deviceId": "string",
-          "namespaceId": "string",
-          "name": "string",
-          "namespace": "string",
-          "url": "string"
+          "desktopDeviceId": "string",
+          "deviceName": "string|null",
+          "publicKey": "string|null",
+          "namespaces": [
+            {
+              "accountId": "string",
+              "desktopDeviceId": "string",
+              "namespaceId": "string",
+              "namespace": "string",
+              "url": "string",
+              "root": false
+            }
+          ]
         }
       ]
     }
   ]
 }
 ```
+
+Notes:
+- The parser accepts `deviceId` and `desktopDeviceId` as aliases in account-device and namespace entries.
 
 Rendered domain shape:
 ```json
@@ -489,8 +511,10 @@ Rendered domain shape:
     "deviceId": "string",
     "namespaces": [
       {
+        "namespaceId": "string",
         "namespaceName": "string",
-        "namespaceUrl": "string"
+        "namespaceUrl": "string",
+        "deviceId": "string"
       }
     ]
   }

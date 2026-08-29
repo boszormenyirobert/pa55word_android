@@ -16,7 +16,7 @@ Source of truth:
 | POST | `/api/v1/authentication/response/direct` | Yes | Yes | Payload | Top-level `nonce` is in the request body; nested `envelop.nonce` also exists. |
 | GET | `/api/v1/authentication/{accountId}` | Yes | Yes | Query | `nonce` is sent as `?deviceId={deviceId}&nonce={nonce}`. |
 | DELETE | `/api/v1/authentication/{accountId}/{desktopDeviceId}/{attestationId}` | Yes | Yes | Query | `nonce` is sent as `?nonce={nonce}`. |
-| GET | `/api/v1/account/{accountId}/{deviceId}` | Yes | Yes | Query | `nonce` is sent as `?accountId={accountId}&deviceId={deviceId}&nonce={nonce}`. |
+| GET | `/api/v1/account/{accountId}/{deviceId}` | Yes | Yes | Query | `nonce` is sent as `?nonce={nonce}`. |
 
 Summary:
 - Nonce in payload: 6 endpoints.

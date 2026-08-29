@@ -61,6 +61,7 @@ Shape:
   "email": "string",
   "phone": "string",
   "encDek": "string|null",
+  "root": true,
   "fcmToken": "string|null"
 }
 ```
@@ -72,6 +73,7 @@ When written:
 
 Field notes:
 - `encDek` is the encrypted DEK ciphertext stored as a string.
+- `root` marks the locally persisted phone registration as the root registration.
 - `fcmToken` is optional and is filled after successful FCM token sync.
 
 ### namespaces_state

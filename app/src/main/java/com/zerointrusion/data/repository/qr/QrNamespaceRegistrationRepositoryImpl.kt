@@ -10,8 +10,8 @@ import com.zerointrusion.data.repository.registration.FcmTokenSynchronizer
 import com.zerointrusion.data.security.DekService
 import com.zerointrusion.data.security.KeyStoreService
 import com.zerointrusion.data.security.SignatureService
-import com.zerointrusion.data.storage.NamespaceStore
 import com.zerointrusion.data.storage.RegistrationStateStore
+import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
 import com.zerointrusion.domain.qr.QrNamespaceRegistrationResult
 import com.zerointrusion.domain.qr.QrNamespaceRegistrationRepository
 import com.zerointrusion.domain.registration.RegistrationValidator
@@ -19,10 +19,10 @@ import com.zerointrusion.domain.registration.RegistrationValidator
 class QrNamespaceRegistrationRepositoryImpl(
     registrationApi: RegistrationApi,
     keyStoreService: KeyStoreService,
-    namespaceStore: NamespaceStore,
     stateStore: RegistrationStateStore,
     dekService: DekService,
     signatureService: SignatureService,
+    connectedDevicesRepository: ConnectedDevicesRepository,
     validator: RegistrationValidator,
     firebaseService: FirebaseService,
     gson: Gson,
@@ -32,12 +32,10 @@ class QrNamespaceRegistrationRepositoryImpl(
         stateStore = stateStore,
     )
     private val qrPayloadParser = QrPayloadParser(gson, validator)
-    private val deviceRegistrationFromQrFlow = DeviceRegistrationFromQrFlow(namespaceStore)
+    private val deviceRegistrationFromQrFlow = DeviceRegistrationFromQrFlow()
     private val namespaceRegistrationFromQrFlow = NamespaceRegistrationFromQrFlow(
         registrationApi = registrationApi,
         keyStoreService = keyStoreService,
-        namespaceStore = namespaceStore,
-        signatureService = signatureService,
         gson = gson,
         validator = validator,
     )
@@ -48,11 +46,18 @@ class QrNamespaceRegistrationRepositoryImpl(
         signatureService = signatureService,
         gson = gson,
         fcmTokenSynchronizer = fcmTokenSynchronizer,
+        connectedDevicesRepository = connectedDevicesRepository,
         qrPayloadParser = qrPayloadParser,
         deviceRegistrationFromQrFlow = deviceRegistrationFromQrFlow,
         namespaceRegistrationFromQrFlow = namespaceRegistrationFromQrFlow,
     )
 
-    override suspend fun registerNamespaceFromQr(qrPayload: String): QrNamespaceRegistrationResult =
-        qrNamespaceRegistrationHandler.registerNamespaceFromQr(qrPayload)
+    override suspend fun registerNamespaceFromQr(
+        qrPayload: String,
+        namespaceLinkDeviceId: String?,
+    ): QrNamespaceRegistrationResult =
+        qrNamespaceRegistrationHandler.registerNamespaceFromQr(
+            qrPayload = qrPayload,
+            namespaceLinkDeviceId = namespaceLinkDeviceId,
+        )
 }

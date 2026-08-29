@@ -7,7 +7,6 @@ import com.zerointrusion.data.security.DekService
 import com.zerointrusion.data.security.DeviceService
 import com.zerointrusion.data.security.KeyStoreService
 import com.zerointrusion.data.security.NamespaceService
-import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.domain.registration.RegistrationRepository
 import com.zerointrusion.domain.registration.RegistrationFormInput
@@ -23,7 +22,6 @@ class RegistrationRepositoryImpl(
     deviceService: DeviceService,
     namespaceService: NamespaceService,
     dekService: DekService,
-    signatureService: SignatureService,
     private val stateStore: RegistrationStateStore,
     validator: RegistrationValidator,
     gson: Gson,
@@ -38,7 +36,6 @@ class RegistrationRepositoryImpl(
         deviceService = deviceService,
         namespaceService = namespaceService,
         dekService = dekService,
-        signatureService = signatureService,
         stateStore = stateStore,
         validator = validator,
         gson = gson,

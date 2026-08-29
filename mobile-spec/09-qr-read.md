@@ -15,7 +15,8 @@ Request ownership:
 QR device payload shape:
 ```json
 {
-  "deviceId": "string",
+  "type": "deviceRegistration",
+  "desktopDeviceId": "string",
   "publicKey": "string",
   "deviceName": "string"
 }
@@ -24,7 +25,8 @@ QR device payload shape:
 QR namespace payload shape:
 ```json
 {
-  "deviceId": "string",
+  "type": "namespace",
+  "desktopDeviceId": "string",
   "publicKey": "string",
   "deviceName": "string",
   "namespaceId": "string",
@@ -42,12 +44,12 @@ Phone registration request from QR shape:
     "url": "string"
   },
   "device": {
-    "deviceId": "string",
+    "mobileDeviceId": "string",
     "publicKey": "string",
     "deviceName": "string"
   },
   "dek": {
-    "deviceId": "string",
+    "mobileDeviceId": "string",
     "encDek": "string"
   },
   "email": "string",
@@ -55,6 +57,8 @@ Phone registration request from QR shape:
   "nonce": "string"
 }
 ```
+
+This QR-driven phone registration request does not send the `root` field.
 
 Signed:
 - No.

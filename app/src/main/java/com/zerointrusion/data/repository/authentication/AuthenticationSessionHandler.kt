@@ -10,12 +10,15 @@ import com.zerointrusion.data.repository.common.AUTHENTICATION_LOG_TAG
 import com.zerointrusion.data.repository.common.AuthenticationSignedRequestPayload
 import com.zerointrusion.data.repository.common.buildAuthenticationSessionRevocationUrl
 import com.zerointrusion.data.repository.common.buildAuthenticationSessionsUrl
+import com.zerointrusion.data.repository.common.buildSignedAccountMobileDeviceNonceJson
 import com.zerointrusion.data.repository.common.mapNetworkException
+import com.zerointrusion.data.repository.common.resolveNamespaceEndpointTargets
 import com.zerointrusion.data.repository.common.serverFailure
+import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
 import com.zerointrusion.data.security.SignatureService
-import com.zerointrusion.data.storage.NamespaceStore
 import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
+import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
 import com.zerointrusion.domain.authentication.DesktopSessionRevocationResult
 import com.zerointrusion.domain.common.RegistrationFailure
 import kotlinx.coroutines.async
@@ -28,122 +31,147 @@ import java.util.UUID
 
 internal class AuthenticationSessionHandler(
     private val registrationApi: RegistrationApi,
-    private val namespaceStore: NamespaceStore,
+    private val accountDetailsStateHolder: AccountDetailsStateHolder,
     private val stateStore: RegistrationStateStore,
     private val signatureService: SignatureService,
     private val gson: Gson,
+    private val connectedDevicesRepository: ConnectedDevicesRepository,
 ) {
-    suspend fun fetchActiveDesktopSessions(): List<ActiveDesktopSession> = withContext(Dispatchers.IO) {
+    suspend fun fetchActiveDesktopSessions(
+        namespaceId: String? = null,
+        namespaceUrl: String? = null,
+    ): List<ActiveDesktopSession> = withContext(Dispatchers.IO) {
         val registrationState = requireRegistrationState()
-        val nonce = newNonce()
-        val requestPayload = AuthenticationSignedRequestPayload(
-            accountId = registrationState.accountId,
-            deviceId = registrationState.deviceId,
-            nonce = nonce,
-        )
-        val requestUrl = buildAuthenticationSessionsUrl(
-            baseUrl = registrationState.namespaceUrl,
-            accountId = registrationState.accountId,
-            deviceId = registrationState.deviceId,
-            nonce = nonce,
-        )
-        val requestBodyJson = gson.toJson(requestPayload)
-        val signature = signatureService.signJsonString(requestBodyJson)
+        val requestedNamespaceId = namespaceId?.trim().orEmpty()
+        val requestedNamespaceUrl = namespaceUrl?.trim()?.trimEnd('/').orEmpty()
+        runCatching { connectedDevicesRepository.fetchConnectedDevices() }
+            .onFailure { exception ->
+                if (accountDetailsStateHolder.currentSnapshot()?.namespaces.isNullOrEmpty()) {
+                    throw exception
+                }
+                Log.w(
+                    AUTHENTICATION_LOG_TAG,
+                    "AUTH sessions proceeding with cached namespaces because account snapshot refresh failed.",
+                    exception,
+                )
+            }
 
-        Log.d(AUTHENTICATION_LOG_TAG, "AUTH sessions fetch start. url=$requestUrl")
-        val response = try {
-            registrationApi.fetchAuthenticationSessions(
-                url = requestUrl,
-                signature = signature,
+        val availableNamespaces = accountDetailsStateHolder.currentSnapshot()?.namespaces.orEmpty()
+        if (availableNamespaces.isEmpty()) {
+            throw RegistrationFailure.Validation(
+                "No namespaces are available after refreshing account details for live-session fetch.",
             )
-        } catch (exception: Exception) {
-            Log.e(AUTHENTICATION_LOG_TAG, "AUTH sessions fetch failed before HTTP response. url=$requestUrl", exception)
-            throw mapNetworkException(requestUrl, exception)
+        }
+        val requestNamespaces = resolveSessionRequests(
+            availableNamespaces = availableNamespaces,
+            registrationState = registrationState,
+            requestedNamespaceId = requestedNamespaceId,
+            requestedNamespaceUrl = requestedNamespaceUrl,
+        )
+
+        Log.d(
+            AUTHENTICATION_LOG_TAG,
+            "AUTH available namespaces before session fetch. requestedNamespaceId=$requestedNamespaceId requestedNamespaceUrl=$requestedNamespaceUrl availableNamespaces=${gson.toJson(availableNamespaces)} selectedNamespaces=${gson.toJson(requestNamespaces)}",
+        )
+
+        val outcomes = coroutineScope {
+            requestNamespaces.map { requestNamespace ->
+                async {
+                    fetchNamespaceSessions(
+                        requestNamespace = requestNamespace,
+                        mobileDeviceId = registrationState.deviceId,
+                        availableNamespaces = availableNamespaces,
+                    )
+                }
+            }.awaitAll()
         }
 
-        if (!response.isSuccessful) {
-            Log.e(AUTHENTICATION_LOG_TAG, "AUTH sessions fetch failed. http=${response.code()} url=$requestUrl")
-            throw serverFailure(gson, response.errorBody()?.charStream(), response.code(), requestUrl)
+        val successfulSessions = outcomes
+            .flatMap { it.sessions }
+            .distinctBy { session ->
+                listOf(
+                    session.attestationId.trim().lowercase(),
+                    session.deviceId.trim().lowercase(),
+                    session.namespaceUrl.trim().trimEnd('/').lowercase(),
+                    session.namespaceName.trim().lowercase(),
+                ).joinToString(separator = "|")
+            }
+        if (outcomes.any { it.wasSuccessful }) {
+            return@withContext successfulSessions
         }
 
-        response.body().orEmpty().map { it.toDomain() }
+        val failures = outcomes.mapNotNull { it.failureMessage }
+        throw RegistrationFailure.Server(
+            failures.joinToString(separator = " | ").ifBlank {
+                "Desktop sessions fetch failed for all known namespaces."
+            },
+        )
     }
 
     suspend fun revokeDesktopSession(
-        attestationId: String,
-        desktopDeviceId: String,
+        session: ActiveDesktopSession,
     ): DesktopSessionRevocationResult = withContext(Dispatchers.IO) {
-        val normalizedAttestationId = attestationId.trim()
-        val normalizedDesktopDeviceId = desktopDeviceId.trim()
+        val normalizedAttestationId = session.attestationId.trim()
+        val normalizedDesktopDeviceId = session.deviceId.trim()
+        val normalizedAccountId = session.accountId.trim()
+        val normalizedNamespaceUrl = session.namespaceUrl.trim().trimEnd('/')
         if (normalizedAttestationId.isEmpty()) {
             throw RegistrationFailure.Validation("The selected session does not contain a valid attestationId.")
         }
         if (normalizedDesktopDeviceId.isEmpty()) {
             throw RegistrationFailure.Validation("The selected session does not contain a valid desktop deviceId.")
         }
+        if (normalizedAccountId.isEmpty()) {
+            throw RegistrationFailure.Validation("The selected session does not contain a valid accountId.")
+        }
+        if (normalizedNamespaceUrl.isEmpty()) {
+            throw RegistrationFailure.Validation("The selected session does not contain a valid namespaceUrl.")
+        }
 
         val registrationState = requireRegistrationState()
-        val requestNamespaces = namespaceStore.observeNamespaces().first()
-            .distinctBy { it.namespaceUrl.trim().trimEnd('/') + "|" + it.namespaceId }
-        if (requestNamespaces.isEmpty()) {
-            throw RegistrationFailure.Validation(
-                "No locally stored namespace URL is available for desktop session revoke.",
-            )
+        val outcome = revokeNamespaceSession(
+            baseUrl = normalizedNamespaceUrl,
+            accountId = normalizedAccountId,
+            mobileDeviceId = registrationState.deviceId,
+            desktopDeviceId = normalizedDesktopDeviceId,
+            attestationId = normalizedAttestationId,
+        )
+
+        outcome.failureMessage?.let { failureMessage ->
+            throw RegistrationFailure.Server(failureMessage)
         }
 
-        val outcomes = coroutineScope {
-            requestNamespaces.map { namespaceEntry ->
-                async {
-                    revokeNamespaceSession(
-                        namespaceEntry = namespaceEntry,
-                        mobileDeviceId = registrationState.deviceId,
-                    )
-                }
-            }.awaitAll()
-        }
-
-        val failures = outcomes.mapNotNull { it.failureMessage }
-
-        if (failures.isNotEmpty()) {
-            throw RegistrationFailure.Server(failures.joinToString(separator = " | "))
-        }
-
-        val lastSuccessResponse = outcomes.mapNotNull { it.response }.lastOrNull()
-
-        (lastSuccessResponse
+        (outcome.response
             ?: AuthenticationSessionRevocationResponseDto(success = true, attestationId = normalizedAttestationId))
             .toDomain(normalizedAttestationId)
     }
 
     private suspend fun revokeNamespaceSession(
-        namespaceEntry: com.zerointrusion.domain.namespaces.NamespaceEntry,
+        baseUrl: String,
+        accountId: String,
         mobileDeviceId: String,
+        desktopDeviceId: String,
+        attestationId: String,
     ): NamespaceRevocationOutcome {
-        val namespaceAttestationId = namespaceEntry.attestationId
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-            ?: return NamespaceRevocationOutcome(
-                failureMessage = "Desktop session revoke failed for ${namespaceEntry.namespaceName}: no namespace attestationId is stored for ${namespaceEntry.namespaceUrl}.",
-            )
-
         val nonce = newNonce()
         val requestPayload = AuthenticationSessionRevocationResponseRequestDto(
-            accountId = namespaceEntry.accountId,
+            accountId = accountId,
             deviceId = mobileDeviceId,
-            desktopId = namespaceEntry.deviceId,
-            attestationId = namespaceAttestationId,
+            desktopId = desktopDeviceId,
+            attestationId = attestationId,
             nonce = nonce,
         )
         val requestUrl = buildAuthenticationSessionRevocationUrl(
-            baseUrl = namespaceEntry.namespaceUrl,
-            accountId = namespaceEntry.accountId,
-            desktopDeviceId = namespaceEntry.deviceId,
-            attestationId = namespaceAttestationId,
+            baseUrl = baseUrl,
+            accountId = accountId,
+            desktopDeviceId = desktopDeviceId,
+            attestationId = attestationId,
             nonce = nonce,
         )
         val requestBodyJson = buildRevocationRequestBodyJson(requestPayload)
         val signature = signatureService.signJsonString(requestBodyJson)
         Log.d(AUTHENTICATION_LOG_TAG, "AUTH session revoke start. url=$requestUrl")
+        Log.d(AUTHENTICATION_LOG_TAG, "HTTP DELETE $requestUrl payload=$requestBodyJson")
         val response = try {
             registrationApi.revokeAuthenticationSession(
                 url = requestUrl,
@@ -168,7 +196,72 @@ internal class AuthenticationSessionHandler(
 
         return NamespaceRevocationOutcome(
             response = response.body()
-                ?: AuthenticationSessionRevocationResponseDto(success = true, attestationId = namespaceAttestationId),
+                ?: AuthenticationSessionRevocationResponseDto(success = true, attestationId = attestationId),
+        )
+    }
+
+    private suspend fun fetchNamespaceSessions(
+        requestNamespace: NamespaceSessionRequest,
+        mobileDeviceId: String,
+        availableNamespaces: List<com.zerointrusion.domain.namespaces.NamespaceEntry>,
+    ): NamespaceSessionFetchOutcome {
+        val nonce = newNonce()
+        val requestPayload = AuthenticationSignedRequestPayload(
+            accountId = requestNamespace.accountId,
+            mobileDeviceId = mobileDeviceId,
+            nonce = nonce,
+        )
+        val requestUrl = buildAuthenticationSessionsUrl(
+            baseUrl = requestNamespace.namespaceUrl,
+            accountId = requestNamespace.accountId,
+            mobileDeviceId = mobileDeviceId,
+            nonce = nonce,
+        )
+        val requestBodyJson = buildSignedAccountMobileDeviceNonceJson(
+            gson = gson,
+            accountId = requestPayload.accountId,
+            mobileDeviceId = requestPayload.mobileDeviceId,
+            nonce = requestPayload.nonce,
+        )
+        val signature = signatureService.signJsonString(requestBodyJson)
+
+        Log.d(AUTHENTICATION_LOG_TAG, "AUTH sessions fetch start. url=$requestUrl namespaceId=${requestNamespace.namespaceId}")
+        Log.d(AUTHENTICATION_LOG_TAG, "HTTP GET $requestUrl payload=$requestBodyJson")
+        val response = try {
+            registrationApi.fetchAuthenticationSessions(
+                url = requestUrl,
+                signature = signature,
+            )
+        } catch (exception: Exception) {
+            Log.e(AUTHENTICATION_LOG_TAG, "AUTH sessions fetch failed before HTTP response. url=$requestUrl namespaceId=${requestNamespace.namespaceId}", exception)
+            return NamespaceSessionFetchOutcome(
+                failureMessage = mapNetworkException(requestUrl, exception).message
+                    ?: "Desktop sessions fetch failed at $requestUrl.",
+            )
+        }
+
+        if (!response.isSuccessful) {
+            Log.e(AUTHENTICATION_LOG_TAG, "AUTH sessions fetch failed. http=${response.code()} url=$requestUrl namespaceId=${requestNamespace.namespaceId}")
+            return NamespaceSessionFetchOutcome(
+                failureMessage = serverFailure(gson, response.errorBody()?.charStream(), response.code(), requestUrl).message
+                    ?: "Desktop sessions fetch failed at $requestUrl.",
+            )
+        }
+
+        val responseBody = response.body().orEmpty()
+        Log.d(
+            AUTHENTICATION_LOG_TAG,
+            "AUTH sessions raw response. url=$requestUrl namespaceId=${requestNamespace.namespaceId} namespaceName=${requestNamespace.namespaceName} body=${gson.toJson(responseBody)}",
+        )
+
+        return NamespaceSessionFetchOutcome(
+            wasSuccessful = true,
+            sessions = responseBody.map { sessionDto ->
+                sessionDto.toDomain(
+                    requestNamespace = requestNamespace,
+                    availableNamespaces = availableNamespaces,
+                )
+            },
         )
     }
 
@@ -189,11 +282,58 @@ internal class AuthenticationSessionHandler(
     private fun newNonce(): String = UUID.randomUUID().toString().replace("-", "")
 
     private fun AuthenticationSessionDto.toDomain(): ActiveDesktopSession = ActiveDesktopSession(
+        accountId = "",
         attestationId = attestationId,
         deviceId = deviceId,
+        deviceName = deviceId,
+        namespaceName = "",
+        namespaceUrl = "",
         issuedAt = issuedAt,
         expiresAt = expiresAt,
     )
+
+    private fun AuthenticationSessionDto.toDomain(
+        requestNamespace: NamespaceSessionRequest,
+        availableNamespaces: List<com.zerointrusion.domain.namespaces.NamespaceEntry>,
+    ): ActiveDesktopSession {
+        val resolvedDeviceName = resolveSessionDeviceName(
+            desktopDeviceId = deviceId,
+            availableNamespaces = availableNamespaces,
+        )
+
+        Log.d(
+            AUTHENTICATION_LOG_TAG,
+            "AUTH session device resolution. namespaceId=${requestNamespace.namespaceId} namespaceName=${requestNamespace.namespaceName} sessionDeviceId=$deviceId resolvedDeviceName=$resolvedDeviceName",
+        )
+
+        return ActiveDesktopSession(
+            accountId = requestNamespace.accountId,
+            attestationId = attestationId,
+            deviceId = deviceId,
+            deviceName = resolvedDeviceName,
+            namespaceName = requestNamespace.namespaceName,
+            namespaceUrl = requestNamespace.namespaceUrl,
+            issuedAt = issuedAt,
+            expiresAt = expiresAt,
+        )
+    }
+
+    private fun resolveSessionDeviceName(
+        desktopDeviceId: String,
+        availableNamespaces: List<com.zerointrusion.domain.namespaces.NamespaceEntry>,
+    ): String {
+        val normalizedDesktopDeviceId = desktopDeviceId.trim()
+        if (normalizedDesktopDeviceId.isEmpty()) {
+            return desktopDeviceId
+        }
+
+        val matchingNamespaceEntry = availableNamespaces.firstOrNull { namespaceEntry ->
+            namespaceEntry.desktopDeviceId.trim().equals(normalizedDesktopDeviceId, ignoreCase = true)
+        }
+
+        return matchingNamespaceEntry?.deviceName?.trim()?.takeIf { it.isNotEmpty() }
+            ?: normalizedDesktopDeviceId
+    }
 
     private fun AuthenticationSessionRevocationResponseDto.toDomain(
         fallbackAttestationId: String,
@@ -227,4 +367,90 @@ internal class AuthenticationSessionHandler(
         val response: AuthenticationSessionRevocationResponseDto? = null,
         val failureMessage: String? = null,
     )
+
+    private data class NamespaceSessionFetchOutcome(
+        val sessions: List<ActiveDesktopSession> = emptyList(),
+        val wasSuccessful: Boolean = false,
+        val failureMessage: String? = null,
+    )
+
+    private data class NamespaceSessionRequest(
+        val accountId: String,
+        val namespaceId: String,
+        val deviceName: String,
+        val namespaceName: String,
+        val namespaceUrl: String,
+    ) {
+        fun storageIdentity(): String = listOf(
+            accountId.trim().lowercase(),
+            namespaceId.trim().lowercase(),
+            namespaceUrl.trim().trimEnd('/').lowercase(),
+        ).joinToString(separator = "|")
+    }
+
+    private fun resolveSessionRequests(
+        availableNamespaces: List<com.zerointrusion.domain.namespaces.NamespaceEntry>,
+        registrationState: com.zerointrusion.domain.registration.RegistrationState,
+        requestedNamespaceId: String,
+        requestedNamespaceUrl: String,
+    ): List<NamespaceSessionRequest> {
+        val hasExplicitNamespaceRequest = requestedNamespaceId.isNotEmpty() || requestedNamespaceUrl.isNotEmpty()
+
+        if (hasExplicitNamespaceRequest) {
+            val matchingNamespaces = availableNamespaces.filter { namespaceEntry ->
+                val namespaceIdMatches = requestedNamespaceId.isEmpty() ||
+                    namespaceEntry.namespaceId.trim().equals(requestedNamespaceId, ignoreCase = true)
+                val namespaceUrlMatches = requestedNamespaceUrl.isEmpty() ||
+                    namespaceEntry.namespaceUrl.trim().trimEnd('/').equals(requestedNamespaceUrl, ignoreCase = true)
+                namespaceIdMatches && namespaceUrlMatches
+            }
+
+            if (matchingNamespaces.isNotEmpty()) {
+                return matchingNamespaces.toSessionRequests(registrationState)
+                    .distinctBy { it.storageIdentity() }
+            }
+
+            return listOf(
+                NamespaceSessionRequest(
+                    accountId = registrationState.accountId,
+                    namespaceId = if (requestedNamespaceId.isNotEmpty()) requestedNamespaceId else registrationState.namespaceId,
+                    deviceName = registrationState.deviceName,
+                    namespaceName = registrationState.namespaceName,
+                    namespaceUrl = if (requestedNamespaceUrl.isNotEmpty()) requestedNamespaceUrl else registrationState.namespaceUrl,
+                ),
+            )
+        }
+
+        if (availableNamespaces.isNotEmpty()) {
+            return availableNamespaces.toSessionRequests(registrationState)
+                .distinctBy { it.storageIdentity() }
+        }
+
+        return listOf(
+            NamespaceSessionRequest(
+                accountId = registrationState.accountId,
+                namespaceId = registrationState.namespaceId,
+                deviceName = registrationState.deviceName,
+                namespaceName = registrationState.namespaceName,
+                namespaceUrl = registrationState.namespaceUrl,
+            ),
+        )
+    }
+
+    private fun List<com.zerointrusion.domain.namespaces.NamespaceEntry>.toSessionRequests(
+        registrationState: com.zerointrusion.domain.registration.RegistrationState,
+    ): List<NamespaceSessionRequest> = resolveNamespaceEndpointTargets(
+        namespaces = this,
+        referenceNamespaceUrl = registrationState.namespaceUrl,
+        referenceAccountId = registrationState.accountId,
+    ).map { target ->
+        val representative = target.entries.first()
+            NamespaceSessionRequest(
+                accountId = target.accountId,
+                namespaceId = target.namespaceId,
+                deviceName = representative.deviceName?.trim().takeUnless { it.isNullOrEmpty() } ?: representative.desktopDeviceId,
+                namespaceName = target.namespaceName,
+                namespaceUrl = target.namespaceUrl,
+            )
+    }
 }

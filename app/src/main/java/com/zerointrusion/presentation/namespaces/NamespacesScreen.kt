@@ -109,7 +109,7 @@ fun NamespacesScreen(
                         "Namespace ID: ${namespace.namespaceId}",
                         "Namespace URL: ${namespace.namespaceUrl}",
                         "Account ID: ${namespace.accountId}",
-                        "Device ID: ${namespace.deviceId}",
+                        "Desktop Device ID: ${namespace.desktopDeviceId}",
                         "Device name: ${namespace.deviceName.orEmpty()}",
                     ),
                     isGateway = isGateway,

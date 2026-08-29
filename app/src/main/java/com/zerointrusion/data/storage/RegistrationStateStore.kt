@@ -21,6 +21,8 @@ interface RegistrationStateStore {
     fun observeState(): Flow<RegistrationState?>
 
     suspend fun save(state: RegistrationState)
+
+    suspend fun clear()
 }
 
 @Singleton
@@ -40,6 +42,15 @@ class EncryptedRegistrationStateStore @Inject constructor(
                 .putString(AppConstants.ENCRYPTED_PREFS_STATE_KEY, gson.toJson(state))
                 .apply()
             stateFlow.value = state
+        }
+    }
+
+    override suspend fun clear() {
+        withContext(Dispatchers.IO) {
+            encryptedPreferences.edit()
+                .remove(AppConstants.ENCRYPTED_PREFS_STATE_KEY)
+                .apply()
+            stateFlow.value = null
         }
     }
 

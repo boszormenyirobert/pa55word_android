@@ -14,7 +14,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -38,7 +37,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,12 +53,12 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
-import com.zerointrusion.domain.authentication.NamespaceAuthenticationResult
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.notification.BackendPushNotification
 import com.zerointrusion.presentation.app.QrNamespaceRegistrationUiState
@@ -68,12 +66,9 @@ import com.zerointrusion.ui.theme.Blue
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ActionDeclineRed
 import com.zerointrusion.ui.theme.ErrorTextLight
-import com.zerointrusion.ui.theme.Green
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
 import com.zerointrusion.ui.theme.Yellow
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 
 @Composable
 fun PostLoginHomeScreen(
@@ -85,94 +80,76 @@ fun PostLoginHomeScreen(
     liveDesktopSessionRevokingAttestationId: String?,
     notification: BackendPushNotification?,
     notificationError: String?,
-    authenticationNamespaceResults: List<NamespaceAuthenticationResult>,
     qrNamespaceRegistrationState: QrNamespaceRegistrationUiState,
     onOpenSettings: () -> Unit,
     onOpenQrRead: () -> Unit,
     onClearQrNamespaceRegistrationState: () -> Unit,
-    onRefreshLiveDesktopSessions: () -> Unit,
     onRevokeDesktopSession: (ActiveDesktopSession) -> Unit,
     onAllowNotification: () -> Unit,
     onDeclineNotification: () -> Unit,
     onDismissNotificationError: () -> Unit,
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val notificationManager = remember(context) { NotificationManagerCompat.from(context) }
-
-    var pendingQrNavigation by rememberSaveable { mutableStateOf(false) }
-    var cameraPermissionGranted by rememberSaveable {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
-        )
-    }
+    var notificationsEnabled by remember { mutableStateOf(notificationManager.areNotificationsEnabled()) }
     var cameraPermissionError by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingQrNavigation by rememberSaveable { mutableStateOf(false) }
     var hasRequestedCameraPermission by rememberSaveable { mutableStateOf(false) }
-
     var hasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
-    var notificationsEnabled by rememberSaveable { mutableStateOf(notificationManager.areNotificationsEnabled()) }
-    var notificationsPermissionGranted by rememberSaveable {
-        mutableStateOf(
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED,
-        )
-    }
+
+    val cameraPermissionGranted = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.CAMERA,
+    ) == PackageManager.PERMISSION_GRANTED
+    val notificationsPermissionGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        cameraPermissionGranted = granted
-        cameraPermissionError = if (granted) {
-            null
+        if (granted) {
+            cameraPermissionError = null
+            if (pendingQrNavigation) {
+                pendingQrNavigation = false
+                onOpenQrRead()
+            }
         } else {
-            "Camera permission was denied, so QR scanning is unavailable."
-        }
-        if (granted && pendingQrNavigation) {
             pendingQrNavigation = false
-            onClearQrNamespaceRegistrationState()
-            onOpenQrRead()
-        } else if (!granted) {
-            pendingQrNavigation = false
+            cameraPermissionError = if (hasRequestedCameraPermission) {
+                "Camera permission is required to scan the QR code."
+            } else {
+                null
+            }
         }
     }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-    ) { granted ->
-        notificationsPermissionGranted = granted
+    ) {
         notificationsEnabled = notificationManager.areNotificationsEnabled()
-    }
-
-    LaunchedEffect(Unit) {
-        if (!cameraPermissionGranted && !hasRequestedCameraPermission) {
-            hasRequestedCameraPermission = true
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-
-        if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            !notificationsPermissionGranted &&
-            !hasRequestedNotificationPermission
-        ) {
-            hasRequestedNotificationPermission = true
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-
-        notificationsEnabled = notificationManager.areNotificationsEnabled()
+        hasRequestedNotificationPermission = true
     }
 
     LaunchedEffect(notificationsPermissionGranted) {
         notificationsEnabled = notificationManager.areNotificationsEnabled()
     }
 
-    LaunchedEffect(Unit) {
-        onRefreshLiveDesktopSessions()
-        while (isActive) {
-            delay(15_000)
-            onRefreshLiveDesktopSessions()
+    val hasNotification = notification != null
+
+    fun openQrRead() {
+        onClearQrNamespaceRegistrationState()
+        if (cameraPermissionGranted) {
+            cameraPermissionError = null
+            onOpenQrRead()
+        } else {
+            pendingQrNavigation = true
+            hasRequestedCameraPermission = true
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
-
-    val hasNotification = notification != null
 
     Box(
         modifier = Modifier
@@ -213,8 +190,6 @@ fun PostLoginHomeScreen(
 
             LiveDesktopSessionsCard(
                 sessions = liveDesktopSessions,
-                namespaces = namespaces,
-                authenticationNamespaceResults = authenticationNamespaceResults,
                 fallbackServerName = namespaceName,
                 revokingAttestationId = liveDesktopSessionRevokingAttestationId,
                 onRevokeDesktopSession = onRevokeDesktopSession,
@@ -242,9 +217,7 @@ fun PostLoginHomeScreen(
                         Button(
                             onClick = {
                                 notificationsEnabled = notificationManager.areNotificationsEnabled()
-                                if (
-                                    !notificationsPermissionGranted
-                                ) {
+                                if (!notificationsPermissionGranted) {
                                     hasRequestedNotificationPermission = true
                                     notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                 } else {
@@ -271,22 +244,11 @@ fun PostLoginHomeScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Button(
-                        onClick = {
-                            onClearQrNamespaceRegistrationState()
-                            if (cameraPermissionGranted) {
-                                cameraPermissionError = null
-                                onOpenQrRead()
-                            } else {
-                                pendingQrNavigation = true
-                                hasRequestedCameraPermission = true
-                                cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-                            }
-                        },
+                        onClick = ::openQrRead,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text("Qr-Read")
                     }
-
                 }
             }
 
@@ -300,6 +262,7 @@ fun PostLoginHomeScreen(
 
             when (qrNamespaceRegistrationState) {
                 QrNamespaceRegistrationUiState.Idle -> Unit
+                is QrNamespaceRegistrationUiState.AwaitingDeviceSelection -> Unit
                 QrNamespaceRegistrationUiState.InProgress -> Text(
                     text = "Connecting scanned namespace...",
                     color = White,
@@ -362,18 +325,39 @@ fun PostLoginHomeScreen(
 @Composable
 private fun LiveDesktopSessionsCard(
     sessions: List<ActiveDesktopSession>,
-    namespaces: List<NamespaceEntry>,
-    authenticationNamespaceResults: List<NamespaceAuthenticationResult>,
     fallbackServerName: String,
     revokingAttestationId: String?,
     onRevokeDesktopSession: (ActiveDesktopSession) -> Unit,
 ) {
-    val deviceNamesById = remember(namespaces) {
-        namespaces
-            .asReversed()
-            .associate { namespace ->
-                namespace.deviceId to namespace.deviceName.orEmpty()
+    val visibleGroups = remember(sessions) {
+        sessions
+            .groupBy { session -> session.deviceName.takeIf { it.isNotBlank() } ?: session.deviceId }
+            .toList()
+            .sortedBy { it.first.lowercase() }
+            .map { (deviceName, deviceSessions) ->
+                val liveNamespaces = deviceSessions
+                    .groupBy { session ->
+                        session.namespaceUrl.trim().trimEnd('/').lowercase() + "|" +
+                            session.namespaceName.trim().lowercase()
+                    }
+                    .values
+                    .mapNotNull { namespaceSessions ->
+                        val representative = namespaceSessions.firstOrNull() ?: return@mapNotNull null
+                        val resolvedServerName = representative.namespaceName
+                            .takeIf { it.isNotBlank() }
+                            ?: fallbackServerName.ifBlank { representative.namespaceUrl }
+
+                        if (namespaceSessions.isEmpty()) {
+                            null
+                        } else {
+                            resolvedServerName to namespaceSessions
+                        }
+                    }
+                    .sortedBy { it.first.lowercase() }
+
+                deviceName to liveNamespaces
             }
+            .filter { (_, liveNamespaces) -> liveNamespaces.isNotEmpty() }
     }
 
     Card(
@@ -391,30 +375,14 @@ private fun LiveDesktopSessionsCard(
                 color = White,
             )
 
-            if (sessions.isNotEmpty() && authenticationNamespaceResults.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        text = "Authentication namespace results",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = White,
-                    )
-                    authenticationNamespaceResults.forEach { result ->
-                        NamespaceAuthenticationStatusRow(result = result)
-                    }
-                }
-            }
-
-            if (sessions.isEmpty()) {
+            if (visibleGroups.isEmpty()) {
                 Text(
                     text = "No live desktop sessions.",
                     color = White,
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
-                sessions.forEach { session ->
-                    val resolvedServerName = deviceNamesById[session.deviceId]
-                        .takeIf { !it.isNullOrBlank() }
-                        ?: fallbackServerName.ifBlank { session.deviceId }
+                visibleGroups.forEach { (deviceName, liveNamespaces) ->
                     Card(
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = Dark.copy(alpha = 0.36f)),
@@ -425,89 +393,82 @@ private fun LiveDesktopSessionsCard(
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Text(
-                                text = resolvedServerName,
+                                text = deviceName,
                                 color = White,
                                 style = MaterialTheme.typography.titleMedium,
                             )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = Yellow.copy(alpha = 0.18f),
-                                    border = BorderStroke(1.dp, Yellow),
+
+                            liveNamespaces.forEachIndexed { index, (resolvedServerName, matchingSessions) ->
+                                Column(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
                                 ) {
                                     Text(
-                                        text = "live session",
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                        color = Yellow,
-                                        style = MaterialTheme.typography.labelLarge,
+                                        text = resolvedServerName,
+                                        color = White,
+                                        style = MaterialTheme.typography.bodyLarge,
                                     )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Surface(
+                                            shape = RoundedCornerShape(999.dp),
+                                            color = Yellow.copy(alpha = 0.18f),
+                                            border = BorderStroke(1.dp, Yellow),
+                                        ) {
+                                            Text(
+                                                text = "live session",
+                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                                color = Yellow,
+                                                style = MaterialTheme.typography.labelLarge,
+                                            )
+                                        }
+                                    }
+
+                                    matchingSessions.forEach { session ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Text(
+                                                text = "Attestation: ${session.attestationId}",
+                                                color = White,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                modifier = Modifier.weight(1f),
+                                            )
+
+                                            Surface(
+                                                shape = RoundedCornerShape(999.dp),
+                                                color = if (revokingAttestationId == session.attestationId) {
+                                                    ActionDeclineRed.copy(alpha = 0.45f)
+                                                } else {
+                                                    ActionDeclineRed
+                                                },
+                                                modifier = Modifier.clickable(
+                                                    enabled = revokingAttestationId != session.attestationId,
+                                                    onClick = { onRevokeDesktopSession(session) },
+                                                ),
+                                            ) {
+                                                Text(
+                                                    if (revokingAttestationId == session.attestationId) "Revoking..." else "Revoke session",
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                    color = White.copy(alpha = if (revokingAttestationId == session.attestationId) 0.8f else 1f),
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
-                                Surface(
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = if (revokingAttestationId == session.attestationId) {
-                                        ActionDeclineRed.copy(alpha = 0.45f)
-                                    } else {
-                                        ActionDeclineRed
-                                    },
-                                    modifier = Modifier.clickable(
-                                        enabled = revokingAttestationId != session.attestationId,
-                                        onClick = { onRevokeDesktopSession(session) },
-                                    ),
-                                ) {
-                                    Text(
-                                        if (revokingAttestationId == session.attestationId) "Revoking..." else "Revoke session",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = White.copy(alpha = if (revokingAttestationId == session.attestationId) 0.8f else 1f),
-                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    )
+
+                                if (index != liveNamespaces.lastIndex) {
+                                    Spacer(modifier = Modifier.height(2.dp))
                                 }
                             }
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun NamespaceAuthenticationStatusRow(
-    result: NamespaceAuthenticationResult,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            modifier = Modifier
-                .size(10.dp)
-                .background(
-                    color = if (result.success) Green else ActionDeclineRed,
-                    shape = RoundedCornerShape(999.dp),
-                ),
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = result.namespaceName,
-                color = White,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                text = "${result.namespaceId} • ${result.namespaceUrl}",
-                color = White.copy(alpha = 0.72f),
-                style = MaterialTheme.typography.bodySmall,
-            )
-            result.message?.takeIf { it.isNotBlank() }?.let { message ->
-                Text(
-                    text = message,
-                    color = if (result.success) Green else ErrorTextLight,
-                    style = MaterialTheme.typography.bodySmall,
-                )
             }
         }
     }
@@ -566,7 +527,8 @@ private fun NotificationStateBox(
                 val deviceName = notification.data["deviceName"].orEmpty()
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     NotificationDetailLine(label = "Device", value = deviceName)
-                    NotificationDetailLine(label = "Device id", value = notification.deviceId)
+                    NotificationDetailLine(label = "Mobile device id", value = notification.mobileDeviceId)
+                    NotificationDetailLine(label = "Desktop device id", value = notification.desktopDeviceId)
                     NotificationDetailLine(label = "Account id", value = notification.accountId)
                 }
             }
@@ -611,3 +573,7 @@ private fun NotificationDetailLine(
         style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 24.sp),
     )
 }
+
+    private fun Map<String, String>.firstNonBlankValue(vararg keys: String): String {
+        return keys.firstNotNullOfOrNull { key -> get(key)?.takeIf { it.isNotBlank() } }.orEmpty()
+    }

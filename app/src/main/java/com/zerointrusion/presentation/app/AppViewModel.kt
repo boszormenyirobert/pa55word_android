@@ -3,7 +3,9 @@ package com.zerointrusion.presentation.app
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.Gson
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
+import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.notification.BackendPushNotification
@@ -28,6 +30,7 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class AppViewModel @Inject constructor(
+    private val gson: Gson,
     private val registrationRepository: RegistrationRepository,
     private val namespacesRepository: NamespacesRepository,
     private val connectedDevicesRepository: ConnectedDevicesRepository,
@@ -37,15 +40,28 @@ class AppViewModel @Inject constructor(
 ) : ViewModel() {
     private companion object {
         const val QR_LOG_TAG = "ZeroIntrusionQr"
+        private val NAMESPACE_ID_KEYS = listOf("namespaceId", "namespace_id", "namespaceID")
+        private val NAMESPACE_URL_KEYS = listOf("namespaceUrl", "namespace_url", "namespaceURL", "url")
     }
 
     private val _uiState = MutableStateFlow(AppUiState())
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
     private var lastFcmSyncKey: String? = null
     private var fcmSyncInFlight: Boolean = false
+    private var storedConnectedDeviceGroups: List<ConnectedDeviceGroup> = emptyList()
     private var storedNamespaces: List<NamespaceEntry> = emptyList()
+    private var pendingNamespaceQrPayload: String? = null
     private var liveDesktopSessionsRefreshInFlight: Boolean = false
     private var postApprovalSessionRefreshJob: Job? = null
+
+    private data class ScannedQrPayloadPreview(
+        val type: String? = null,
+        val namespaceName: String? = null,
+        val namespaceId: String? = null,
+        val namespaceUrl: String? = null,
+        val desktopDeviceId: String? = null,
+        val deviceName: String? = null,
+    )
 
     init {
         viewModelScope.launch {
@@ -71,6 +87,17 @@ class AppViewModel @Inject constructor(
 
                 if (state != null) {
                     ensureFcmTokenSync(state)
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            connectedDevicesRepository.observeConnectedDevices().collect { groups ->
+                storedConnectedDeviceGroups = groups
+                _uiState.update { state ->
+                    state.copy(
+                        connectedDevicesState = ConnectedDevicesUiState.Success(groups),
+                    )
                 }
             }
         }
@@ -134,6 +161,7 @@ class AppViewModel @Inject constructor(
     }
 
     fun clearQrNamespaceRegistrationState() {
+        pendingNamespaceQrPayload = null
         _uiState.update { it.copy(qrNamespaceRegistrationState = QrNamespaceRegistrationUiState.Idle) }
     }
 
@@ -186,11 +214,7 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(connectedDevicesState = ConnectedDevicesUiState.InProgress) }
             runCatching { connectedDevicesRepository.fetchConnectedDevices() }
-                .onSuccess { groups ->
-                    _uiState.update {
-                        it.copy(connectedDevicesState = ConnectedDevicesUiState.Success(groups))
-                    }
-                }
+                .onSuccess { }
                 .onFailure { throwable ->
                     val message = (throwable as? RegistrationFailure)?.message
                         ?: throwable.message
@@ -198,6 +222,15 @@ class AppViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(connectedDevicesState = ConnectedDevicesUiState.Error(message))
                     }
+                }
+        }
+    }
+
+    fun refreshAccountDetailsSnapshot() {
+        viewModelScope.launch {
+            runCatching { connectedDevicesRepository.fetchConnectedDevices() }
+                .onFailure {
+                    // Leave visible state untouched; background refresh is best-effort.
                 }
         }
     }
@@ -233,13 +266,25 @@ class AppViewModel @Inject constructor(
     }
 
     fun refreshLiveDesktopSessions() {
+        refreshLiveDesktopSessions(namespaceId = null, namespaceUrl = null)
+    }
+
+    private fun refreshLiveDesktopSessions(
+        namespaceId: String?,
+        namespaceUrl: String?,
+    ) {
         if (liveDesktopSessionsRefreshInFlight) {
             return
         }
 
         liveDesktopSessionsRefreshInFlight = true
         viewModelScope.launch {
-            runCatching { authenticationRepository.fetchActiveDesktopSessions() }
+            runCatching {
+                authenticationRepository.fetchActiveDesktopSessions(
+                    namespaceId = namespaceId,
+                    namespaceUrl = namespaceUrl,
+                )
+            }
                 .onSuccess { sessions ->
                     _uiState.update { state ->
                         state.copy(
@@ -276,10 +321,7 @@ class AppViewModel @Inject constructor(
 
         viewModelScope.launch {
             runCatching {
-                authenticationRepository.revokeDesktopSession(
-                    attestationId = session.attestationId,
-                    desktopDeviceId = session.deviceId,
-                )
+                authenticationRepository.revokeDesktopSession(session)
             }.onSuccess { result ->
                 if (result.success) {
                     _uiState.update { state ->
@@ -321,10 +363,72 @@ class AppViewModel @Inject constructor(
             return
         }
 
+        val namespacePayload = parseNamespaceQrPreview(qrPayload)
+        if (namespacePayload != null) {
+            Log.d(
+                QR_LOG_TAG,
+                "Namespace QR payload recognized. namespaceName=${namespacePayload.namespaceName?.trim().orEmpty()} namespaceId=${namespacePayload.namespaceId?.trim().orEmpty()} namespaceUrl=${namespacePayload.namespaceUrl?.trim().orEmpty()} desktopDeviceId=${namespacePayload.desktopDeviceId?.trim().orEmpty()} deviceName=${namespacePayload.deviceName?.trim().orEmpty()} payloadLength=${qrPayload.length}",
+            )
+            val deviceOptions = buildQrNamespaceDeviceOptions()
+            if (deviceOptions.isEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        qrNamespaceRegistrationState = QrNamespaceRegistrationUiState.Error(
+                            "No connected devices are available for selection.",
+                        ),
+                    )
+                }
+                return
+            }
+
+            pendingNamespaceQrPayload = qrPayload
+            _uiState.update {
+                it.copy(
+                    qrNamespaceRegistrationState = QrNamespaceRegistrationUiState.AwaitingDeviceSelection(
+                        namespaceName = namespacePayload.namespaceName?.trim().orEmpty(),
+                        deviceOptions = deviceOptions,
+                    ),
+                )
+            }
+            return
+        }
+
+        submitQrNamespaceRegistration(qrPayload = qrPayload)
+    }
+
+    fun confirmQrNamespaceDeviceSelection(deviceId: String) {
+        val pendingPayload = pendingNamespaceQrPayload
+        if (pendingPayload.isNullOrBlank()) {
+            _uiState.update {
+                it.copy(
+                    qrNamespaceRegistrationState = QrNamespaceRegistrationUiState.Error(
+                        "The scanned QR payload is no longer available. Scan the QR code again.",
+                    ),
+                )
+            }
+            return
+        }
+
+        submitQrNamespaceRegistration(
+            qrPayload = pendingPayload,
+            namespaceLinkDeviceId = deviceId,
+        )
+    }
+
+    private fun submitQrNamespaceRegistration(
+        qrPayload: String,
+        namespaceLinkDeviceId: String? = null,
+    ) {
+        pendingNamespaceQrPayload = null
         viewModelScope.launch {
             Log.d(QR_LOG_TAG, "QR payload received in ViewModel. length=${qrPayload.length}")
             _uiState.update { it.copy(qrNamespaceRegistrationState = QrNamespaceRegistrationUiState.InProgress) }
-            runCatching { qrNamespaceRegistrationRepository.registerNamespaceFromQr(qrPayload) }
+            runCatching {
+                qrNamespaceRegistrationRepository.registerNamespaceFromQr(
+                    qrPayload = qrPayload,
+                    namespaceLinkDeviceId = namespaceLinkDeviceId,
+                )
+            }
                 .onSuccess { result: QrNamespaceRegistrationResult ->
                     Log.d(QR_LOG_TAG, "QR namespace connection succeeded for namespace=${result.namespaceName} desktopDeviceId=${result.desktopDeviceId}")
                     _uiState.update {
@@ -348,6 +452,19 @@ class AppViewModel @Inject constructor(
         }
     }
 
+    private fun parseNamespaceQrPreview(qrPayload: String): ScannedQrPayloadPreview? {
+        val preview = runCatching {
+            gson.fromJson(qrPayload.trim(), ScannedQrPayloadPreview::class.java)
+        }.getOrNull() ?: return null
+
+        return preview.takeIf { it.type?.trim() == "namespace" }
+    }
+
+    private fun buildQrNamespaceDeviceOptions(): List<QrNamespaceDeviceOption> = buildQrNamespaceDeviceOptions(
+        connectedDeviceGroups = storedConnectedDeviceGroups,
+        storedNamespaces = storedNamespaces,
+    )
+
     fun onNotificationDecision(decision: NotificationDecision) {
         val notification = _uiState.value.notificationOverlay.notification ?: return
         val isMatch = _uiState.value.notificationOverlay.canRespond
@@ -360,12 +477,17 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch {
             val approved = decision == NotificationDecision.Accept
             val notificationId = notification.data["notificationId"].orEmpty()
+            val targetNamespaceId = notification.data.firstNonBlankValue(NAMESPACE_ID_KEYS)
+            val targetNamespaceUrl = notification.data.firstNonBlankValue(NAMESPACE_URL_KEYS)
             runCatching {
                 authenticationRepository.respondToAuthentication(
                     notificationId = notificationId,
                     accountId = notification.accountId,
-                    deviceId = notification.deviceId,
+                    deviceId = notification.mobileDeviceId,
+                    requestingDeviceId = notification.desktopDeviceId,
                     approved = approved,
+                    namespaceId = targetNamespaceId,
+                    namespaceUrl = targetNamespaceUrl,
                 )
             }.onSuccess { result ->
                 notificationRepository.clearNotification()
@@ -377,10 +499,14 @@ class AppViewModel @Inject constructor(
                     )
                 }
                 if (approved) {
+                    val successfulNamespace = result.namespaceResults.firstOrNull { it.success }
                     postApprovalSessionRefreshJob?.cancel()
                     postApprovalSessionRefreshJob = viewModelScope.launch {
                         delay(2_000)
-                        refreshLiveDesktopSessions()
+                        refreshLiveDesktopSessions(
+                            namespaceId = successfulNamespace?.namespaceId,
+                            namespaceUrl = successfulNamespace?.namespaceUrl,
+                        )
                     }
                 }
             }.onFailure { throwable ->
@@ -475,22 +601,51 @@ class AppViewModel @Inject constructor(
             )
         }
 
-        if (notification.accountId.isBlank() || notification.deviceId.isBlank()) {
+        if (notification.accountId.isBlank() || notification.mobileDeviceId.isBlank()) {
             return NotificationOverlayUiState(
                 notification = notification,
-                mismatchError = "Push notification blocked because the delivered Firebase data payload did not include a non-empty accountId and deviceId. Put both values inside message.data so the app can verify the target device.",
+                mismatchError = "Push notification blocked because the delivered Firebase data payload did not include a non-empty accountId and mobileDeviceId. Put both values inside message.data so the app can verify the target device.",
                 canRespond = false,
             )
         }
 
-        val matchingNamespace = knownNamespaces.firstOrNull {
-            it.deviceId == notification.deviceId && it.accountId == notification.accountId
+        if (!registrationState.deviceId.equals(notification.mobileDeviceId, ignoreCase = true)) {
+            return NotificationOverlayUiState(
+                notification = notification,
+                mismatchError = "Push notification targeted mobileDeviceId=${notification.mobileDeviceId}, but this phone is registered as deviceId=${registrationState.deviceId}.",
+                canRespond = false,
+            )
         }
+
+        val targetNamespaceId = notification.data.firstNonBlankValue(NAMESPACE_ID_KEYS)
+        if (targetNamespaceId.isBlank()) {
+            return NotificationOverlayUiState(
+                notification = notification,
+                mismatchError = "Push notification blocked because the delivered Firebase data payload did not include namespaceId.",
+                canRespond = false,
+            )
+        }
+
+        val targetNamespaceUrl = notification.data.firstNonBlankValue(NAMESPACE_URL_KEYS)
+        val matchingNamespaces = knownNamespaces.filter {
+            val accountMatches = it.accountId.equals(notification.accountId, ignoreCase = true) ||
+                it.foreignAccountId?.equals(notification.accountId, ignoreCase = true) == true
+            if (!accountMatches) {
+                false
+            } else {
+                val namespaceIdMatches = it.namespaceId.equals(targetNamespaceId, ignoreCase = true)
+                val namespaceUrlMatches = targetNamespaceUrl.isBlank() ||
+                    it.namespaceUrl.trim().trimEnd('/').equals(targetNamespaceUrl.trim().trimEnd('/'), ignoreCase = true)
+                namespaceIdMatches && namespaceUrlMatches
+            }
+        }
+
+        val matchingNamespace = matchingNamespaces.firstOrNull()
 
         if (matchingNamespace == null) {
             return NotificationOverlayUiState(
                 notification = notification,
-                mismatchError = "Push notification deviceId/accountId pair does not match any locally stored namespace. Received deviceId=${notification.deviceId}, accountId=${notification.accountId}.",
+                mismatchError = "Push notification namespaceId/accountId pair does not match any locally stored namespace for mobileDeviceId=${notification.mobileDeviceId}. Received namespaceId=$targetNamespaceId, namespaceUrl=${targetNamespaceUrl.ifBlank { "(empty)" }}, accountId=${notification.accountId}, desktopDeviceId=${notification.desktopDeviceId}.",
                 canRespond = false,
             )
         }
@@ -507,3 +662,25 @@ class AppViewModel @Inject constructor(
         else -> take(10) + "..." + takeLast(6)
     }
 }
+
+private fun Map<String, String>.firstNonBlankValue(keys: List<String>): String {
+    return keys.firstNotNullOfOrNull { key -> get(key)?.takeIf { it.isNotBlank() } }.orEmpty()
+}
+
+internal fun buildQrNamespaceDeviceOptions(
+    connectedDeviceGroups: List<ConnectedDeviceGroup>,
+    storedNamespaces: List<NamespaceEntry>,
+): List<QrNamespaceDeviceOption> = connectedDeviceGroups
+    .filter { group -> group.deviceId.isNotBlank() }
+    .map { group ->
+        val representative = storedNamespaces.firstOrNull { namespace ->
+            namespace.desktopDeviceId.trim().equals(group.deviceId.trim(), ignoreCase = true)
+        }
+        QrNamespaceDeviceOption(
+            deviceId = group.deviceId,
+            deviceName = representative?.deviceName?.trim().takeUnless { it.isNullOrEmpty() }
+                ?: group.deviceName?.trim().takeUnless { it.isNullOrEmpty() }
+                ?: group.deviceId,
+        )
+    }
+    .sortedBy { option -> option.deviceName.lowercase() }

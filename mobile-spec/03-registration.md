@@ -36,6 +36,7 @@ Request shape:
   },
   "email": "string",
   "phone": "string",
+  "root": true,
   "nonce": "string"
 }
 ```

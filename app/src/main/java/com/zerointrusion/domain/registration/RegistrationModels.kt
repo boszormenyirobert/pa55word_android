@@ -1,5 +1,7 @@
 package com.zerointrusion.domain.registration
 
+import com.google.gson.annotations.SerializedName
+
 data class Namespace(
     val namespaceId: String,
     val name: String,
@@ -7,15 +9,23 @@ data class Namespace(
 )
 
 data class Device(
-    val deviceId: String,
+    @SerializedName("mobileDeviceId")
+    val mobileDeviceId: String,
     val publicKey: String,
     val deviceName: String,
-)
+) {
+    val deviceId: String
+        get() = mobileDeviceId
+}
 
 data class DekPayload(
-    val deviceId: String,
+    @SerializedName("mobileDeviceId")
+    val mobileDeviceId: String,
     val encDek: String,
-)
+) {
+    val deviceId: String
+        get() = mobileDeviceId
+}
 
 data class RegistrationPayload(
     val namespace: Namespace,
@@ -31,7 +41,8 @@ data class RegistrationResult(
 
 data class RegistrationState(
     val accountId: String,
-    val deviceId: String,
+    @SerializedName("mobileDeviceId")
+    val mobileDeviceId: String,
     val deviceName: String,
     val namespaceName: String,
     val namespaceUrl: String,
@@ -39,8 +50,12 @@ data class RegistrationState(
     val email: String,
     val phone: String,
     val encDek: String?,
+    val root: Boolean = false,
     val fcmToken: String? = null,
-)
+) {
+    val deviceId: String
+        get() = mobileDeviceId
+}
 
 data class RegistrationFormInput(
     val email: String,

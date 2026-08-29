@@ -6,12 +6,13 @@ import com.google.gson.JsonElement
 import com.zerointrusion.data.network.AuthenticationAttestationEnvelopeDto
 import com.zerointrusion.data.network.AuthenticationResponseRequestDto
 import com.zerointrusion.data.network.RegistrationApi
-import com.zerointrusion.data.repository.common.buildAuthenticationDirectResponseUrl
 import com.zerointrusion.data.repository.common.REG_LOG_TAG
 import com.zerointrusion.data.repository.common.buildAuthenticationResponseUrl
+import com.zerointrusion.data.repository.common.resolveNamespaceEndpointTargets
+import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
 import com.zerointrusion.data.security.SignatureService
-import com.zerointrusion.data.storage.NamespaceStore
 import com.zerointrusion.data.storage.RegistrationStateStore
+import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
 import com.zerointrusion.domain.authentication.AuthenticationResponseResult
 import com.zerointrusion.domain.authentication.NamespaceAuthenticationResult
 import com.zerointrusion.domain.common.RegistrationFailure
@@ -25,98 +26,160 @@ import java.util.UUID
 
 internal class AuthenticationResponseHandler(
     private val registrationApi: RegistrationApi,
-    private val namespaceStore: NamespaceStore,
+    private val accountDetailsStateHolder: AccountDetailsStateHolder,
     private val stateStore: RegistrationStateStore,
     private val signatureService: SignatureService,
     private val gson: Gson,
+    private val connectedDevicesRepository: ConnectedDevicesRepository,
 ) {
     suspend fun respondToAuthentication(
         notificationId: String,
         accountId: String,
         deviceId: String,
+        requestingDeviceId: String,
         approved: Boolean,
+        namespaceId: String? = null,
+        namespaceUrl: String? = null,
     ): AuthenticationResponseResult = withContext(Dispatchers.IO) {
         val registrationState = stateStore.observeState().first()
             ?: throw RegistrationFailure.Validation("No registered account is stored on this device.")
-
-        val availableNamespaces = namespaceStore.observeNamespaces().first()
-        val targetNamespace = availableNamespaces
-            .firstOrNull { it.deviceId == deviceId && it.accountId == accountId }
-            ?: throw RegistrationFailure.Validation(
-                "No locally stored namespace matches deviceId=$deviceId and accountId=$accountId for authentication response.",
-            )
-        val responseNamespaces = availableNamespaces
-            .distinctBy { it.storageIdentity() }
-        if (responseNamespaces.isEmpty()) {
+        val normalizedMobileDeviceId = deviceId.trim()
+        val normalizedRequestingDeviceId = requestingDeviceId.trim()
+        val requiredNamespaceId = namespaceId?.trim().orEmpty()
+        if (requiredNamespaceId.isEmpty()) {
             throw RegistrationFailure.Validation(
-                "No locally stored namespace URL is available for authentication response.",
+                "Authentication response blocked because the notification did not include namespaceId.",
             )
         }
-        Log.d(REG_LOG_TAG, "Authentication response start. namespaceDeviceId=${targetNamespace.deviceId} signingDeviceId=${registrationState.deviceId} accountId=${targetNamespace.accountId} approved=$approved")
+        if (normalizedMobileDeviceId.isEmpty()) {
+            throw RegistrationFailure.Validation(
+                "Authentication response blocked because the notification did not include the target mobile deviceId.",
+            )
+        }
+        if (normalizedRequestingDeviceId.isEmpty()) {
+            throw RegistrationFailure.Validation(
+                "Authentication response blocked because the notification did not include desktopDeviceId.",
+            )
+        }
+        if (!registrationState.deviceId.equals(normalizedMobileDeviceId, ignoreCase = true)) {
+            throw RegistrationFailure.Validation(
+                "Authentication response blocked because the notification targeted mobileDeviceId=$normalizedMobileDeviceId, but this phone is registered as deviceId=${registrationState.deviceId}.",
+            )
+        }
+
+        var availableNamespaces = accountDetailsStateHolder.currentSnapshot()?.namespaces.orEmpty()
+        var matchingNamespaceTargets = findMatchingAuthenticationTargets(
+            availableNamespaces = availableNamespaces,
+            notificationAccountId = accountId,
+            mobileDeviceId = normalizedMobileDeviceId,
+            requestingDeviceId = normalizedRequestingDeviceId,
+            namespaceId = requiredNamespaceId,
+            namespaceUrl = namespaceUrl,
+            registrationState = registrationState,
+        )
+
+        if (matchingNamespaceTargets.isEmpty()) {
+            runCatching { connectedDevicesRepository.fetchConnectedDevices() }
+            availableNamespaces = accountDetailsStateHolder.currentSnapshot()?.namespaces.orEmpty()
+            matchingNamespaceTargets = findMatchingAuthenticationTargets(
+                availableNamespaces = availableNamespaces,
+                notificationAccountId = accountId,
+                mobileDeviceId = normalizedMobileDeviceId,
+                requestingDeviceId = normalizedRequestingDeviceId,
+                namespaceId = requiredNamespaceId,
+                namespaceUrl = namespaceUrl,
+                registrationState = registrationState,
+            )
+        }
+
+        if (matchingNamespaceTargets.isEmpty()) {
+            Log.d(
+                REG_LOG_TAG,
+                "Authentication response namespace resolution failed. notificationAccountId=$accountId notificationMobileDeviceId=$normalizedMobileDeviceId notificationDesktopDeviceId=$normalizedRequestingDeviceId notificationNamespaceId=$requiredNamespaceId notificationNamespaceUrl=${namespaceUrl.orEmpty()} availableNamespaces=${gson.toJson(availableNamespaces.map { namespaceEntry ->
+                    mapOf(
+                        "accountId" to namespaceEntry.accountId,
+                        "foreignAccountId" to namespaceEntry.foreignAccountId.orEmpty(),
+                        "desktopDeviceId" to namespaceEntry.desktopDeviceId,
+                        "namespaceId" to namespaceEntry.namespaceId,
+                        "namespaceUrl" to namespaceEntry.namespaceUrl,
+                    )
+                })}",
+            )
+        }
+
+        val targetNamespaceTarget = when {
+            matchingNamespaceTargets.size == 1 -> matchingNamespaceTargets.first()
+            matchingNamespaceTargets.size > 1 -> {
+                throw RegistrationFailure.Validation(
+                    "Authentication response blocked because namespaceId=$requiredNamespaceId still matches multiple local namespaces for accountId=$accountId and mobileDeviceId=$normalizedMobileDeviceId.",
+                )
+            }
+            else -> matchingNamespaceTargets.firstOrNull()
+        }
+
+        val resolvedTargetNamespace = targetNamespaceTarget
+            ?: throw RegistrationFailure.Validation(
+                "No locally stored namespace matches mobileDeviceId=$normalizedMobileDeviceId, accountId=$accountId, namespaceId=$requiredNamespaceId, namespaceUrl=${namespaceUrl.orEmpty()} and desktopDeviceId=$normalizedRequestingDeviceId for authentication response.",
+            )
+        val responseAccountId = resolvedTargetNamespace.accountId.trim()
+        Log.d(REG_LOG_TAG, "Authentication response start. namespaceDesktopDeviceId=${resolvedTargetNamespace.desktopDeviceId} mobileDeviceId=$normalizedMobileDeviceId desktopDeviceId=$normalizedRequestingDeviceId signingDeviceId=${registrationState.deviceId} accountId=$responseAccountId approved=$approved")
 
         val issuedAtEpochSeconds = Instant.now().epochSecond
         val expiryEpochSeconds = issuedAtEpochSeconds + MAX_ATTESTATION_LIFETIME_SECONDS
-        val namespaceOutcomes = responseNamespaces.map { namespaceEntry ->
-            fun failureOutcome(message: String) = NamespaceResponseOutcome(
-                namespaceEntry = namespaceEntry,
-                authenticationResult = namespaceEntry.toAuthenticationResult(
-                    success = false,
-                    message = message,
-                ),
-            )
+        fun failureOutcome(message: String) = NamespaceResponseOutcome(
+            namespaceEntry = resolvedTargetNamespace,
+            authenticationResult = resolvedTargetNamespace.toAuthenticationResult(
+                success = false,
+                message = message,
+            ),
+        )
 
-            val requestPayload = AuthenticationResponseRequestDto(
-                notificationId = notificationId,
-                accountId = namespaceEntry.accountId,
-                deviceId = registrationState.deviceId,
-                approved = approved,
+        val requestPayload = AuthenticationResponseRequestDto(
+            notificationId = notificationId,
+            accountId = responseAccountId,
+            mobileDeviceId = registrationState.deviceId,
+            approved = approved,
+            nonce = newNonce(),
+            envelop = AuthenticationAttestationEnvelopeDto(
+                desktopDeviceId = normalizedRequestingDeviceId,
+                mobileDeviceId = registrationState.deviceId,
+                namespaces = if (approved) listOf(resolvedTargetNamespace.namespaceId) else emptyList(),
+                iat = issuedAtEpochSeconds,
+                exp = expiryEpochSeconds,
                 nonce = newNonce(),
-                envelop = AuthenticationAttestationEnvelopeDto(
-                    desktopId = namespaceEntry.deviceId,
-                    deviceId = registrationState.deviceId,
-                    namespaces = if (approved) listOf(namespaceEntry.namespaceId) else emptyList(),
-                    iat = issuedAtEpochSeconds,
-                    exp = expiryEpochSeconds,
-                    nonce = newNonce(),
-                ),
+            ),
+        )
+        val responseUrl = buildAuthenticationResponseUrl(resolvedTargetNamespace.namespaceUrl)
+        val requestBodyJson = gson.toJson(requestPayload)
+        val signature = signatureService.signJsonString(requestBodyJson)
+        Log.d(
+            REG_LOG_TAG,
+            "Authentication response namespace mapping. namespaceId=${resolvedTargetNamespace.namespaceId} namespaceUrl=${resolvedTargetNamespace.namespaceUrl} namespaceAccountId=${resolvedTargetNamespace.accountId} foreignAccountId=${resolvedTargetNamespace.foreignAccountId.orEmpty()} responseAccountId=$responseAccountId",
+        )
+        Log.d(REG_LOG_TAG, "HTTP POST $responseUrl payload=$requestBodyJson")
+        Log.d(REG_LOG_TAG, "Authentication response signature: $signature")
+        val namespaceOutcome = try {
+            val response = registrationApi.sendAuthenticationResponse(
+                url = responseUrl,
+                signature = signature,
+                request = requestPayload,
             )
-            val responseUrl = if (namespaceEntry.deviceId == targetNamespace.deviceId && namespaceEntry.accountId == targetNamespace.accountId) {
-                buildAuthenticationResponseUrl(namespaceEntry.namespaceUrl)
-            } else {
-                buildAuthenticationDirectResponseUrl(namespaceEntry.namespaceUrl)
-            }
-            val requestBodyJson = gson.toJson(requestPayload)
-            val signature = signatureService.signJsonString(requestBodyJson)
-            val response = try {
-                if (namespaceEntry.deviceId == targetNamespace.deviceId && namespaceEntry.accountId == targetNamespace.accountId) {
-                    registrationApi.sendAuthenticationResponse(
-                        url = responseUrl,
-                        signature = signature,
-                        request = requestPayload,
-                    )
-                } else {
-                    registrationApi.sendAuthenticationDirectResponse(
-                        url = responseUrl,
-                        signature = signature,
-                        request = requestPayload,
-                    )
-                }
-            } catch (exception: Exception) {
-                return@map failureOutcome(mapFailureMessage(responseUrl, exception))
-            }
-
             if (!response.isSuccessful) {
                 val errorBody = response.errorBody()?.string()
-                return@map failureOutcome(
+                failureOutcome(
                     errorBody ?: "Authentication response failed with HTTP ${response.code()} at $responseUrl.",
                 )
+            } else {
+                NamespaceResponseOutcome(
+                    namespaceEntry = resolvedTargetNamespace,
+                    authenticationResult = resolvedTargetNamespace.toAuthenticationResult(success = true),
+                    attestationId = response.body().extractAttestationId(),
+                )
             }
-            NamespaceResponseOutcome(
-                namespaceEntry = namespaceEntry,
-                authenticationResult = namespaceEntry.toAuthenticationResult(success = true),
-                attestationId = response.body().extractAttestationId(),
-            )
+        } catch (exception: Exception) {
+            failureOutcome(mapFailureMessage(responseUrl, exception))
         }
+        val namespaceOutcomes = listOf(namespaceOutcome)
 
         persistAttestationIds(
             existingNamespaces = availableNamespaces,
@@ -168,7 +231,8 @@ internal class AuthenticationResponseHandler(
         }
 
         if (updatedNamespaces != existingNamespaces) {
-            namespaceStore.saveNamespaces(updatedNamespaces)
+            val currentSnapshot = accountDetailsStateHolder.currentSnapshot() ?: return
+            accountDetailsStateHolder.replaceSnapshot(currentSnapshot.copy(namespaces = updatedNamespaces))
         }
     }
 
@@ -193,10 +257,101 @@ internal class AuthenticationResponseHandler(
 
     private fun NamespaceEntry.storageIdentity(): String = listOf(
         accountId.trim().lowercase(),
-        deviceId.trim().lowercase(),
+        desktopDeviceId.trim().lowercase(),
         namespaceId.trim().lowercase(),
         namespaceUrl.trim().trimEnd('/').lowercase(),
     ).joinToString(separator = "|")
+
+    private fun NamespaceEntry.matchesAuthenticationTarget(
+        accountId: String,
+        mobileDeviceId: String,
+        requestingDeviceId: String,
+        namespaceId: String?,
+        namespaceUrl: String?,
+        registrationState: RegistrationState,
+    ): Boolean {
+        val normalizedAccountId = accountId.trim()
+        val normalizedForeignAccountId = foreignAccountId?.trim().orEmpty()
+        val accountMatches = this.accountId.trim() == normalizedAccountId ||
+            (normalizedForeignAccountId.isNotEmpty() && normalizedForeignAccountId == normalizedAccountId)
+
+        if (!accountMatches) {
+            return false
+        }
+
+        if (!registrationState.deviceId.equals(mobileDeviceId, ignoreCase = true)) {
+            return false
+        }
+
+        if (!desktopDeviceId.equals(requestingDeviceId, ignoreCase = true)) {
+            return false
+        }
+
+        val hasNamespaceId = !namespaceId.isNullOrBlank()
+        val hasNamespaceUrl = !namespaceUrl.isNullOrBlank()
+        if (!hasNamespaceId) {
+            return false
+        }
+
+        if (!hasNamespaceUrl) {
+            return this.namespaceId.trim().lowercase() == namespaceId.orEmpty().trim().lowercase()
+        }
+
+        if (this.namespaceId.trim().lowercase() != namespaceId.orEmpty().trim().lowercase()) {
+            return false
+        }
+
+        if (this.namespaceUrl.trim().trimEnd('/').lowercase() != namespaceUrl.orEmpty().trim().trimEnd('/').lowercase()) {
+            return false
+        }
+
+        return true
+    }
+
+    private fun findMatchingAuthenticationTargets(
+        availableNamespaces: List<NamespaceEntry>,
+        notificationAccountId: String,
+        mobileDeviceId: String,
+        requestingDeviceId: String,
+        namespaceId: String,
+        namespaceUrl: String?,
+        registrationState: RegistrationState,
+    ): List<NamespaceEntry> {
+        val normalizedNotificationAccountId = notificationAccountId.trim()
+        val normalizedNamespaceId = namespaceId.trim()
+        val normalizedNamespaceUrl = namespaceUrl?.trim()?.trimEnd('/').orEmpty()
+
+        return resolveNamespaceEndpointTargets(
+            namespaces = availableNamespaces,
+            referenceNamespaceUrl = registrationState.namespaceUrl,
+            referenceAccountId = registrationState.accountId,
+        ).filter { target ->
+            target.accountId.equals(normalizedNotificationAccountId, ignoreCase = true) &&
+                target.namespaceId.trim().equals(normalizedNamespaceId, ignoreCase = true) &&
+                (normalizedNamespaceUrl.isEmpty() ||
+                    target.namespaceUrl.equals(normalizedNamespaceUrl, ignoreCase = true))
+        }.mapNotNull { target ->
+            target.entries.firstOrNull { namespaceEntry ->
+                namespaceEntry.matchesAuthenticationTarget(
+                    accountId = notificationAccountId,
+                    mobileDeviceId = mobileDeviceId,
+                    requestingDeviceId = requestingDeviceId,
+                    namespaceId = namespaceId,
+                    namespaceUrl = namespaceUrl,
+                    registrationState = registrationState,
+                ) && namespaceEntry.accountId.trim().equals(target.accountId, ignoreCase = true)
+            } ?: target.entries.firstOrNull { namespaceEntry ->
+                namespaceEntry.matchesAuthenticationTarget(
+                    accountId = notificationAccountId,
+                    mobileDeviceId = mobileDeviceId,
+                    requestingDeviceId = requestingDeviceId,
+                    namespaceId = namespaceId,
+                    namespaceUrl = namespaceUrl,
+                    registrationState = registrationState,
+                )
+            }
+        }
+    }
 
     private fun com.zerointrusion.data.network.AuthenticationResponseDto?.extractAttestationId(): String? {
         val nestedAttestationId = this?.attestation?.attestationId
