@@ -73,6 +73,7 @@ data class AppUiState(
     val desktopSessionsState: DesktopSessionsUiState = DesktopSessionsUiState.Idle,
     val liveDesktopSessions: List<ActiveDesktopSession> = emptyList(),
     val liveDesktopSessionRevokingAttestationId: String? = null,
+    val liveDesktopSessionRevokeErrorMessage: String? = null,
     val namespaces: List<NamespaceEntry> = emptyList(),
     val namespaceSelectionErrorMessage: String? = null,
     val namespaceManagementErrorMessage: String? = null,

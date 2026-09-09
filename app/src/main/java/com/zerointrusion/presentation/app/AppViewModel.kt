@@ -312,6 +312,7 @@ class AppViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 liveDesktopSessionRevokingAttestationId = session.attestationId,
+                liveDesktopSessionRevokeErrorMessage = null,
                 desktopSessionsState = currentState?.copy(
                     revokingAttestationId = session.attestationId,
                     message = null,
@@ -347,6 +348,7 @@ class AppViewModel @Inject constructor(
                     val successState = state.desktopSessionsState as? DesktopSessionsUiState.Success
                     state.copy(
                         liveDesktopSessionRevokingAttestationId = null,
+                        liveDesktopSessionRevokeErrorMessage = failureMessage,
                         desktopSessionsState = successState?.copy(
                             revokingAttestationId = null,
                             message = failureMessage,
@@ -499,14 +501,10 @@ class AppViewModel @Inject constructor(
                     )
                 }
                 if (approved) {
-                    val successfulNamespace = result.namespaceResults.firstOrNull { it.success }
                     postApprovalSessionRefreshJob?.cancel()
                     postApprovalSessionRefreshJob = viewModelScope.launch {
-                        delay(2_000)
-                        refreshLiveDesktopSessions(
-                            namespaceId = successfulNamespace?.namespaceId,
-                            namespaceUrl = successfulNamespace?.namespaceUrl,
-                        )
+                        delay(1_000)
+                        refreshLiveDesktopSessions()
                     }
                 }
             }.onFailure { throwable ->

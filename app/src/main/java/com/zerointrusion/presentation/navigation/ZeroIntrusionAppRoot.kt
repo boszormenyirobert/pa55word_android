@@ -134,6 +134,7 @@ fun ZeroIntrusionAppRoot(
                     namespaces = appState.namespaces,
                     liveDesktopSessions = appState.liveDesktopSessions,
                     liveDesktopSessionRevokingAttestationId = appState.liveDesktopSessionRevokingAttestationId,
+                    liveDesktopSessionRevokeErrorMessage = appState.liveDesktopSessionRevokeErrorMessage,
                     notification = appState.notificationOverlay.notification,
                     notificationError = appState.notificationOverlay.mismatchError,
                     qrNamespaceRegistrationState = appState.qrNamespaceRegistrationState,

@@ -143,7 +143,7 @@ data class AuthenticationResponseDto(
 
 data class AuthenticationSessionDto(
     val attestationId: String,
-    val deviceId: String,
+    val deviceId: String? = null,
     val issuedAt: String,
     val expiresAt: String,
 )
@@ -155,8 +155,8 @@ data class AuthenticationSessionRevocationResponseDto(
 
 data class AuthenticationSessionRevocationResponseRequestDto(
     val accountId: String,
-    val deviceId: String,
-    val desktopId: String,
+    val mobileDeviceId: String,
+    val desktopDeviceId: String,
     val attestationId: String,
     val nonce: String,
 )

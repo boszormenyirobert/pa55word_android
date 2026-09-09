@@ -34,6 +34,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -78,6 +79,7 @@ fun PostLoginHomeScreen(
     namespaces: List<NamespaceEntry>,
     liveDesktopSessions: List<ActiveDesktopSession>,
     liveDesktopSessionRevokingAttestationId: String?,
+    liveDesktopSessionRevokeErrorMessage: String?,
     notification: BackendPushNotification?,
     notificationError: String?,
     qrNamespaceRegistrationState: QrNamespaceRegistrationUiState,
@@ -194,6 +196,14 @@ fun PostLoginHomeScreen(
                 revokingAttestationId = liveDesktopSessionRevokingAttestationId,
                 onRevokeDesktopSession = onRevokeDesktopSession,
             )
+
+            liveDesktopSessionRevokeErrorMessage?.let { message ->
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = ErrorTextLight,
+                )
+            }
 
             if (!notificationsEnabled || !notificationsPermissionGranted) {
                 Card(
@@ -407,37 +417,31 @@ private fun LiveDesktopSessionsCard(
                                         color = White,
                                         style = MaterialTheme.typography.bodyLarge,
                                     )
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Surface(
-                                            shape = RoundedCornerShape(999.dp),
-                                            color = Yellow.copy(alpha = 0.18f),
-                                            border = BorderStroke(1.dp, Yellow),
-                                        ) {
-                                            Text(
-                                                text = "live session",
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                                color = Yellow,
-                                                style = MaterialTheme.typography.labelLarge,
+
+                                    matchingSessions.forEachIndexed { sessionIndex, session ->
+                                        if (sessionIndex != 0) {
+                                            HorizontalDivider(
+                                                color = White.copy(alpha = 0.12f),
+                                                thickness = 1.dp,
                                             )
                                         }
-                                    }
-
-                                    matchingSessions.forEach { session ->
                                         Row(
                                             modifier = Modifier.fillMaxWidth(),
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
-                                            Text(
-                                                text = "Attestation: ${session.attestationId}",
-                                                color = White,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                modifier = Modifier.weight(1f),
-                                            )
+                                            Surface(
+                                                shape = RoundedCornerShape(999.dp),
+                                                color = Yellow.copy(alpha = 0.18f),
+                                                border = BorderStroke(1.dp, Yellow),
+                                            ) {
+                                                Text(
+                                                    text = "live session",
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                                    color = Yellow,
+                                                    style = MaterialTheme.typography.labelLarge,
+                                                )
+                                            }
 
                                             Surface(
                                                 shape = RoundedCornerShape(999.dp),
@@ -463,7 +467,10 @@ private fun LiveDesktopSessionsCard(
                                 }
 
                                 if (index != liveNamespaces.lastIndex) {
-                                    Spacer(modifier = Modifier.height(2.dp))
+                                    HorizontalDivider(
+                                        color = White.copy(alpha = 0.12f),
+                                        thickness = 1.dp,
+                                    )
                                 }
                             }
                         }

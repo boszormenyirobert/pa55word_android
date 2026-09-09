@@ -156,8 +156,8 @@ internal class AuthenticationSessionHandler(
         val nonce = newNonce()
         val requestPayload = AuthenticationSessionRevocationResponseRequestDto(
             accountId = accountId,
-            deviceId = mobileDeviceId,
-            desktopId = desktopDeviceId,
+            mobileDeviceId = mobileDeviceId,
+            desktopDeviceId = desktopDeviceId,
             attestationId = attestationId,
             nonce = nonce,
         )
@@ -284,8 +284,8 @@ internal class AuthenticationSessionHandler(
     private fun AuthenticationSessionDto.toDomain(): ActiveDesktopSession = ActiveDesktopSession(
         accountId = "",
         attestationId = attestationId,
-        deviceId = deviceId,
-        deviceName = deviceId,
+        deviceId = deviceId.orEmpty(),
+        deviceName = deviceId.orEmpty(),
         namespaceName = "",
         namespaceUrl = "",
         issuedAt = issuedAt,
@@ -296,20 +296,26 @@ internal class AuthenticationSessionHandler(
         requestNamespace: NamespaceSessionRequest,
         availableNamespaces: List<com.zerointrusion.domain.namespaces.NamespaceEntry>,
     ): ActiveDesktopSession {
+        // Server may omit deviceId when the session's namespace only has a single desktop device.
+        val resolvedSessionDeviceId = deviceId.orEmpty().ifBlank {
+            availableNamespaces
+                .firstOrNull { it.namespaceId.trim() == requestNamespace.namespaceId.trim() }
+                ?.desktopDeviceId.orEmpty()
+        }
         val resolvedDeviceName = resolveSessionDeviceName(
-            desktopDeviceId = deviceId,
+            desktopDeviceId = resolvedSessionDeviceId,
             availableNamespaces = availableNamespaces,
         )
 
         Log.d(
             AUTHENTICATION_LOG_TAG,
-            "AUTH session device resolution. namespaceId=${requestNamespace.namespaceId} namespaceName=${requestNamespace.namespaceName} sessionDeviceId=$deviceId resolvedDeviceName=$resolvedDeviceName",
+            "AUTH session device resolution. namespaceId=${requestNamespace.namespaceId} namespaceName=${requestNamespace.namespaceName} sessionDeviceId=$resolvedSessionDeviceId resolvedDeviceName=$resolvedDeviceName",
         )
 
         return ActiveDesktopSession(
             accountId = requestNamespace.accountId,
             attestationId = attestationId,
-            deviceId = deviceId,
+            deviceId = resolvedSessionDeviceId,
             deviceName = resolvedDeviceName,
             namespaceName = requestNamespace.namespaceName,
             namespaceUrl = requestNamespace.namespaceUrl,
@@ -349,11 +355,11 @@ internal class AuthenticationSessionHandler(
         append("\"accountId\":")
         append(gson.toJson(payload.accountId))
         append(',')
-        append("\"deviceId\":")
-        append(gson.toJson(payload.deviceId))
+        append("\"mobileDeviceId\":")
+        append(gson.toJson(payload.mobileDeviceId))
         append(',')
-        append("\"desktopId\":")
-        append(gson.toJson(payload.desktopId))
+        append("\"desktopDeviceId\":")
+        append(gson.toJson(payload.desktopDeviceId))
         append(',')
         append("\"attestationId\":")
         append(gson.toJson(payload.attestationId))
