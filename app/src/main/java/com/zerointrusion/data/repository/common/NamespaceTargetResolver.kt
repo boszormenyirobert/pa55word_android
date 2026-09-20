@@ -61,20 +61,6 @@ internal fun resolveNamespaceTargetAccountId(
         return normalizedReferenceAccountId
     }
 
-    val linkedCandidates = namespaceEntries.mapNotNull { namespaceEntry ->
-        val localAccountId = namespaceEntry.accountId.trim()
-        val foreignAccountId = namespaceEntry.foreignAccountId?.trim().orEmpty()
-        when {
-            localAccountId.equals(normalizedReferenceAccountId, ignoreCase = true) && foreignAccountId.isNotEmpty() -> foreignAccountId
-            foreignAccountId.equals(normalizedReferenceAccountId, ignoreCase = true) && localAccountId.isNotEmpty() -> localAccountId
-            else -> null
-        }
-    }.distinctBy { it.lowercase() }
-
-    if (linkedCandidates.size == 1) {
-        return linkedCandidates.first()
-    }
-
     val localCandidates = namespaceEntries.mapNotNull { namespaceEntry ->
         namespaceEntry.accountId.trim().takeIf { it.isNotEmpty() }
     }.distinctBy { it.lowercase() }
@@ -83,16 +69,5 @@ internal fun resolveNamespaceTargetAccountId(
         return localCandidates.first()
     }
 
-    val foreignCandidates = namespaceEntries.mapNotNull { namespaceEntry ->
-        namespaceEntry.foreignAccountId?.trim()?.takeIf { it.isNotEmpty() }
-    }.distinctBy { it.lowercase() }
-
-    if (foreignCandidates.size == 1) {
-        return foreignCandidates.first()
-    }
-
-    return linkedCandidates.firstOrNull()
-        ?: localCandidates.firstOrNull()
-        ?: foreignCandidates.firstOrNull()
-        ?: normalizedReferenceAccountId
+    return localCandidates.firstOrNull() ?: normalizedReferenceAccountId
 }

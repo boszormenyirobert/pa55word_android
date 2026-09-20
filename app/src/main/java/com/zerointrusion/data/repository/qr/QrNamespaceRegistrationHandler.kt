@@ -7,7 +7,6 @@ import com.zerointrusion.data.network.AccountErrorResponseDto
 import com.zerointrusion.data.network.NewDeviceRegistrationDto
 import com.zerointrusion.data.network.NewDeviceRegistrationDekDto
 import com.zerointrusion.data.network.NewDeviceRegistrationDeviceDto
-import com.zerointrusion.data.network.NamespaceRegistrationRequestDto
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.qr.DeviceRegistrationFromQrFlow
 import com.zerointrusion.data.qr.NamespaceRegistrationFromQrFlow
@@ -21,11 +20,16 @@ import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
 import com.zerointrusion.data.repository.registration.FcmTokenSynchronizer
 import com.zerointrusion.data.security.DekService
 import com.zerointrusion.data.security.SignatureService
+import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
+import com.zerointrusion.data.storage.LocalConnectedDeviceEntry
+import com.zerointrusion.data.storage.LocalConnectedNamespace
 import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.qr.DeviceRegistrationQrPayload
 import com.zerointrusion.domain.qr.NamespaceQrPayload
+import com.zerointrusion.domain.qr.NamespaceSyncQrPayload
 import com.zerointrusion.domain.qr.QrNamespaceRegistrationResult
+import com.zerointrusion.domain.qr.ScannedQrPayload
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -38,13 +42,14 @@ internal class QrNamespaceRegistrationHandler(
     private val gson: Gson,
     private val fcmTokenSynchronizer: FcmTokenSynchronizer,
     private val connectedDevicesRepository: ConnectedDevicesRepository,
+    private val connectedDevicesLocalStore: ConnectedDevicesLocalStore,
     private val qrPayloadParser: QrPayloadParser,
     private val deviceRegistrationFromQrFlow: DeviceRegistrationFromQrFlow,
     private val namespaceRegistrationFromQrFlow: NamespaceRegistrationFromQrFlow,
 ) {
     suspend fun registerNamespaceFromQr(
         qrPayload: String,
-        namespaceLinkDeviceId: String? = null,
+        rootDeviceAccountId: String? = null,
     ): QrNamespaceRegistrationResult = withContext(Dispatchers.IO) {
         val registrationState = stateStore.observeState().first()
             ?: throw RegistrationFailure.Validation("No registered account is stored on this device.")
@@ -59,6 +64,11 @@ internal class QrNamespaceRegistrationHandler(
             ?: throw RegistrationFailure.Validation("The stored registration state does not contain an encrypted DEK.")
 
         val qrData = qrPayloadParser.parse(qrPayload)
+        val qrType = when (qrData) {
+            is DeviceRegistrationQrPayload -> "deviceRegistration"
+            is NamespaceQrPayload -> "namespace"
+            is NamespaceSyncQrPayload -> "namespace_sync"
+        }
         val preparation = when (qrData) {
             is DeviceRegistrationQrPayload -> {
                 Log.d(
@@ -73,22 +83,8 @@ internal class QrNamespaceRegistrationHandler(
                 payload = qrData,
                 storedEncDek = storedEncDek,
             )
-        }
 
-        if (qrData is NamespaceQrPayload) {
-            val initialNamespaceLinkRequest = buildInitialNamespaceLinkRequest(
-                currentAccountId = registrationState.accountId,
-                scannedNamespaceAccountId = preparation.targetNamespaceAccountId,
-                currentMobileDeviceId = registrationState.deviceId,
-                selectedDesktopDeviceId = namespaceLinkDeviceId?.trim().takeUnless { it.isNullOrEmpty() }
-                    ?: throw RegistrationFailure.Validation("Select a connected device before linking the scanned namespace."),
-                qrData = qrData,
-            )
-            registerNamespaceLink(
-                requestUrl = registrationState.namespaceUrl.trim().trimEnd('/') + AppConstants.NAMESPACE_ENDPOINT_PATH,
-                request = initialNamespaceLinkRequest,
-                logLabel = "Namespace link submit",
-            )
+            is NamespaceSyncQrPayload -> namespaceRegistrationFromQrFlow.prepareSync(qrData)
         }
 
         val rawDek = decryptRootDeviceDek(
@@ -98,8 +94,13 @@ internal class QrNamespaceRegistrationHandler(
         )
         val reEncryptedDek = dekService.encryptDek(rawDek, preparation.scannedPublicKey)
         val nonce = newRequestNonce()
+        val resolvedRootDeviceAccountId = when (qrData) {
+            is NamespaceSyncQrPayload -> rootDeviceAccountId?.trim().takeUnless { it.isNullOrEmpty() }
+                ?: preparation.targetNamespaceAccountId
+            else -> preparation.targetNamespaceAccountId
+        }
         val desktopRegistrationDto = NewDeviceRegistrationDto(
-            accountId = preparation.targetNamespaceAccountId,
+            accountId = resolvedRootDeviceAccountId,
             device = NewDeviceRegistrationDeviceDto(
                 mobileDeviceId = registrationState.deviceId,
                 publicKey = preparation.scannedPublicKey,
@@ -115,6 +116,7 @@ internal class QrNamespaceRegistrationHandler(
         val requestBodyJson = gson.toJson(desktopRegistrationDto)
         val submitSignature = signatureService.signJsonString(requestBodyJson)
         val submitUrl = buildRootDeviceRegistrationUrl(preparation.namespaceEntry.namespaceUrl)
+        Log.d(QR_LOG_TAG, "QR request dump. type=$qrType url=$submitUrl payload=$requestBodyJson")
         Log.d(QR_LOG_TAG, "HTTP POST $submitUrl payload=$requestBodyJson")
         Log.d(QR_LOG_TAG, "Desktop registration submit start. url=$submitUrl scannedDesktopDeviceId=${preparation.scannedDesktopDeviceId}")
         val submitResponse = try {
@@ -137,103 +139,43 @@ internal class QrNamespaceRegistrationHandler(
         }
 
         Log.d(QR_LOG_TAG, "Desktop registration submit success. url=$submitUrl scannedDesktopDeviceId=${preparation.scannedDesktopDeviceId}")
-
-        if (qrData is NamespaceQrPayload) {
-            val reverseNamespaceLinkRequest = buildReverseNamespaceLinkRequest(
-                scannedNamespaceAccountId = preparation.targetNamespaceAccountId,
-                currentMobileDeviceId = registrationState.deviceId,
-                scannedDesktopDeviceId = qrData.desktopDeviceId.trim(),
-                qrData = qrData,
-            )
-            registerNamespaceLink(
-                requestUrl = preparation.namespaceEntry.namespaceUrl.trim().trimEnd('/') + AppConstants.NAMESPACE_ENDPOINT_PATH,
-                request = reverseNamespaceLinkRequest,
-                logLabel = "Namespace reverse link submit",
-            )
-        }
+        connectedDevicesLocalStore.upsertEntry(
+            LocalConnectedDeviceEntry(
+                url = preparation.namespaceEntry.namespaceUrl,
+                accountId = resolvedRootDeviceAccountId,
+                desktopDeviceId = preparation.scannedDesktopDeviceId,
+                namespaces = listOf(
+                    LocalConnectedNamespace(
+                        accountId = preparation.namespaceEntry.accountId,
+                        desktopDeviceId = preparation.scannedDesktopDeviceId,
+                        namespaceId = preparation.namespaceEntry.namespaceId,
+                        namespace = preparation.namespaceEntry.namespaceName,
+                        url = preparation.namespaceEntry.namespaceUrl,
+                    ),
+                ),
+            ),
+        )
 
         fcmTokenSynchronizer.syncNamespace(
             namespaceEntry = preparation.namespaceEntry,
             registrationState = registrationState,
         )
-        runCatching { connectedDevicesRepository.fetchConnectedDevices() }
-            .onFailure { exception ->
-                Log.w(
-                    QR_LOG_TAG,
-                    "QR registration refresh failed after successful server registration. namespaceUrl=${preparation.namespaceEntry.namespaceUrl}",
-                    exception,
-                )
-            }
+        if (qrData !is NamespaceQrPayload) {
+            runCatching { connectedDevicesRepository.fetchConnectedDevices() }
+                .onFailure { exception ->
+                    Log.w(
+                        QR_LOG_TAG,
+                        "QR registration refresh failed after successful server registration. namespaceUrl=${preparation.namespaceEntry.namespaceUrl}",
+                        exception,
+                    )
+                }
+        }
 
         QrNamespaceRegistrationResult(
             namespaceName = preparation.namespaceEntry.namespaceName,
             desktopDeviceId = preparation.scannedDesktopDeviceId,
         )
     }
-
-    private suspend fun registerNamespaceLink(
-        requestUrl: String,
-        request: NamespaceRegistrationRequestDto,
-        logLabel: String,
-    ) {
-        val requestJson = gson.toJson(request)
-        val signature = signatureService.signJsonString(requestJson)
-
-        Log.d(
-            QR_LOG_TAG,
-            "$logLabel start. url=$requestUrl accountId=${request.accountId} foreignAccountId=${request.foreignAccountId} mobileDeviceId=${request.mobileDeviceId} desktopDeviceId=${request.desktopDeviceId} namespaceId=${request.namespaceId}",
-        )
-        Log.d(QR_LOG_TAG, "HTTP POST $requestUrl payload=$requestJson")
-        Log.d(QR_LOG_TAG, "$logLabel signature: $signature")
-        val response = try {
-            registrationApi.registerNamespace(
-                url = requestUrl,
-                signature = signature,
-                request = request,
-            )
-        } catch (exception: Exception) {
-            Log.e(QR_LOG_TAG, "$logLabel failed before HTTP response. url=$requestUrl", exception)
-            throw mapNetworkException(requestUrl, exception)
-        }
-
-        if (!response.isSuccessful) {
-            Log.e(QR_LOG_TAG, "$logLabel returned HTTP ${response.code()} for $requestUrl")
-            throw serverFailure(gson, response.errorBody()?.charStream(), response.code(), requestUrl)
-        }
-    }
-
-    private fun buildInitialNamespaceLinkRequest(
-        currentAccountId: String,
-        scannedNamespaceAccountId: String,
-        currentMobileDeviceId: String,
-        selectedDesktopDeviceId: String,
-        qrData: NamespaceQrPayload,
-    ): NamespaceRegistrationRequestDto = NamespaceRegistrationRequestDto(
-        accountId = currentAccountId,
-        foreignAccountId = scannedNamespaceAccountId,
-        mobileDeviceId = currentMobileDeviceId,
-        desktopDeviceId = selectedDesktopDeviceId,
-        namespaceId = qrData.namespaceId,
-        name = qrData.namespaceName,
-        url = qrData.namespaceUrl.trim().trimEnd('/'),
-        nonce = newRequestNonce(),
-    )
-
-    private fun buildReverseNamespaceLinkRequest(
-        scannedNamespaceAccountId: String,
-        currentMobileDeviceId: String,
-        scannedDesktopDeviceId: String,
-        qrData: NamespaceQrPayload,
-    ): NamespaceRegistrationRequestDto = NamespaceRegistrationRequestDto(
-        accountId = scannedNamespaceAccountId,
-        foreignAccountId = "",
-        mobileDeviceId = currentMobileDeviceId,
-        desktopDeviceId = scannedDesktopDeviceId,
-        namespaceId = qrData.namespaceId,
-        name = qrData.namespaceName,
-        url = qrData.namespaceUrl.trim().trimEnd('/'),
-        nonce = newRequestNonce(),
-    )
 
     private fun decryptRootDeviceDek(
         dekService: DekService,

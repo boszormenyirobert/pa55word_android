@@ -29,8 +29,8 @@ internal class ConnectedDevicesResponseParser(
 
     private data class ConnectedAccountDeviceDto(
         val accountId: String?,
-        @SerializedName(value = "deviceId", alternate = ["desktopDeviceId"])
         val deviceId: String?,
+        val desktopDeviceId: String?,
         val deviceName: String?,
         val publicKey: String?,
         val namespaces: List<ConnectedNamespaceDto>?,
@@ -38,9 +38,8 @@ internal class ConnectedDevicesResponseParser(
 
     private data class ConnectedNamespaceDto(
         val accountId: String?,
-        val foreignAccountId: String?,
-        @SerializedName(value = "deviceId", alternate = ["desktopDeviceId"])
         val deviceId: String?,
+        val desktopDeviceId: String?,
         val namespaceId: String?,
         val name: String?,
         val namespace: String?,
@@ -73,7 +72,7 @@ internal class ConnectedDevicesResponseParser(
             }
 
             val parsedGroups = deviceDtos.mapNotNull { device ->
-                val deviceId = device.deviceId?.trim().orEmpty()
+                val deviceId = device.desktopDeviceId?.trim().orEmpty()
                 if (deviceId.isEmpty()) {
                     return@mapNotNull null
                 }
@@ -98,7 +97,7 @@ internal class ConnectedDevicesResponseParser(
                 parsedGroups
             } else {
                 val legacyDeviceIds = namespaceDtos.mapNotNull { namespace ->
-                    namespace.deviceId?.trim()?.takeIf { it.isNotEmpty() }
+                    namespace.desktopDeviceId?.trim()?.takeIf { it.isNotEmpty() }
                 }.distinct()
 
                 if (legacyDeviceIds.isEmpty()) {
@@ -107,7 +106,7 @@ internal class ConnectedDevicesResponseParser(
 
                 legacyDeviceIds.map { deviceId ->
                     val matchingNamespaceDtos = namespaceDtos
-                        .filter { it.deviceId?.trim() == deviceId }
+                        .filter { it.desktopDeviceId?.trim() == deviceId }
                         .ifEmpty { namespaceDtos }
 
                     ConnectedDeviceGroup(
@@ -136,7 +135,7 @@ internal class ConnectedDevicesResponseParser(
 
             if (deviceDtos.isNotEmpty()) {
                 deviceDtos.flatMap { device ->
-                    val deviceId = device.deviceId?.trim().orEmpty()
+                    val deviceId = device.desktopDeviceId?.trim().orEmpty()
                     if (deviceId.isEmpty()) {
                         return@flatMap emptyList()
                     }
@@ -144,7 +143,7 @@ internal class ConnectedDevicesResponseParser(
                     val deviceNamespaces = device.namespaces.orEmpty()
                         .ifEmpty {
                             accountNamespaceDtos.filter { namespace ->
-                                namespace.deviceId?.trim().orEmpty() == deviceId
+                                namespace.desktopDeviceId?.trim().orEmpty() == deviceId
                             }
                         }
 
@@ -157,11 +156,11 @@ internal class ConnectedDevicesResponseParser(
                 }
             } else {
                 accountNamespaceDtos
-                    .mapNotNull { namespaceDto -> namespaceDto.deviceId?.trim()?.takeIf { it.isNotEmpty() } }
+                    .mapNotNull { namespaceDto -> namespaceDto.desktopDeviceId?.trim()?.takeIf { it.isNotEmpty() } }
                     .distinct()
                     .flatMap { deviceId ->
                         accountNamespaceDtos
-                            .filter { namespace -> namespace.deviceId?.trim().orEmpty() == deviceId }
+                            .filter { namespace -> namespace.desktopDeviceId?.trim().orEmpty() == deviceId }
                             .toNamespaceEntries(
                                 accountId = resolvedAccountId,
                                 deviceId = deviceId,
@@ -202,7 +201,8 @@ internal class ConnectedDevicesResponseParser(
     }
 
     private fun List<ConnectedNamespaceDto>.toConnectedNamespaces(deviceIdFallback: String): List<ConnectedDeviceNamespace> = mapNotNull { namespaceDto ->
-        val deviceId = namespaceDto.deviceId?.trim()?.takeIf { it.isNotEmpty() } ?: deviceIdFallback
+        val accountId = namespaceDto.accountId?.trim().orEmpty()
+        val deviceId = namespaceDto.desktopDeviceId?.trim()?.takeIf { it.isNotEmpty() } ?: deviceIdFallback
         val namespaceId = namespaceDto.namespaceId?.trim().orEmpty()
         val namespaceName = listOf(namespaceDto.name, namespaceDto.namespace)
             .firstOrNull { !it.isNullOrBlank() }
@@ -210,11 +210,13 @@ internal class ConnectedDevicesResponseParser(
             .orEmpty()
         val namespaceUrl = namespaceDto.url?.trim().orEmpty()
 
-        if (deviceId.isEmpty() || namespaceId.isEmpty() || namespaceName.isEmpty() || namespaceUrl.isEmpty()) {
+        if (accountId.isEmpty() || deviceId.isEmpty() || namespaceId.isEmpty() || namespaceName.isEmpty() || namespaceUrl.isEmpty()) {
             return@mapNotNull null
         }
 
         ConnectedDeviceNamespace(
+            accountId = accountId,
+            desktopDeviceId = deviceId,
             namespaceId = namespaceId,
             namespaceName = namespaceName,
             namespaceUrl = namespaceUrl,
@@ -248,7 +250,6 @@ internal class ConnectedDevicesResponseParser(
             desktopDeviceId = deviceId,
             deviceName = deviceName,
             publicKey = publicKey,
-            foreignAccountId = namespaceDto.foreignAccountId?.trim()?.takeIf { it.isNotEmpty() },
         )
     }
 }

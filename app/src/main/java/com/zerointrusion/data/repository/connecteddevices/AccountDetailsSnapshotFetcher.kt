@@ -12,7 +12,9 @@ import com.zerointrusion.data.repository.common.resolveNamespaceEndpointTargets
 import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
 import com.zerointrusion.data.security.DekService
 import com.zerointrusion.data.security.SignatureService
+import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
 import com.zerointrusion.data.storage.RegistrationStateStore
+import com.zerointrusion.data.storage.toNamespaceEntries
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.connecteddevices.AccountDetailsSnapshot
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
@@ -30,6 +32,7 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
     private val registrationApi: RegistrationApi,
     private val stateStore: RegistrationStateStore,
     private val accountDetailsStateHolder: AccountDetailsStateHolder,
+    private val connectedDevicesLocalStore: ConnectedDevicesLocalStore,
     private val dekService: DekService,
     private val signatureService: SignatureService,
     private val gson: Gson,
@@ -57,7 +60,19 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
             }
         }
 
-        val existingNamespaces = accountDetailsStateHolder.currentSnapshot()?.namespaces.orEmpty()
+        // The in-memory snapshot resets on process restart; merge in persisted local entries too,
+        // otherwise previously-paired second servers are never re-queried after a cold start.
+        val existingNamespaces = (
+            accountDetailsStateHolder.currentSnapshot()?.namespaces.orEmpty() +
+                connectedDevicesLocalStore.currentEntries().toNamespaceEntries()
+            ).distinctBy { namespaceEntry ->
+            listOf(
+                namespaceEntry.accountId.trim().lowercase(),
+                namespaceEntry.desktopDeviceId.trim().lowercase(),
+                namespaceEntry.namespaceId.trim().lowercase(),
+                namespaceEntry.namespaceUrl.trim().trimEnd('/').lowercase(),
+            ).joinToString(separator = "|")
+        }
         val homeTarget = AccountDetailsFetchTarget(
             namespaceUrl = registrationState.namespaceUrl.trim().trimEnd('/'),
             accountId = registrationState.accountId.trim(),
@@ -87,6 +102,7 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
 
         val mergedNamespaces = snapshots
             .flatMap { snapshot -> snapshot.namespaces }
+            .map { namespace -> namespace.withCarriedForwardAttestationId(existingNamespaces) }
             .distinctBy { namespace ->
                 listOf(
                     namespace.accountId.trim().lowercase(),
@@ -101,6 +117,22 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
             groups = mergedGroups,
             namespaces = mergedNamespaces,
         )
+    }
+
+    // The backend never returns attestationId per namespace; carry forward the value this phone last
+    // recorded locally when approving that exact device's login, so it survives snapshot refreshes and
+    // can later disambiguate active sessions that share a namespace.
+    private fun NamespaceEntry.withCarriedForwardAttestationId(existingNamespaces: List<NamespaceEntry>): NamespaceEntry {
+        if (!attestationId.isNullOrBlank()) {
+            return this
+        }
+        val previousAttestationId = existingNamespaces.firstOrNull { existing ->
+            existing.accountId.trim().equals(accountId.trim(), ignoreCase = true) &&
+                existing.desktopDeviceId.trim().equals(desktopDeviceId.trim(), ignoreCase = true) &&
+                existing.namespaceId.trim().equals(namespaceId.trim(), ignoreCase = true) &&
+                existing.namespaceUrl.trim().trimEnd('/').equals(namespaceUrl.trim().trimEnd('/'), ignoreCase = true)
+        }?.attestationId?.trim()?.takeIf { it.isNotEmpty() } ?: return this
+        return copy(attestationId = previousAttestationId)
     }
 
     private suspend fun fetchSnapshotForTarget(

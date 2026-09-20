@@ -1,6 +1,8 @@
 package com.zerointrusion.presentation.qrread
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +12,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -96,7 +99,9 @@ fun QrNamespaceDeviceSelectionScreen(
                                 shape = RoundedCornerShape(14.dp),
                             ) {
                                 Text(
-                                    text = selectedOption?.deviceName ?: "Select connected device",
+                                    text = selectedOption?.let { option ->
+                                        "${option.deviceName} (${option.deviceId})"
+                                    } ?: "Select connected device",
                                     modifier = Modifier.fillMaxWidth(),
                                 )
                             }
@@ -104,16 +109,22 @@ fun QrNamespaceDeviceSelectionScreen(
                                 expanded = expanded,
                                 onDismissRequest = { expanded = false },
                             ) {
-                                qrNamespaceRegistrationState.deviceOptions.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(option.deviceName)
-                                        },
-                                        onClick = {
-                                            selectedDeviceId = option.deviceId
-                                            expanded = false
-                                        },
-                                    )
+                                Column(
+                                    modifier = Modifier
+                                        .heightIn(max = 280.dp)
+                                        .verticalScroll(rememberScrollState()),
+                                ) {
+                                    qrNamespaceRegistrationState.deviceOptions.forEach { option ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text("${option.deviceName} (${option.deviceId})")
+                                            },
+                                            onClick = {
+                                                selectedDeviceId = option.deviceId
+                                                expanded = false
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }

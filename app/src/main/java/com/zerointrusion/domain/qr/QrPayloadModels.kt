@@ -19,3 +19,11 @@ data class NamespaceQrPayload(
     val namespaceName: String,
     val namespaceUrl: String,
 ) : ScannedQrPayload
+
+data class NamespaceSyncQrPayload(
+    override val desktopDeviceId: String,
+    override val publicKey: String,
+    val deviceName: String,
+    val namespaceId: String,
+    val namespaceUrl: String,
+) : ScannedQrPayload

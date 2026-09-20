@@ -1,7 +1,8 @@
 package com.zerointrusion.data.repository.namespaces
 
-import com.zerointrusion.data.storage.NamespaceStore
+import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
 import com.zerointrusion.data.storage.RegistrationStateStore
+import com.zerointrusion.data.storage.toNamespaceEntries
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.namespaces.NamespacesRepository
@@ -9,13 +10,15 @@ import com.zerointrusion.domain.registration.RegistrationState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
 class NamespacesRepositoryImpl(
-    private val namespaceStore: NamespaceStore,
+    private val connectedDevicesLocalStore: ConnectedDevicesLocalStore,
     private val stateStore: RegistrationStateStore,
 ) : NamespacesRepository {
-    override fun observeNamespaces(): Flow<List<NamespaceEntry>> = namespaceStore.observeNamespaces()
+    override fun observeNamespaces(): Flow<List<NamespaceEntry>> =
+        connectedDevicesLocalStore.observeEntries().map { entries -> entries.toNamespaceEntries() }
 
     override suspend fun setSelectedNamespace(namespace: NamespaceEntry): RegistrationState = withContext(Dispatchers.IO) {
         val currentState = stateStore.observeState().first()
@@ -54,13 +57,6 @@ class NamespacesRepositoryImpl(
             )
         }
 
-        val updatedNamespaces = namespaceStore.observeNamespaces().first().filterNot { storedNamespace ->
-            storedNamespace.accountId == namespace.accountId &&
-                storedNamespace.namespaceId == namespace.namespaceId &&
-                storedNamespace.namespaceName == namespace.namespaceName &&
-                storedNamespace.namespaceUrl == namespace.namespaceUrl &&
-                storedNamespace.desktopDeviceId == namespace.desktopDeviceId
-        }
-        namespaceStore.saveNamespaces(updatedNamespaces)
+        TODO("Implement namespace deletion API call.")
     }
 }

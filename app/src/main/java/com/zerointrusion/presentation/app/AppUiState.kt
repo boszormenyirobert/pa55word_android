@@ -30,6 +30,7 @@ sealed class QrNamespaceRegistrationUiState {
 }
 
 data class QrNamespaceDeviceOption(
+    val accountId: String,
     val deviceId: String,
     val deviceName: String,
 )

@@ -93,6 +93,13 @@ private fun ConnectedDeviceGroupCard(group: ConnectedDeviceGroup) {
                 color = White,
                 style = MaterialTheme.typography.bodyMedium,
             )
+            group.deviceName?.takeIf { it.isNotBlank() }?.let { deviceName ->
+                Text(
+                    text = "Device name: $deviceName",
+                    color = White,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
 
             if (group.namespaces.isEmpty()) {
                 Text(
@@ -127,6 +134,22 @@ private fun ConnectedNamespaceRow(namespace: ConnectedDeviceNamespace) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
+                    text = "Account ID:",
+                    color = White,
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = namespace.accountId,
+                    color = White,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
                     text = "Namespace:",
                     color = White,
                     style = MaterialTheme.typography.labelLarge,
@@ -149,7 +172,7 @@ private fun ConnectedNamespaceRow(namespace: ConnectedDeviceNamespace) {
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = namespace.deviceId,
+                    text = namespace.desktopDeviceId,
                     color = White,
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -185,6 +208,24 @@ private fun ConnectedNamespaceRow(namespace: ConnectedDeviceNamespace) {
                     color = White,
                     style = MaterialTheme.typography.bodyMedium,
                 )
+            }
+            if (namespace.deviceId != namespace.desktopDeviceId) {
+                Row(
+                    verticalAlignment = Alignment.Top,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "Device ID fallback:",
+                        color = White,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text = namespace.deviceId,
+                        color = White,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
             }
         }
     }

@@ -87,17 +87,6 @@ data class AccountRegistrationResponseDto(
     val accountId: String?,
 )
 
-data class NamespaceRegistrationRequestDto(
-    val accountId: String,
-    val foreignAccountId: String,
-    val mobileDeviceId: String,
-    val desktopDeviceId: String,
-    val namespaceId: String,
-    val name: String,
-    val url: String,
-    val nonce: String,
-)
-
 data class AccountErrorResponseDto(
     val error: Int?,
     val message: String?,
@@ -143,7 +132,7 @@ data class AuthenticationResponseDto(
 
 data class AuthenticationSessionDto(
     val attestationId: String,
-    val deviceId: String? = null,
+    val desktopDeviceId: String? = null,
     val issuedAt: String,
     val expiresAt: String,
 )
@@ -167,13 +156,6 @@ interface RegistrationApi {
         @Url url: String,
         @Body request: AccountRegistrationRequestDto,
     ): Response<ResponseBody>
-
-    @POST
-    suspend fun registerNamespace(
-        @Url url: String,
-        @Header("x-signature") signature: String,
-        @Body request: NamespaceRegistrationRequestDto,
-    ): Response<Unit>
 
     @POST
     suspend fun registerFcmToken(

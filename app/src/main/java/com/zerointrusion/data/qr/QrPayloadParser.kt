@@ -5,6 +5,7 @@ import com.google.gson.JsonSyntaxException
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.qr.DeviceRegistrationQrPayload
 import com.zerointrusion.domain.qr.NamespaceQrPayload
+import com.zerointrusion.domain.qr.NamespaceSyncQrPayload
 import com.zerointrusion.domain.qr.ScannedQrPayload
 import com.zerointrusion.domain.registration.RegistrationValidator
 
@@ -15,6 +16,7 @@ internal class QrPayloadParser(
     private companion object {
         const val DEVICE_REGISTRATION_TYPE = "deviceRegistration"
         const val NAMESPACE_TYPE = "namespace"
+        const val NAMESPACE_SYNC_TYPE = "namespace_sync"
 
         val DEVICE_ID_REGEX = Regex("^[A-Za-z0-9]{10}$")
     }
@@ -79,8 +81,25 @@ internal class QrPayloadParser(
                 )
             }
 
+            NAMESPACE_SYNC_TYPE -> {
+                val deviceName = payload.deviceName?.trim().orEmpty()
+                val namespaceId = payload.namespaceId?.trim().orEmpty()
+                val namespaceUrl = payload.namespaceUrl?.trim().orEmpty()
+                validateDeviceName(deviceName)
+                validateNamespaceId(namespaceId)
+                validateNamespaceUrl(namespaceUrl)
+
+                NamespaceSyncQrPayload(
+                    desktopDeviceId = desktopDeviceId,
+                    publicKey = publicKey,
+                    deviceName = deviceName,
+                    namespaceId = namespaceId,
+                    namespaceUrl = namespaceUrl,
+                )
+            }
+
             else -> throw RegistrationFailure.Validation(
-                "The scanned QR payload type must be either deviceRegistration or namespace.",
+                "The scanned QR payload type must be deviceRegistration, namespace, or namespace_sync.",
             )
         }
     }
@@ -121,6 +140,22 @@ internal class QrPayloadParser(
     private fun validateDeviceName(deviceName: String) {
         if (deviceName.isEmpty()) {
             throw RegistrationFailure.Validation("The scanned QR payload does not contain a deviceName.")
+        }
+    }
+
+    private fun validateNamespaceId(namespaceId: String) {
+        if (namespaceId.isEmpty()) {
+            throw RegistrationFailure.Validation("The scanned QR payload does not contain a namespaceId.")
+        }
+        if (!validator.isValidNamespaceId(namespaceId)) {
+            throw RegistrationFailure.Validation("The scanned QR payload namespaceId is invalid.")
+        }
+    }
+
+    private fun validateNamespaceUrl(namespaceUrl: String) {
+        val validationError = validator.validateNamespaceUrl(namespaceUrl)
+        if (validationError != null) {
+            throw RegistrationFailure.Validation(validationError)
         }
     }
 }

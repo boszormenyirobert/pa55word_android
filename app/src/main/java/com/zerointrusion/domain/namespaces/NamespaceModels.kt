@@ -9,7 +9,6 @@ data class NamespaceEntry(
     val attestationId: String? = null,
     val deviceName: String? = null,
     val publicKey: String? = null,
-    val foreignAccountId: String? = null,
 )
 
 data class NamespaceFormValidation(

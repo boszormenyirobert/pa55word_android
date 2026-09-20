@@ -10,7 +10,6 @@ Data source:
 Request ownership:
 - This flow owns the QR-driven phone registration request when the scanned QR contains a namespace.
 - This flow owns the desktop root-device registration request.
-- The Retrofit namespace-link endpoint exists in the codebase, but no current live call site was found for it in this flow.
 
 QR device payload shape:
 ```json
@@ -34,6 +33,24 @@ QR namespace payload shape:
   "namespaceUrl": "string"
 }
 ```
+
+QR namespace_sync payload shape:
+```json
+{
+  "type": "namespace_sync",
+  "desktopDeviceId": "string",
+  "publicKey": "string",
+  "deviceName": "string",
+  "namespaceId": "string",
+  "namespaceUrl": "string"
+}
+```
+
+`namespace_sync` follows a different flow from `namespace`:
+- `namespaceName` is omitted from the QR payload.
+- The app resolves the namespace locally by normalized `namespaceUrl`.
+- The app skips the QR phone-registration `POST /api/v1/account` request.
+- The signed namespace-link requests go to `POST /api/v1/namespace/link` instead of `POST /api/v1/namespace`.
 
 Phone registration request from QR shape:
 ```json
@@ -72,25 +89,8 @@ Phone registration response shape:
 }
 ```
 
-Namespace link request shape:
-```json
-{
-  "accountId": "string",
-  "deviceId": "string",
-  "namespaceId": "string",
-  "name": "string",
-  "url": "string"
-}
-```
-
-Signed:
-- Yes.
-- Signed payload is the same as the transmitted request body.
-
-Namespace link response shape:
-- `HTTP 200/204` with empty body.
-
 Notes:
 - QR scanning is local.
 - Device-only QR updates the local namespace list and then registers the desktop root-device relation remotely.
-- Namespace QR first performs phone account registration on the scanned namespace, stores the new namespace locally, and then registers the desktop root-device relation remotely.
+- Namespace QR first performs phone account registration on the scanned namespace using the phone's existing identity data plus the scanned namespace data, stores the new namespace locally, and then registers the desktop root-device relation remotely.
+- Namespace_sync QR resolves an already known namespace by URL, submits one signed namespace-link request to `/namespace/link`, and then registers the desktop root-device relation remotely.

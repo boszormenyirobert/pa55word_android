@@ -27,7 +27,6 @@ internal class DeviceRegistrationFromQrFlow(
             desktopDeviceId = payload.desktopDeviceId,
             deviceName = payload.deviceName,
             publicKey = payload.publicKey,
-            foreignAccountId = registrationState.accountId,
         )
 
         return QrRegistrationPreparation(

@@ -39,7 +39,7 @@ Encryption configuration:
 
 Stored keys:
 - `registration_state`
-- `namespaces_state`
+- `connected_devices_local_state`
 
 ### registration_state
 
@@ -76,33 +76,37 @@ Field notes:
 - `root` marks the locally persisted phone registration as the root registration.
 - `fcmToken` is optional and is filled after successful FCM token sync.
 
-### namespaces_state
+### connected_devices_local_state
 
 Meaning:
-- All locally known desktop namespace connections.
+- All locally known root-device to namespace connections used by the Connected devices view.
 
 Stored format:
-- JSON array serialized from `List<NamespaceEntry>`.
+- JSON array serialized from a dedicated local connected-devices list.
 
 Shape:
 ```json
 [
   {
-    "namespaceName": "string",
-    "namespaceId": "string",
-    "namespaceUrl": "string",
+    "url": "string",
     "accountId": "string",
-    "deviceId": "string",
-    "deviceName": "string|null",
-    "publicKey": "string|null"
+    "desktopDeviceId": "string",
+    "namespaces": [
+      {
+        "accountId": "string",
+        "desktopDeviceId": "string",
+        "namespaceId": "string",
+        "namespace": "string",
+        "url": "string"
+      }
+    ]
   }
 ]
 ```
 
 When written:
-- QR device flow after adding or merging a scanned desktop namespace relation.
-- QR namespace flow after registering the phone on the scanned namespace and storing the resulting desktop relation.
-- Local namespace delete from `Settings Connected Devices`.
+- Successful root-device registration flows.
+- Connected-devices backend refresh after parsing account snapshots.
 
 Merge rules:
 - Entries are deduplicated by `namespaceId + namespaceUrl + deviceId` after trim and lowercase normalization.
@@ -112,7 +116,7 @@ Merge rules:
 
 The following state is in-memory only and is not written to local persistent storage:
 - Live desktop sessions list.
-- Connected-devices backend fetch results.
+- Connected-devices backend fetch results beyond the reduced persisted local list.
 - Authentication notification overlay state.
 - Desktop-session revoke progress state.
 - Namespace delete confirmation UI state.
@@ -124,6 +128,6 @@ If encrypted preferences cannot be opened or decrypted after restore, reinstall,
 - The app deletes the entire `zero_intrusion_secure_registration` preferences file.
 - It recreates the encrypted preferences file.
 - `registration_state` is treated as missing.
-- `namespaces_state` falls back to an empty list.
+- `connected_devices_local_state` falls back to an empty list.
 
 The Android Keystore keypair is managed separately from the encrypted preferences file.

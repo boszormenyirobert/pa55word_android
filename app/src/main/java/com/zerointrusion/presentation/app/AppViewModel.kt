@@ -40,6 +40,8 @@ class AppViewModel @Inject constructor(
 ) : ViewModel() {
     private companion object {
         const val QR_LOG_TAG = "ZeroIntrusionQr"
+        const val NAMESPACE_QR_TYPE = "namespace"
+        const val NAMESPACE_SYNC_QR_TYPE = "namespace_sync"
         private val NAMESPACE_ID_KEYS = listOf("namespaceId", "namespace_id", "namespaceID")
         private val NAMESPACE_URL_KEYS = listOf("namespaceUrl", "namespace_url", "namespaceURL", "url")
     }
@@ -369,29 +371,9 @@ class AppViewModel @Inject constructor(
         if (namespacePayload != null) {
             Log.d(
                 QR_LOG_TAG,
-                "Namespace QR payload recognized. namespaceName=${namespacePayload.namespaceName?.trim().orEmpty()} namespaceId=${namespacePayload.namespaceId?.trim().orEmpty()} namespaceUrl=${namespacePayload.namespaceUrl?.trim().orEmpty()} desktopDeviceId=${namespacePayload.desktopDeviceId?.trim().orEmpty()} deviceName=${namespacePayload.deviceName?.trim().orEmpty()} payloadLength=${qrPayload.length}",
+                "Namespace sync QR payload recognized. type=${namespacePayload.type?.trim().orEmpty()} namespaceId=${namespacePayload.namespaceId?.trim().orEmpty()} namespaceUrl=${namespacePayload.namespaceUrl?.trim().orEmpty()} desktopDeviceId=${namespacePayload.desktopDeviceId?.trim().orEmpty()} deviceName=${namespacePayload.deviceName?.trim().orEmpty()} payloadLength=${qrPayload.length}",
             )
-            val deviceOptions = buildQrNamespaceDeviceOptions()
-            if (deviceOptions.isEmpty()) {
-                _uiState.update {
-                    it.copy(
-                        qrNamespaceRegistrationState = QrNamespaceRegistrationUiState.Error(
-                            "No connected devices are available for selection.",
-                        ),
-                    )
-                }
-                return
-            }
-
-            pendingNamespaceQrPayload = qrPayload
-            _uiState.update {
-                it.copy(
-                    qrNamespaceRegistrationState = QrNamespaceRegistrationUiState.AwaitingDeviceSelection(
-                        namespaceName = namespacePayload.namespaceName?.trim().orEmpty(),
-                        deviceOptions = deviceOptions,
-                    ),
-                )
-            }
+            submitQrNamespaceRegistration(qrPayload = qrPayload)
             return
         }
 
@@ -411,15 +393,29 @@ class AppViewModel @Inject constructor(
             return
         }
 
+        val selectedOption = (_uiState.value.qrNamespaceRegistrationState as? QrNamespaceRegistrationUiState.AwaitingDeviceSelection)
+            ?.deviceOptions
+            ?.firstOrNull { option -> option.deviceId == deviceId }
+        if (selectedOption == null) {
+            _uiState.update {
+                it.copy(
+                    qrNamespaceRegistrationState = QrNamespaceRegistrationUiState.Error(
+                        "The selected connected device is no longer available. Scan the QR code again.",
+                    ),
+                )
+            }
+            return
+        }
+
         submitQrNamespaceRegistration(
             qrPayload = pendingPayload,
-            namespaceLinkDeviceId = deviceId,
+            rootDeviceAccountId = selectedOption.accountId,
         )
     }
 
     private fun submitQrNamespaceRegistration(
         qrPayload: String,
-        namespaceLinkDeviceId: String? = null,
+        rootDeviceAccountId: String? = null,
     ) {
         pendingNamespaceQrPayload = null
         viewModelScope.launch {
@@ -428,7 +424,7 @@ class AppViewModel @Inject constructor(
             runCatching {
                 qrNamespaceRegistrationRepository.registerNamespaceFromQr(
                     qrPayload = qrPayload,
-                    namespaceLinkDeviceId = namespaceLinkDeviceId,
+                    rootDeviceAccountId = rootDeviceAccountId,
                 )
             }
                 .onSuccess { result: QrNamespaceRegistrationResult ->
@@ -459,12 +455,30 @@ class AppViewModel @Inject constructor(
             gson.fromJson(qrPayload.trim(), ScannedQrPayloadPreview::class.java)
         }.getOrNull() ?: return null
 
-        return preview.takeIf { it.type?.trim() == "namespace" }
+        return preview.takeIf { previewPayload ->
+            val normalizedType = previewPayload.type?.trim()
+            normalizedType == NAMESPACE_SYNC_QR_TYPE
+        }
+    }
+
+    private fun resolveNamespaceQrPreviewName(preview: ScannedQrPayloadPreview): String {
+        val explicitName = preview.namespaceName?.trim().orEmpty()
+        if (explicitName.isNotEmpty()) {
+            return explicitName
+        }
+
+        val namespaceUrl = preview.namespaceUrl?.trim().orEmpty().trimEnd('/')
+        val storedNamespaceName = storedNamespaces.firstOrNull { namespaceEntry ->
+                namespaceEntry.namespaceUrl.trim().trimEnd('/').equals(namespaceUrl, ignoreCase = true)
+        }?.namespaceName?.trim().orEmpty()
+
+            return storedNamespaceName.ifEmpty { preview.namespaceId?.trim().orEmpty() }
     }
 
     private fun buildQrNamespaceDeviceOptions(): List<QrNamespaceDeviceOption> = buildQrNamespaceDeviceOptions(
         connectedDeviceGroups = storedConnectedDeviceGroups,
         storedNamespaces = storedNamespaces,
+        mobileDeviceId = _uiState.value.registrationState?.deviceId.orEmpty(),
     )
 
     fun onNotificationDecision(decision: NotificationDecision) {
@@ -626,8 +640,7 @@ class AppViewModel @Inject constructor(
 
         val targetNamespaceUrl = notification.data.firstNonBlankValue(NAMESPACE_URL_KEYS)
         val matchingNamespaces = knownNamespaces.filter {
-            val accountMatches = it.accountId.equals(notification.accountId, ignoreCase = true) ||
-                it.foreignAccountId?.equals(notification.accountId, ignoreCase = true) == true
+            val accountMatches = it.accountId.equals(notification.accountId, ignoreCase = true)
             if (!accountMatches) {
                 false
             } else {
@@ -668,13 +681,18 @@ private fun Map<String, String>.firstNonBlankValue(keys: List<String>): String {
 internal fun buildQrNamespaceDeviceOptions(
     connectedDeviceGroups: List<ConnectedDeviceGroup>,
     storedNamespaces: List<NamespaceEntry>,
+    mobileDeviceId: String,
 ): List<QrNamespaceDeviceOption> = connectedDeviceGroups
-    .filter { group -> group.deviceId.isNotBlank() }
+    .filter { group ->
+        group.deviceId.isNotBlank() &&
+            !group.deviceId.trim().equals(mobileDeviceId.trim(), ignoreCase = true)
+    }
     .map { group ->
         val representative = storedNamespaces.firstOrNull { namespace ->
             namespace.desktopDeviceId.trim().equals(group.deviceId.trim(), ignoreCase = true)
         }
         QrNamespaceDeviceOption(
+            accountId = group.accountId,
             deviceId = group.deviceId,
             deviceName = representative?.deviceName?.trim().takeUnless { it.isNullOrEmpty() }
                 ?: group.deviceName?.trim().takeUnless { it.isNullOrEmpty() }

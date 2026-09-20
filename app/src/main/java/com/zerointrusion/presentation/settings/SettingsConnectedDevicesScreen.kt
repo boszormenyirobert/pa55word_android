@@ -42,7 +42,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
-import com.zerointrusion.domain.authentication.ActiveDesktopSession
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.presentation.deviceinformation.DeviceInformationUiModel
@@ -58,12 +57,12 @@ fun SettingsConnectedDevicesScreen(
     deviceInformation: DeviceInformationUiModel,
     namespaces: List<NamespaceEntry>,
     connectedDeviceGroups: List<ConnectedDeviceGroup>,
-    liveDesktopSessions: List<ActiveDesktopSession>,
     namespaceManagementErrorMessage: String?,
     onDeleteNamespace: (NamespaceEntry) -> Unit,
     onBack: () -> Unit,
 ) {
     var namespacePendingDelete by remember { mutableStateOf<NamespaceEntry?>(null) }
+    var showHeadExplanation by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -88,7 +87,6 @@ fun SettingsConnectedDevicesScreen(
             deviceInformation = deviceInformation,
             namespaces = namespaces,
             connectedDeviceGroups = connectedDeviceGroups,
-            liveDesktopSessions = liveDesktopSessions,
             namespaceManagementErrorMessage = namespaceManagementErrorMessage,
             namespacePendingDelete = namespacePendingDelete,
             onDeleteClick = { namespace ->
@@ -98,6 +96,8 @@ fun SettingsConnectedDevicesScreen(
                 namespacePendingDelete = null
                 onDeleteNamespace(namespace)
             },
+            showHeadExplanation = showHeadExplanation,
+            onHeadClick = { showHeadExplanation = !showHeadExplanation },
         )
 
         OutlinedButton(
@@ -117,16 +117,13 @@ internal data class SettingsConnectedDeviceGroupUiModel(
     val deviceId: String,
     val deviceLabel: String,
     val namespaces: List<NamespaceEntry>,
-    val hasLiveSession: Boolean,
 )
 
 internal fun buildSettingsConnectedDeviceGroups(
     namespaces: List<NamespaceEntry>,
     connectedDeviceGroups: List<ConnectedDeviceGroup>,
-    liveDesktopSessions: List<ActiveDesktopSession>,
 ): List<SettingsConnectedDeviceGroupUiModel> {
     val namespacesByDeviceId = namespaces.groupBy { it.desktopDeviceId.trim() }
-    val sessionsByDeviceId = liveDesktopSessions.groupBy { it.deviceId.trim() }
     val deviceIdsInDisplayOrder = linkedSetOf<String>()
 
     connectedDeviceGroups.forEach { group ->
@@ -140,25 +137,17 @@ internal fun buildSettingsConnectedDeviceGroups(
         deviceIdsInDisplayOrder += deviceId
     }
 
-    sessionsByDeviceId.keys.filter { it.isNotEmpty() }.sorted().forEach { deviceId ->
-        deviceIdsInDisplayOrder += deviceId
-    }
-
     return deviceIdsInDisplayOrder.map { deviceId ->
         val deviceNamespaces = namespacesByDeviceId[deviceId].orEmpty()
             .sortedWith(compareBy({ it.namespaceName.lowercase() }, { it.namespaceUrl.lowercase() }))
-        val matchingSessions = sessionsByDeviceId[deviceId].orEmpty()
         val deviceLabel = deviceNamespaces.firstNotNullOfOrNull { namespace ->
             namespace.deviceName?.trim()?.takeIf { it.isNotEmpty() }
-        } ?: matchingSessions.firstNotNullOfOrNull { session ->
-            session.deviceName.trim().takeIf { it.isNotEmpty() }
         } ?: deviceId
 
         SettingsConnectedDeviceGroupUiModel(
             deviceId = deviceId,
             deviceLabel = deviceLabel,
             namespaces = deviceNamespaces,
-            hasLiveSession = matchingSessions.isNotEmpty(),
         )
     }.sortedWith(compareBy({ it.deviceLabel.lowercase() }, { it.deviceId.lowercase() }))
 }
@@ -168,17 +157,18 @@ private fun ConnectedDevicesSettingsContent(
     deviceInformation: DeviceInformationUiModel,
     namespaces: List<NamespaceEntry>,
     connectedDeviceGroups: List<ConnectedDeviceGroup>,
-    liveDesktopSessions: List<ActiveDesktopSession>,
     namespaceManagementErrorMessage: String?,
     namespacePendingDelete: NamespaceEntry?,
     onDeleteClick: (NamespaceEntry) -> Unit,
     onConfirmDelete: (NamespaceEntry) -> Unit,
+    showHeadExplanation: Boolean,
+    onHeadClick: () -> Unit,
 ) {
-    val groupedDevices = remember(namespaces, connectedDeviceGroups, liveDesktopSessions) {
+    val visibleNamespaces = namespaces
+    val groupedDevices = remember(visibleNamespaces, connectedDeviceGroups) {
         buildSettingsConnectedDeviceGroups(
-            namespaces = namespaces,
+            namespaces = visibleNamespaces,
             connectedDeviceGroups = connectedDeviceGroups,
-            liveDesktopSessions = liveDesktopSessions,
         )
     }
 
@@ -233,11 +223,13 @@ private fun ConnectedDevicesSettingsContent(
                                     style = MaterialTheme.typography.titleMedium,
                                     color = White,
                                 )
+                                Text(
+                                    text = "Desktop ID: ${group.deviceId}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = White.copy(alpha = 0.72f),
+                                )
                             }
 
-                            if (group.hasLiveSession) {
-                                LiveSessionBadge()
-                            }
                         }
                     }
 
@@ -264,9 +256,10 @@ private fun ConnectedDevicesSettingsContent(
                                         namespace.namespaceName == deviceInformation.namespaceName &&
                                         namespace.namespaceUrl == deviceInformation.namespaceUrl,
                                     showDeleteConfirmation = namespacePendingDelete == namespace,
-                                    isFirst = index == 0,
                                     onDeleteClick = { onDeleteClick(namespace) },
                                     onConfirmDelete = { onConfirmDelete(namespace) },
+                                    showHeadExplanation = showHeadExplanation,
+                                    onHeadClick = onHeadClick,
                                 )
                                 if (index != group.namespaces.lastIndex) {
                                     HorizontalDivider(
@@ -287,29 +280,14 @@ private fun ConnectedDevicesSettingsContent(
 }
 
 @Composable
-private fun LiveSessionBadge() {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = Yellow.copy(alpha = 0.18f),
-        border = BorderStroke(1.dp, Yellow),
-    ) {
-        Text(
-            text = "live session",
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            color = Yellow,
-            style = MaterialTheme.typography.labelLarge,
-        )
-    }
-}
-
-@Composable
 private fun NamespaceConnectionCard(
     namespace: NamespaceEntry,
     isGateway: Boolean,
     showDeleteConfirmation: Boolean,
-    isFirst: Boolean,
     onDeleteClick: () -> Unit,
     onConfirmDelete: () -> Unit,
+    showHeadExplanation: Boolean,
+    onHeadClick: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -325,7 +303,7 @@ private fun NamespaceConnectionCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = if (isFirst) 2.dp else 10.dp),
+                    .padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
             ) {
@@ -341,13 +319,21 @@ private fun NamespaceConnectionCard(
                         shape = RoundedCornerShape(999.dp),
                         color = Yellow.copy(alpha = 0.18f),
                         border = BorderStroke(1.dp, Yellow),
+                        modifier = Modifier.height(24.dp),
+                        onClick = onHeadClick,
                     ) {
-                        Text(
-                            text = "Backup connection",
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                            color = Yellow,
-                            style = MaterialTheme.typography.labelLarge,
-                        )
+                        Box(
+                            modifier = Modifier
+                                .height(24.dp)
+                                .padding(horizontal = 10.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                text = "Head",
+                                color = Yellow,
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                        }
                     }
                 } else {
                     IconButton(onClick = onDeleteClick, modifier = Modifier.size(24.dp)) {
@@ -360,10 +346,40 @@ private fun NamespaceConnectionCard(
                 }
             }
 
+            if (isGateway && showHeadExplanation) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    color = Yellow.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, Yellow.copy(alpha = 0.55f)),
+                ) {
+                    Text(
+                        text = "The server is configured as the root server, which is a prerequisite for multiple-server support. Before removing the \"Head\" server, if there is an additional server, the Head must first be changed. Multiple-server support enables independent credential databases for each server. Removing a server, including the \"Head\" server, permanently removes only the credentials stored in the database assigned to that server.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = White,
+                        modifier = Modifier.padding(12.dp),
+                    )
+                }
+            }
+
             Text(
                 text = namespace.namespaceUrl,
                 color = White.copy(alpha = 0.82f),
                 style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Text(
+                text = "Account ID: ${namespace.accountId}",
+                color = White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Text(
+                text = "Desktop ID: ${namespace.desktopDeviceId}",
+                color = White.copy(alpha = 0.72f),
+                style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.fillMaxWidth(),
             )
 

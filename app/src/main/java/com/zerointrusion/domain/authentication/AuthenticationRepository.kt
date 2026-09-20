@@ -9,6 +9,9 @@ data class ActiveDesktopSession(
     val namespaceUrl: String,
     val issuedAt: String,
     val expiresAt: String,
+    // True when the backend omitted deviceId and more than one desktop device shares this namespace,
+    // so deviceId/deviceName below are a best-effort guess and must not be used to group sessions together.
+    val deviceIdAmbiguous: Boolean = false,
 )
 
 data class DesktopSessionRevocationResult(

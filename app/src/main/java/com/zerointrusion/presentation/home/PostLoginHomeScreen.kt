@@ -341,10 +341,19 @@ private fun LiveDesktopSessionsCard(
 ) {
     val visibleGroups = remember(sessions) {
         sessions
-            .groupBy { session -> session.deviceName.takeIf { it.isNotBlank() } ?: session.deviceId }
+            .groupBy { session -> if (session.deviceIdAmbiguous) "ambiguous|${session.attestationId}" else session.deviceId }
             .toList()
-            .sortedBy { it.first.lowercase() }
-            .map { (deviceName, deviceSessions) ->
+            .sortedBy { (deviceId, deviceSessions) ->
+                (deviceSessions.firstOrNull()?.deviceName?.takeIf { it.isNotBlank() } ?: deviceId).lowercase()
+            }
+            .map { (deviceId, deviceSessions) ->
+                val groupRepresentative = deviceSessions.firstOrNull()
+                val deviceName = groupRepresentative?.deviceName?.takeIf { it.isNotBlank() } ?: deviceId
+                val displayDeviceName = if (groupRepresentative?.deviceIdAmbiguous == true) {
+                    "$deviceName (unconfirmed device)"
+                } else {
+                    deviceName
+                }
                 val liveNamespaces = deviceSessions
                     .groupBy { session ->
                         session.namespaceUrl.trim().trimEnd('/').lowercase() + "|" +
@@ -365,7 +374,7 @@ private fun LiveDesktopSessionsCard(
                     }
                     .sortedBy { it.first.lowercase() }
 
-                deviceName to liveNamespaces
+                displayDeviceName to liveNamespaces
             }
             .filter { (_, liveNamespaces) -> liveNamespaces.isNotEmpty() }
     }

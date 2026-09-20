@@ -3,6 +3,6 @@ package com.zerointrusion.domain.qr
 interface QrNamespaceRegistrationRepository {
     suspend fun registerNamespaceFromQr(
         qrPayload: String,
-        namespaceLinkDeviceId: String? = null,
+        rootDeviceAccountId: String? = null,
     ): QrNamespaceRegistrationResult
 }

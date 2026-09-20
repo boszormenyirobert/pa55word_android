@@ -39,7 +39,8 @@ internal fun DeviceInformationContent(
     onNamespaceSelected: (NamespaceEntry) -> Unit,
 ) {
     var isExpanded by remember { mutableStateOf(false) }
-    val selectedNamespace = namespaces.firstOrNull { namespace ->
+    val visibleNamespaces = namespaces
+    val selectedNamespace = visibleNamespaces.firstOrNull { namespace ->
         namespace.namespaceId == model.namespaceId &&
             namespace.namespaceUrl == model.namespaceUrl &&
             namespace.accountId == model.accountId
@@ -48,7 +49,7 @@ internal fun DeviceInformationContent(
         model.accountId,
         model.namespaceId,
         model.namespaceUrl,
-        namespaces,
+        visibleNamespaces,
     ) {
         mutableStateOf(selectedNamespace)
     }
@@ -95,7 +96,7 @@ internal fun DeviceInformationContent(
 
     ExposedDropdownMenuBox(
         expanded = isExpanded,
-        onExpandedChange = { if (namespaces.isNotEmpty()) isExpanded = !isExpanded },
+        onExpandedChange = { if (visibleNamespaces.isNotEmpty()) isExpanded = !isExpanded },
     ) {
         OutlinedTextField(
             value = pendingNamespace?.namespaceName ?: model.namespaceName,
@@ -108,7 +109,7 @@ internal fun DeviceInformationContent(
             modifier = Modifier
                 .menuAnchor(
                     type = MenuAnchorType.PrimaryNotEditable,
-                    enabled = namespaces.isNotEmpty(),
+                        enabled = visibleNamespaces.isNotEmpty(),
                 )
                 .fillMaxWidth(),
         )
@@ -117,7 +118,7 @@ internal fun DeviceInformationContent(
             expanded = isExpanded,
             onDismissRequest = { isExpanded = false },
         ) {
-            namespaces.forEach { namespace ->
+            visibleNamespaces.forEach { namespace ->
                 DropdownMenuItem(
                     text = { Text(namespace.namespaceName) },
                     onClick = {

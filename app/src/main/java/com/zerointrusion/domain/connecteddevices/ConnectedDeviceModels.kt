@@ -1,6 +1,8 @@
 package com.zerointrusion.domain.connecteddevices
 
 data class ConnectedDeviceNamespace(
+    val accountId: String,
+    val desktopDeviceId: String,
     val namespaceId: String,
     val namespaceName: String,
     val namespaceUrl: String,

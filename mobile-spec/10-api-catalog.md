@@ -10,7 +10,6 @@ Unsigned requests:
 - `POST /api/v1/account`
 
 Signed requests:
-- `POST /api/v1/namespace`
 - `POST /api/v1/fcm`
 - `GET /api/v1/root-device?nonce={nonce}`
 - `POST /api/v1/root-device`
@@ -25,6 +24,7 @@ Signed requests:
 Used by:
 - Initial phone registration.
 - QR namespace flow phone registration.
+- Not used by QR namespace_sync flow.
 
 Signed:
 - No.
@@ -63,10 +63,10 @@ Response payload shape:
 }
 ```
 
-## POST /api/v1/namespace
+## POST /api/v1/namespace/link
 
 Used by:
-- Retrofit endpoint is defined for namespace linking, but no current live call site was found in the app code.
+- QR namespace_sync flow namespace-link requests.
 
 Signed:
 - Yes.
@@ -75,24 +75,16 @@ Signed header:
 - `x-signature: <base64-signature>`
 
 Request payload shape:
-```json
-{
-  "accountId": "string",
-  "foreignAccountId": "string",
-  "mobileDeviceId": "string",
-  "desktopDeviceId": "string",
-  "namespaceId": "string",
-  "name": "string",
-  "url": "string",
-  "nonce": "string"
-}
-```
+- Same as `POST /api/v1/namespace`.
+
+Behavior notes:
+- `namespace_sync` QR omits `namespaceName` in the QR payload.
+- The app resolves the display name and target account from the locally stored namespace snapshot, keyed by normalized `namespaceUrl`.
 
 Signed payload shape:
 ```json
 {
   "accountId": "string",
-  "foreignAccountId": "string",
   "mobileDeviceId": "string",
   "desktopDeviceId": "string",
   "namespaceId": "string",
@@ -101,9 +93,6 @@ Signed payload shape:
   "nonce": "string"
 }
 ```
-
-Notes:
-- In the QR namespace reverse-link request, `foreignAccountId` is sent as an empty string.
 
 Response payload shape:
 ```json

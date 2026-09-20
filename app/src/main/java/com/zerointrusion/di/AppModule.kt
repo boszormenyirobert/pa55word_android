@@ -26,8 +26,8 @@ import com.zerointrusion.data.security.DeviceService
 import com.zerointrusion.data.security.KeyStoreService
 import com.zerointrusion.data.security.NamespaceService
 import com.zerointrusion.data.security.SignatureService
-import com.zerointrusion.data.storage.EncryptedNamespaceStore
-import com.zerointrusion.data.storage.NamespaceStore
+import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
+import com.zerointrusion.data.storage.EncryptedConnectedDevicesLocalStore
 import com.zerointrusion.data.storage.EncryptedRegistrationStateStore
 import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.domain.notification.NotificationRepository
@@ -147,10 +147,10 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideNamespaceStore(
+    fun provideConnectedDevicesLocalStore(
         @ApplicationContext context: Context,
         gson: Gson,
-    ): NamespaceStore = EncryptedNamespaceStore(context, gson)
+    ): ConnectedDevicesLocalStore = EncryptedConnectedDevicesLocalStore(context, gson)
 
     @Provides
     @Singleton
@@ -164,6 +164,7 @@ object AppModule {
         registrationApi: RegistrationApi,
         registrationStateStore: RegistrationStateStore,
         accountDetailsStateHolder: AccountDetailsStateHolder,
+        connectedDevicesLocalStore: ConnectedDevicesLocalStore,
         dekService: DekService,
         signatureService: SignatureService,
         gson: Gson,
@@ -171,6 +172,7 @@ object AppModule {
         registrationApi = registrationApi,
         stateStore = registrationStateStore,
         accountDetailsStateHolder = accountDetailsStateHolder,
+        connectedDevicesLocalStore = connectedDevicesLocalStore,
         dekService = dekService,
         signatureService = signatureService,
         gson = gson,
@@ -218,10 +220,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideNamespacesRepository(
-        namespaceStore: NamespaceStore,
+        connectedDevicesLocalStore: ConnectedDevicesLocalStore,
         registrationStateStore: RegistrationStateStore,
     ): NamespacesRepository = NamespacesRepositoryImpl(
-        namespaceStore = namespaceStore,
+        connectedDevicesLocalStore = connectedDevicesLocalStore,
         stateStore = registrationStateStore,
     )
 
@@ -230,11 +232,11 @@ object AppModule {
     fun provideConnectedDevicesRepository(
         accountDetailsSnapshotFetcher: AccountDetailsSnapshotFetcher,
         accountDetailsStateHolder: AccountDetailsStateHolder,
-        namespaceStore: NamespaceStore,
+        connectedDevicesLocalStore: ConnectedDevicesLocalStore,
     ): ConnectedDevicesRepository = ConnectedDevicesRepositoryImpl(
         accountDetailsSnapshotFetcher = accountDetailsSnapshotFetcher,
         accountDetailsStateHolder = accountDetailsStateHolder,
-        namespaceStore = namespaceStore,
+        connectedDevicesLocalStore = connectedDevicesLocalStore,
     )
 
     @Provides
@@ -245,7 +247,9 @@ object AppModule {
         registrationStateStore: RegistrationStateStore,
         dekService: DekService,
         signatureService: SignatureService,
+        accountDetailsStateHolder: AccountDetailsStateHolder,
         connectedDevicesRepository: ConnectedDevicesRepository,
+        connectedDevicesLocalStore: ConnectedDevicesLocalStore,
         validator: RegistrationValidator,
         firebaseService: FirebaseService,
         gson: Gson,
@@ -255,7 +259,9 @@ object AppModule {
         stateStore = registrationStateStore,
         dekService = dekService,
         signatureService = signatureService,
+        accountDetailsStateHolder = accountDetailsStateHolder,
         connectedDevicesRepository = connectedDevicesRepository,
+        connectedDevicesLocalStore = connectedDevicesLocalStore,
         validator = validator,
         firebaseService = firebaseService,
         gson = gson,
@@ -270,6 +276,7 @@ object AppModule {
         signatureService: SignatureService,
         gson: Gson,
         connectedDevicesRepository: ConnectedDevicesRepository,
+        connectedDevicesLocalStore: ConnectedDevicesLocalStore,
     ): AuthenticationRepository = AuthenticationRepositoryImpl(
         registrationApi = registrationApi,
         accountDetailsStateHolder = accountDetailsStateHolder,
@@ -277,5 +284,6 @@ object AppModule {
         signatureService = signatureService,
         gson = gson,
         connectedDevicesRepository = connectedDevicesRepository,
+        connectedDevicesLocalStore = connectedDevicesLocalStore,
     )
 }

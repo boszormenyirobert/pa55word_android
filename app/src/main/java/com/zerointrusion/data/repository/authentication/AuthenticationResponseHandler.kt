@@ -8,10 +8,11 @@ import com.zerointrusion.data.network.AuthenticationResponseRequestDto
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.repository.common.REG_LOG_TAG
 import com.zerointrusion.data.repository.common.buildAuthenticationResponseUrl
-import com.zerointrusion.data.repository.common.resolveNamespaceEndpointTargets
 import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
 import com.zerointrusion.data.security.SignatureService
+import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
 import com.zerointrusion.data.storage.RegistrationStateStore
+import com.zerointrusion.data.storage.toNamespaceEntries
 import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
 import com.zerointrusion.domain.authentication.AuthenticationResponseResult
 import com.zerointrusion.domain.authentication.NamespaceAuthenticationResult
@@ -31,6 +32,7 @@ internal class AuthenticationResponseHandler(
     private val signatureService: SignatureService,
     private val gson: Gson,
     private val connectedDevicesRepository: ConnectedDevicesRepository,
+    private val connectedDevicesLocalStore: ConnectedDevicesLocalStore,
 ) {
     suspend fun respondToAuthentication(
         notificationId: String,
@@ -67,7 +69,7 @@ internal class AuthenticationResponseHandler(
             )
         }
 
-        var availableNamespaces = accountDetailsStateHolder.currentSnapshot()?.namespaces.orEmpty()
+        var availableNamespaces = currentAvailableNamespaces()
         var matchingNamespaceTargets = findMatchingAuthenticationTargets(
             availableNamespaces = availableNamespaces,
             notificationAccountId = accountId,
@@ -80,7 +82,7 @@ internal class AuthenticationResponseHandler(
 
         if (matchingNamespaceTargets.isEmpty()) {
             runCatching { connectedDevicesRepository.fetchConnectedDevices() }
-            availableNamespaces = accountDetailsStateHolder.currentSnapshot()?.namespaces.orEmpty()
+            availableNamespaces = currentAvailableNamespaces()
             matchingNamespaceTargets = findMatchingAuthenticationTargets(
                 availableNamespaces = availableNamespaces,
                 notificationAccountId = accountId,
@@ -98,7 +100,6 @@ internal class AuthenticationResponseHandler(
                 "Authentication response namespace resolution failed. notificationAccountId=$accountId notificationMobileDeviceId=$normalizedMobileDeviceId notificationDesktopDeviceId=$normalizedRequestingDeviceId notificationNamespaceId=$requiredNamespaceId notificationNamespaceUrl=${namespaceUrl.orEmpty()} availableNamespaces=${gson.toJson(availableNamespaces.map { namespaceEntry ->
                     mapOf(
                         "accountId" to namespaceEntry.accountId,
-                        "foreignAccountId" to namespaceEntry.foreignAccountId.orEmpty(),
                         "desktopDeviceId" to namespaceEntry.desktopDeviceId,
                         "namespaceId" to namespaceEntry.namespaceId,
                         "namespaceUrl" to namespaceEntry.namespaceUrl,
@@ -154,7 +155,7 @@ internal class AuthenticationResponseHandler(
         val signature = signatureService.signJsonString(requestBodyJson)
         Log.d(
             REG_LOG_TAG,
-            "Authentication response namespace mapping. namespaceId=${resolvedTargetNamespace.namespaceId} namespaceUrl=${resolvedTargetNamespace.namespaceUrl} namespaceAccountId=${resolvedTargetNamespace.accountId} foreignAccountId=${resolvedTargetNamespace.foreignAccountId.orEmpty()} responseAccountId=$responseAccountId",
+            "Authentication response namespace mapping. namespaceId=${resolvedTargetNamespace.namespaceId} namespaceUrl=${resolvedTargetNamespace.namespaceUrl} namespaceAccountId=${resolvedTargetNamespace.accountId} responseAccountId=$responseAccountId",
         )
         Log.d(REG_LOG_TAG, "HTTP POST $responseUrl payload=$requestBodyJson")
         Log.d(REG_LOG_TAG, "Authentication response signature: $signature")
@@ -198,6 +199,18 @@ internal class AuthenticationResponseHandler(
 
         result
     }
+
+    private fun currentAvailableNamespaces(): List<NamespaceEntry> = (
+        accountDetailsStateHolder.currentSnapshot()?.namespaces.orEmpty() +
+            connectedDevicesLocalStore.currentEntries().toNamespaceEntries()
+        ).distinctBy { namespaceEntry ->
+            listOf(
+                namespaceEntry.accountId.trim().lowercase(),
+                namespaceEntry.desktopDeviceId.trim().lowercase(),
+                namespaceEntry.namespaceId.trim().lowercase(),
+                namespaceEntry.namespaceUrl.trim().trimEnd('/').lowercase(),
+            ).joinToString(separator = "|")
+        }
 
     private suspend fun persistAttestationIds(
         existingNamespaces: List<NamespaceEntry>,
@@ -271,9 +284,7 @@ internal class AuthenticationResponseHandler(
         registrationState: RegistrationState,
     ): Boolean {
         val normalizedAccountId = accountId.trim()
-        val normalizedForeignAccountId = foreignAccountId?.trim().orEmpty()
-        val accountMatches = this.accountId.trim() == normalizedAccountId ||
-            (normalizedForeignAccountId.isNotEmpty() && normalizedForeignAccountId == normalizedAccountId)
+        val accountMatches = this.accountId.trim() == normalizedAccountId
 
         if (!accountMatches) {
             return false
@@ -317,39 +328,17 @@ internal class AuthenticationResponseHandler(
         namespaceUrl: String?,
         registrationState: RegistrationState,
     ): List<NamespaceEntry> {
-        val normalizedNotificationAccountId = notificationAccountId.trim()
-        val normalizedNamespaceId = namespaceId.trim()
-        val normalizedNamespaceUrl = namespaceUrl?.trim()?.trimEnd('/').orEmpty()
-
-        return resolveNamespaceEndpointTargets(
-            namespaces = availableNamespaces,
-            referenceNamespaceUrl = registrationState.namespaceUrl,
-            referenceAccountId = registrationState.accountId,
-        ).filter { target ->
-            target.accountId.equals(normalizedNotificationAccountId, ignoreCase = true) &&
-                target.namespaceId.trim().equals(normalizedNamespaceId, ignoreCase = true) &&
-                (normalizedNamespaceUrl.isEmpty() ||
-                    target.namespaceUrl.equals(normalizedNamespaceUrl, ignoreCase = true))
-        }.mapNotNull { target ->
-            target.entries.firstOrNull { namespaceEntry ->
-                namespaceEntry.matchesAuthenticationTarget(
-                    accountId = notificationAccountId,
-                    mobileDeviceId = mobileDeviceId,
-                    requestingDeviceId = requestingDeviceId,
-                    namespaceId = namespaceId,
-                    namespaceUrl = namespaceUrl,
-                    registrationState = registrationState,
-                ) && namespaceEntry.accountId.trim().equals(target.accountId, ignoreCase = true)
-            } ?: target.entries.firstOrNull { namespaceEntry ->
-                namespaceEntry.matchesAuthenticationTarget(
-                    accountId = notificationAccountId,
-                    mobileDeviceId = mobileDeviceId,
-                    requestingDeviceId = requestingDeviceId,
-                    namespaceId = namespaceId,
-                    namespaceUrl = namespaceUrl,
-                    registrationState = registrationState,
-                )
-            }
+        return availableNamespaces.filter { namespaceEntry ->
+            namespaceEntry.matchesAuthenticationTarget(
+                accountId = notificationAccountId,
+                mobileDeviceId = mobileDeviceId,
+                requestingDeviceId = requestingDeviceId,
+                namespaceId = namespaceId,
+                namespaceUrl = namespaceUrl,
+                registrationState = registrationState,
+            )
+        }.distinctBy { namespaceEntry ->
+            namespaceEntry.storageIdentity()
         }
     }
 

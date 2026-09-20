@@ -4,6 +4,7 @@ import com.google.gson.Gson
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
 import com.zerointrusion.data.security.SignatureService
+import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
 import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.domain.authentication.AuthenticationRepository
 import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
@@ -15,6 +16,7 @@ class AuthenticationRepositoryImpl(
     signatureService: SignatureService,
     gson: Gson,
     connectedDevicesRepository: ConnectedDevicesRepository,
+    connectedDevicesLocalStore: ConnectedDevicesLocalStore,
 ) : AuthenticationRepository {
     private val authenticationResponseHandler = AuthenticationResponseHandler(
         registrationApi = registrationApi,
@@ -23,6 +25,7 @@ class AuthenticationRepositoryImpl(
         signatureService = signatureService,
         gson = gson,
         connectedDevicesRepository = connectedDevicesRepository,
+        connectedDevicesLocalStore = connectedDevicesLocalStore,
     )
     private val authenticationSessionHandler = AuthenticationSessionHandler(
         registrationApi = registrationApi,

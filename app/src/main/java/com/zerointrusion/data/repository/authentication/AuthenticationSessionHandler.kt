@@ -281,26 +281,39 @@ internal class AuthenticationSessionHandler(
 
     private fun newNonce(): String = UUID.randomUUID().toString().replace("-", "")
 
-    private fun AuthenticationSessionDto.toDomain(): ActiveDesktopSession = ActiveDesktopSession(
-        accountId = "",
-        attestationId = attestationId,
-        deviceId = deviceId.orEmpty(),
-        deviceName = deviceId.orEmpty(),
-        namespaceName = "",
-        namespaceUrl = "",
-        issuedAt = issuedAt,
-        expiresAt = expiresAt,
-    )
+    private fun AuthenticationSessionDto.toDomain(): ActiveDesktopSession {
+        val resolvedDeviceId = desktopDeviceId?.trim().orEmpty()
+        return ActiveDesktopSession(
+            accountId = "",
+            attestationId = attestationId,
+            deviceId = resolvedDeviceId,
+            deviceName = resolvedDeviceId,
+            namespaceName = "",
+            namespaceUrl = "",
+            issuedAt = issuedAt,
+            expiresAt = expiresAt,
+        )
+    }
 
     private fun AuthenticationSessionDto.toDomain(
         requestNamespace: NamespaceSessionRequest,
         availableNamespaces: List<com.zerointrusion.domain.namespaces.NamespaceEntry>,
     ): ActiveDesktopSession {
-        // Server may omit deviceId when the session's namespace only has a single desktop device.
-        val resolvedSessionDeviceId = deviceId.orEmpty().ifBlank {
-            availableNamespaces
-                .firstOrNull { it.namespaceId.trim() == requestNamespace.namespaceId.trim() }
-                ?.desktopDeviceId.orEmpty()
+        val namespaceDeviceEntries = availableNamespaces.filter {
+            it.namespaceId.trim().equals(requestNamespace.namespaceId.trim(), ignoreCase = true)
+        }
+        val deviceIdFromServer = desktopDeviceId?.trim().orEmpty()
+        // Falls back to the namespace entry whose stored attestationId matches this session (recorded
+        // locally when this phone last approved that device's login) before guessing, since that
+        // unambiguously identifies the real device when the server omits both id fields.
+        val attestationMatch = namespaceDeviceEntries.firstOrNull {
+            it.attestationId?.trim()?.equals(attestationId.trim(), ignoreCase = true) == true
+        }
+        val deviceIdAmbiguous = deviceIdFromServer.isEmpty() &&
+            attestationMatch == null &&
+            namespaceDeviceEntries.size != 1
+        val resolvedSessionDeviceId = deviceIdFromServer.ifEmpty {
+            attestationMatch?.desktopDeviceId ?: namespaceDeviceEntries.firstOrNull()?.desktopDeviceId.orEmpty()
         }
         val resolvedDeviceName = resolveSessionDeviceName(
             desktopDeviceId = resolvedSessionDeviceId,
@@ -309,7 +322,7 @@ internal class AuthenticationSessionHandler(
 
         Log.d(
             AUTHENTICATION_LOG_TAG,
-            "AUTH session device resolution. namespaceId=${requestNamespace.namespaceId} namespaceName=${requestNamespace.namespaceName} sessionDeviceId=$resolvedSessionDeviceId resolvedDeviceName=$resolvedDeviceName",
+            "AUTH session device resolution. namespaceId=${requestNamespace.namespaceId} namespaceName=${requestNamespace.namespaceName} sessionDeviceId=$resolvedSessionDeviceId resolvedDeviceName=$resolvedDeviceName deviceIdAmbiguous=$deviceIdAmbiguous attestationMatched=${attestationMatch != null}",
         )
 
         return ActiveDesktopSession(
@@ -321,6 +334,7 @@ internal class AuthenticationSessionHandler(
             namespaceUrl = requestNamespace.namespaceUrl,
             issuedAt = issuedAt,
             expiresAt = expiresAt,
+            deviceIdAmbiguous = deviceIdAmbiguous,
         )
     }
 

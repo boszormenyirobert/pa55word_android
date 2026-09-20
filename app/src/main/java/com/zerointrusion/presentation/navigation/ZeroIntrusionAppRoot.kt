@@ -191,7 +191,6 @@ fun ZeroIntrusionAppRoot(
                     connectedDeviceGroups = (appState.connectedDevicesState as? com.zerointrusion.presentation.app.ConnectedDevicesUiState.Success)
                         ?.groups
                         ?: EMPTY_CONNECTED_DEVICE_GROUPS,
-                    liveDesktopSessions = appState.liveDesktopSessions,
                     namespaceManagementErrorMessage = appState.namespaceManagementErrorMessage,
                     onDeleteNamespace = appViewModel::deleteNamespace,
                     onBack = { navController.popBackStack() },
@@ -259,6 +258,9 @@ fun ZeroIntrusionAppRoot(
                 )
             }
             composable(AppRoute.Namespaces.route) {
+                LaunchedEffect(Unit) {
+                    appViewModel.refreshAccountDetailsSnapshot()
+                }
                 NamespacesScreen(
                     namespaces = appState.namespaces,
                     gatewayAccountId = appState.registrationState?.accountId.orEmpty(),

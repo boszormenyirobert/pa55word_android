@@ -32,6 +32,12 @@ class EncryptedRegistrationStateStore @Inject constructor(
 ) : RegistrationStateStore {
     private val encryptedPreferences = openEncryptedPreferences()
 
+    init {
+        encryptedPreferences.edit()
+            .remove(LEGACY_NAMESPACES_STATE_KEY)
+            .apply()
+    }
+
     private val stateFlow = MutableStateFlow(readStateSafely())
 
     override fun observeState(): Flow<RegistrationState?> = stateFlow.asStateFlow()
@@ -116,6 +122,7 @@ class EncryptedRegistrationStateStore @Inject constructor(
             } == true
 
     private companion object {
+        const val LEGACY_NAMESPACES_STATE_KEY = "namespaces_state"
         const val SECURE_STORAGE_LOG_TAG = "ZeroIntrusionStorage"
     }
 }

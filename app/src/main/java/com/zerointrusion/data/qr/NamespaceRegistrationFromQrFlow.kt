@@ -3,7 +3,6 @@ package com.zerointrusion.data.qr
 import android.util.Base64
 import android.util.Log
 import com.google.gson.Gson
-import com.zerointrusion.core.AppConstants
 import com.zerointrusion.data.network.AccountRegistrationDekDto
 import com.zerointrusion.data.network.AccountRegistrationDeviceDto
 import com.zerointrusion.data.network.AccountErrorResponseDto
@@ -11,11 +10,15 @@ import com.zerointrusion.data.network.AccountRegistrationRequestDto
 import com.zerointrusion.data.network.AccountRegistrationResponseDto
 import com.zerointrusion.data.network.NamespaceDto
 import com.zerointrusion.data.network.RegistrationApi
+import com.zerointrusion.data.repository.common.buildRegistrationUrl
 import com.zerointrusion.data.repository.common.newRequestNonce
+import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
 import com.zerointrusion.data.security.KeyStoreService
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.qr.NamespaceQrPayload
+import com.zerointrusion.domain.qr.NamespaceSyncQrPayload
+import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
 import com.zerointrusion.domain.registration.RegistrationState
 import com.zerointrusion.domain.registration.RegistrationValidator
 import java.io.IOException
@@ -27,6 +30,8 @@ import java.net.UnknownServiceException
 internal class NamespaceRegistrationFromQrFlow(
     private val registrationApi: RegistrationApi,
     private val keyStoreService: KeyStoreService,
+    private val accountDetailsStateHolder: AccountDetailsStateHolder,
+    private val connectedDevicesRepository: ConnectedDevicesRepository,
     private val gson: Gson,
     private val validator: RegistrationValidator,
 ) {
@@ -125,7 +130,6 @@ internal class NamespaceRegistrationFromQrFlow(
             desktopDeviceId = payload.desktopDeviceId,
             deviceName = payload.deviceName,
             publicKey = payload.publicKey,
-            foreignAccountId = targetNamespaceAccountId,
         )
 
         return QrRegistrationPreparation(
@@ -137,8 +141,75 @@ internal class NamespaceRegistrationFromQrFlow(
         )
     }
 
-    private fun buildRegistrationUrl(baseUrl: String): String =
-        baseUrl.trim().trimEnd('/') + AppConstants.REGISTRATION_ENDPOINT_PATH
+    suspend fun prepareSync(
+        payload: NamespaceSyncQrPayload,
+    ): QrRegistrationPreparation {
+        validateNamespaceSyncPayload(payload)
+
+        val normalizedNamespaceUrl = payload.namespaceUrl.trim().trimEnd('/')
+            val matchingNamespace = resolveStoredNamespace(normalizedNamespaceUrl)
+            ?: throw RegistrationFailure.Validation(
+                "The scanned namespace_sync QR code does not match any locally stored namespace.",
+            )
+
+        if (matchingNamespace.accountId.isBlank()) {
+            throw RegistrationFailure.Validation(
+                "The locally stored namespace for the scanned namespace_sync QR code does not contain a valid accountId.",
+            )
+        }
+        if (matchingNamespace.namespaceName.isBlank()) {
+            throw RegistrationFailure.Validation(
+                "The locally stored namespace for the scanned namespace_sync QR code does not contain a valid namespaceName.",
+            )
+        }
+
+        return QrRegistrationPreparation(
+            namespaceEntry = matchingNamespace,
+            targetNamespaceAccountId = matchingNamespace.accountId,
+            scannedDesktopDeviceId = payload.desktopDeviceId,
+            scannedPublicKey = payload.publicKey,
+            scannedDeviceName = payload.deviceName,
+        )
+    }
+
+    private suspend fun resolveStoredNamespace(namespaceUrl: String): NamespaceEntry? {
+        val currentMatch = accountDetailsStateHolder.currentSnapshot()
+            ?.namespaces
+            .orEmpty()
+            .firstOrNull { namespaceEntry ->
+                namespaceEntry.namespaceUrl.trim().trimEnd('/').equals(namespaceUrl, ignoreCase = true)
+            }
+
+        if (currentMatch != null) {
+            return currentMatch
+        }
+
+        runCatching { connectedDevicesRepository.fetchConnectedDevices() }
+            .onFailure { exception ->
+                Log.w(
+                    QR_LOG_TAG,
+                    "namespace_sync namespace resolution refresh failed. namespaceUrl=$namespaceUrl",
+                    exception,
+                )
+            }
+
+        return accountDetailsStateHolder.currentSnapshot()
+            ?.namespaces
+            .orEmpty()
+            .firstOrNull { namespaceEntry ->
+                namespaceEntry.namespaceUrl.trim().trimEnd('/').equals(namespaceUrl, ignoreCase = true)
+            }
+    }
+
+    private fun validateNamespaceSyncPayload(payload: NamespaceSyncQrPayload) {
+        if (!validator.isValidNamespaceId(payload.namespaceId)) {
+            throw RegistrationFailure.Validation("The scanned QR payload namespaceId is invalid.")
+        }
+        val namespaceUrlError = validator.validateNamespaceUrl(payload.namespaceUrl)
+        if (namespaceUrlError != null) {
+            throw RegistrationFailure.Validation(namespaceUrlError)
+        }
+    }
 
     private fun serverFailure(
         errorBodyReader: java.io.Reader?,
