@@ -10,6 +10,8 @@ Unsigned requests:
 - `POST /api/v1/account`
 
 Signed requests:
+- `POST /api/v1/mobile-device`
+- `GET /api/v1/mobile-device/{mobileDeviceId}/registration?nonce={nonce}`
 - `POST /api/v1/fcm`
 - `GET /api/v1/root-device?nonce={nonce}`
 - `POST /api/v1/root-device`
@@ -18,6 +20,42 @@ Signed requests:
 - `GET /api/v1/authentication/{accountId}?deviceId={deviceId}&nonce={nonce}`
 - `DELETE /api/v1/authentication/{accountId}/{desktopDeviceId}/{attestationId}?nonce={nonce}`
 - `GET /api/v1/account/{accountId}/{mobileDeviceId}?nonce={nonce}`
+
+## POST /api/v1/mobile-device
+
+Used by the registered phone after scanning an `addition_mobile_device` QR code. The registered phone decrypts its stored DEK and re-encrypts it for the new phone public key.
+
+Signed by the registered phone private key using the complete request JSON. The signature is sent in `x-signature`.
+
+```json
+{
+  "accountId": "existing-account-id",
+  "signingMobileDeviceId": "known-mobile-id",
+  "device": {
+    "mobileDeviceId": "new-mobile-id",
+    "publicKey": "new-mobile-public-key",
+    "deviceName": "New phone"
+  },
+  "dek": {
+    "mobileDeviceId": "new-mobile-id",
+    "encDek": "encrypted-for-new-mobile"
+  },
+  "nonce": "unique-nonce"
+}
+```
+
+## GET /api/v1/mobile-device/{mobileDeviceId}/registration?nonce={nonce}
+
+SSE bootstrap stream opened by the new phone and signed with the new phone private key. The signature payload is:
+
+```json
+{
+  "mobileDeviceId": "new-mobile-id",
+  "nonce": "unique-nonce"
+}
+```
+
+The successful `data:` event supplies `accountId`, `mobileDeviceId`, `dek`, and `namespaces`. The app combines it with the original registration form and generated device data, then stores the normal encrypted registration state.
 
 ## POST /api/v1/account
 

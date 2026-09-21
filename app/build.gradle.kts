@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.google.gson)
     implementation(libs.google.hilt.android)
     implementation(libs.google.mlkit.barcode.scanning)
+    implementation(libs.zxing.core)
     implementation(libs.firebase.messaging)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.squareup.okhttp)

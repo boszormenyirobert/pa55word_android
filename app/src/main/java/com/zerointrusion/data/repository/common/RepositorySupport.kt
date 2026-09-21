@@ -67,6 +67,16 @@ internal fun buildAuthenticationSessionRevocationUrl(
 internal fun buildRootDeviceRegistrationUrl(baseUrl: String): String =
     baseUrl.trim().trimEnd('/') + AppConstants.ROOT_DEVICE_ENDPOINT_PATH
 
+internal fun buildMobileDeviceRegistrationUrl(baseUrl: String): String =
+    baseUrl.trim().trimEnd('/') + AppConstants.MOBILE_DEVICE_ENDPOINT_PATH
+
+internal fun buildMobileDeviceBootstrapUrl(
+    baseUrl: String,
+    mobileDeviceId: String,
+    nonce: String,
+): String = baseUrl.trim().trimEnd('/') + AppConstants.MOBILE_DEVICE_ENDPOINT_PATH + "/" +
+    mobileDeviceId.trim() + "/registration?nonce=" + nonce.trim()
+
 internal fun buildRootDeviceFetchUrl(
     baseUrl: String,
     nonce: String,
@@ -150,4 +160,18 @@ internal fun mapNetworkException(url: String, exception: Exception): Registratio
     is SocketTimeoutException -> RegistrationFailure.Network("The request to $url timed out before the backend responded.")
     is IOException -> RegistrationFailure.Network("No internet connection or the server is unreachable at $url.")
     else -> RegistrationFailure.Unexpected(exception.message ?: "Request failed unexpectedly.")
+}
+
+internal fun buildSignedMobileDeviceNonceJson(
+    gson: Gson,
+    mobileDeviceId: String,
+    nonce: String,
+): String = buildString {
+    append('{')
+    append("\"mobileDeviceId\":")
+    append(gson.toJson(mobileDeviceId))
+    append(',')
+    append("\"nonce\":")
+    append(gson.toJson(nonce))
+    append('}')
 }

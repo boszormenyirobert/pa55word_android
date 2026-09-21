@@ -26,6 +26,7 @@ data class LocalConnectedNamespace(
     val namespaceId: String,
     val namespace: String,
     val url: String,
+    val root: Boolean = false,
 )
 
 data class LocalConnectedDeviceEntry(
@@ -171,6 +172,7 @@ internal fun List<NamespaceEntry>.toLocalConnectedDeviceEntries(): List<LocalCon
                             namespaceId = normalizedNamespaceId,
                             namespace = normalizedNamespaceName,
                             url = normalizedUrl,
+                            root = namespaceEntry.root,
                         ),
                     ),
                 ),
@@ -198,6 +200,7 @@ internal fun List<LocalConnectedDeviceEntry>.toConnectedDeviceGroups(): List<Con
                     namespaceName = namespaceName,
                     namespaceUrl = namespaceUrl,
                     deviceId = representative.desktopDeviceId,
+                    root = namespace.root,
                 )
             }
         }
@@ -235,6 +238,7 @@ internal fun List<LocalConnectedDeviceEntry>.toNamespaceEntries(): List<Namespac
                 namespaceUrl = namespaceUrl,
                 accountId = accountId,
                 desktopDeviceId = desktopDeviceId,
+                root = namespace.root,
                 deviceName = null,
                 publicKey = null,
             )
@@ -280,6 +284,7 @@ private fun normalizeEntries(entries: List<LocalConnectedDeviceEntry>): List<Loc
                         namespaceId = normalizedNamespaceId,
                         namespace = normalizedNamespaceName,
                         url = normalizedNamespaceUrl,
+                        root = namespace.root,
                     )
                 }
             }
@@ -312,7 +317,9 @@ private fun normalizeEntries(entries: List<LocalConnectedDeviceEntry>): List<Loc
         val representative = groupedEntries.firstOrNull() ?: return@mapNotNull null
         val namespaces = groupedEntries
             .flatMap { it.namespaces }
-            .distinctBy { namespace -> namespace.namespaceId.lowercase() + "|" + namespace.url.lowercase() }
+            .groupBy { namespace -> namespace.namespaceId.lowercase() + "|" + namespace.url.lowercase() }
+            .values
+            .map { matchingNamespaces -> matchingNamespaces.last() }
             .sortedWith(compareBy({ it.url.lowercase() }, { it.namespaceId.lowercase() }))
 
         representative.copy(namespaces = namespaces)

@@ -278,7 +278,7 @@ fun PostLoginHomeScreen(
                     color = White,
                 )
                 is QrNamespaceRegistrationUiState.Success -> Text(
-                    text = "Namespace connected: ${qrNamespaceRegistrationState.namespaceName} (desktop: ${qrNamespaceRegistrationState.desktopDeviceId})",
+                    text = qrNamespaceRegistrationState.message,
                     color = com.zerointrusion.ui.theme.Green,
                 )
                 is QrNamespaceRegistrationUiState.Error -> Text(

@@ -1,8 +1,12 @@
 package com.zerointrusion.presentation.qrread
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.util.Log
 import android.util.Size
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -15,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,12 +33,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -43,6 +51,7 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import com.zerointrusion.presentation.app.QrNamespaceRegistrationUiState
+import com.zerointrusion.presentation.common.QrCodeImage
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ErrorTextLight
 import com.zerointrusion.ui.theme.Green
@@ -60,10 +69,24 @@ fun QrReadScreen(
     onBack: () -> Unit,
     onPayloadScanned: (String) -> Unit,
 ) {
+    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     val scanHandled = remember { AtomicBoolean(false) }
     var scannerError by remember { mutableStateOf<String?>(null) }
+    var cameraPermissionGranted by rememberSaveable {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    var cameraPermissionRequested by rememberSaveable { mutableStateOf(false) }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        cameraPermissionGranted = granted
+        cameraPermissionRequested = true
+        scannerError = if (granted) null else "Camera permission is required to scan the QR code."
+    }
     val barcodeScanner = remember {
         BarcodeScanning.getClient(
             BarcodeScannerOptions.Builder()
@@ -76,6 +99,15 @@ fun QrReadScreen(
         onDispose {
             barcodeScanner.close()
             cameraExecutor.shutdown()
+        }
+    }
+
+    val followUpQrPayload = (qrNamespaceRegistrationState as? QrNamespaceRegistrationUiState.Success)
+        ?.followUpQrPayload
+    LaunchedEffect(followUpQrPayload, cameraPermissionGranted) {
+        if (followUpQrPayload == null && !cameraPermissionGranted && !cameraPermissionRequested) {
+            cameraPermissionRequested = true
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
@@ -111,30 +143,60 @@ fun QrReadScreen(
                     color = White,
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(420.dp),
-                ) {
-                    AndroidView(
-                        factory = { viewContext ->
-                            PreviewView(viewContext).apply {
-                                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-                                scaleType = PreviewView.ScaleType.FILL_CENTER
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                        update = { previewView ->
-                            previewView.bindQrCamera(
-                                lifecycleOwner = lifecycleOwner,
-                                cameraExecutor = cameraExecutor,
-                                barcodeScanner = barcodeScanner,
-                                scanHandled = scanHandled,
-                                onPayloadScanned = onPayloadScanned,
-                                onScannerError = { scannerError = it },
-                            )
-                        },
+                if (followUpQrPayload != null) {
+                    Text(
+                        text = "Scan this code with the new mobile to connect its additional namespace servers.",
+                        color = White,
+                        style = MaterialTheme.typography.bodyMedium,
                     )
+                    QrCodeImage(
+                        payload = followUpQrPayload,
+                        contentDescription = "Additional mobile namespaces QR code",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(1f),
+                    )
+                } else if (cameraPermissionGranted) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(420.dp),
+                    ) {
+                        AndroidView(
+                            factory = { viewContext ->
+                                PreviewView(viewContext).apply {
+                                    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                                    scaleType = PreviewView.ScaleType.FILL_CENTER
+                                }
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                            update = { previewView ->
+                                previewView.bindQrCamera(
+                                    lifecycleOwner = lifecycleOwner,
+                                    cameraExecutor = cameraExecutor,
+                                    barcodeScanner = barcodeScanner,
+                                    scanHandled = scanHandled,
+                                    onPayloadScanned = onPayloadScanned,
+                                    onScannerError = { scannerError = it },
+                                )
+                            },
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "Camera access is required to scan the namespace QR code.",
+                        color = White,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Button(
+                        onClick = {
+                            cameraPermissionRequested = true
+                            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Allow camera access")
+                    }
                 }
                 if (!scannerError.isNullOrBlank()) {
                     Text(
@@ -153,7 +215,7 @@ fun QrReadScreen(
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     is QrNamespaceRegistrationUiState.Success -> Text(
-                        text = "Namespace connected: ${qrNamespaceRegistrationState.namespaceName} (desktop: ${qrNamespaceRegistrationState.desktopDeviceId})",
+                        text = qrNamespaceRegistrationState.message,
                         color = Green,
                         style = MaterialTheme.typography.bodyMedium,
                     )

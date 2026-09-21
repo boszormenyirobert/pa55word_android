@@ -122,7 +122,10 @@ fun ZeroIntrusionAppRoot(
                         onPhoneChanged = registrationViewModel::onPhoneChanged,
                         onNamespaceNameChanged = registrationViewModel::onNamespaceNameChanged,
                         onApiUrlChanged = registrationViewModel::onApiUrlChanged,
+                        onAdditionalApiUrlChanged = registrationViewModel::onAdditionalApiUrlChanged,
+                        onThirdApiUrlChanged = registrationViewModel::onThirdApiUrlChanged,
                         onRegister = registrationViewModel::register,
+                        onRegisterNewMobile = registrationViewModel::registerNewMobileToExistingAccount,
                     )
                 }
             }

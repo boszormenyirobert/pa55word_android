@@ -152,7 +152,7 @@ fun QrNamespaceDeviceSelectionScreen(
                     )
 
                     is QrNamespaceRegistrationUiState.Success -> Text(
-                        text = "Namespace connected: ${qrNamespaceRegistrationState.namespaceName} (desktop: ${qrNamespaceRegistrationState.desktopDeviceId})",
+                        text = qrNamespaceRegistrationState.message,
                         color = Green,
                         style = MaterialTheme.typography.bodyMedium,
                     )

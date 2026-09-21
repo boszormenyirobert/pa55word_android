@@ -7,13 +7,16 @@ import com.zerointrusion.data.security.DekService
 import com.zerointrusion.data.security.DeviceService
 import com.zerointrusion.data.security.KeyStoreService
 import com.zerointrusion.data.security.NamespaceService
+import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.domain.registration.RegistrationRepository
+import com.zerointrusion.domain.registration.MobileDeviceRegistrationPreparation
 import com.zerointrusion.domain.registration.RegistrationFormInput
 import com.zerointrusion.domain.registration.RegistrationResult
 import com.zerointrusion.domain.registration.RegistrationState
 import com.zerointrusion.domain.registration.RegistrationValidator
 import kotlinx.coroutines.flow.Flow
+import okhttp3.OkHttpClient
 
 class RegistrationRepositoryImpl(
     registrationApi: RegistrationApi,
@@ -22,9 +25,11 @@ class RegistrationRepositoryImpl(
     deviceService: DeviceService,
     namespaceService: NamespaceService,
     dekService: DekService,
+    signatureService: SignatureService,
     private val stateStore: RegistrationStateStore,
     validator: RegistrationValidator,
     gson: Gson,
+    okHttpClient: OkHttpClient,
 ) : RegistrationRepository {
     private val fcmTokenSynchronizer = FcmTokenSynchronizer(
         firebaseService = firebaseService,
@@ -41,11 +46,28 @@ class RegistrationRepositoryImpl(
         gson = gson,
         fcmTokenSynchronizer = fcmTokenSynchronizer,
     )
+    private val mobileDeviceBootstrapHandler = MobileDeviceBootstrapHandler(
+        okHttpClient = okHttpClient,
+        keyStoreService = keyStoreService,
+        deviceService = deviceService,
+        namespaceService = namespaceService,
+        signatureService = signatureService,
+        stateStore = stateStore,
+        validator = validator,
+        gson = gson,
+        fcmTokenSynchronizer = fcmTokenSynchronizer,
+    )
 
     override fun observeRegistrationState(): Flow<RegistrationState?> = stateStore.observeState()
 
     override suspend fun register(input: RegistrationFormInput): RegistrationResult =
         accountRegistrationHandler.register(input)
+
+    override suspend fun prepareMobileDeviceRegistration(input: RegistrationFormInput): MobileDeviceRegistrationPreparation =
+        mobileDeviceBootstrapHandler.prepare(input)
+
+    override suspend fun awaitMobileDeviceRegistration(preparation: MobileDeviceRegistrationPreparation): RegistrationResult =
+        mobileDeviceBootstrapHandler.await(preparation)
 
     override suspend fun syncFcmToken(state: RegistrationState): RegistrationState =
         fcmTokenSynchronizer.sync(state)

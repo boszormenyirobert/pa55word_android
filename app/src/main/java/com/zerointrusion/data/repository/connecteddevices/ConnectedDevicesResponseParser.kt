@@ -221,6 +221,7 @@ internal class ConnectedDevicesResponseParser(
             namespaceName = namespaceName,
             namespaceUrl = namespaceUrl,
             deviceId = deviceId,
+            root = namespaceDto.root == true,
         )
     }.distinctBy { it.namespaceId.lowercase() + "|" + it.namespaceUrl.lowercase() }
         .sortedBy { it.namespaceName.lowercase() }
@@ -248,6 +249,7 @@ internal class ConnectedDevicesResponseParser(
             namespaceUrl = namespaceUrl,
             accountId = accountId,
             desktopDeviceId = deviceId,
+            root = namespaceDto.root == true,
             deviceName = deviceName,
             publicKey = publicKey,
         )

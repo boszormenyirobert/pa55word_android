@@ -23,8 +23,8 @@ sealed class QrNamespaceRegistrationUiState {
     ) : QrNamespaceRegistrationUiState()
     data object InProgress : QrNamespaceRegistrationUiState()
     data class Success(
-        val namespaceName: String,
-        val desktopDeviceId: String,
+        val message: String,
+        val followUpQrPayload: String? = null,
     ) : QrNamespaceRegistrationUiState()
     data class Error(val message: String) : QrNamespaceRegistrationUiState()
 }
@@ -85,6 +85,7 @@ data class AppUiState(
         get() = when {
             !isInitialized -> AppRoute.Loading.route
             !isAuthenticated -> AppRoute.Security.route
+            isRegistered && registrationState?.pendingAdditionalNamespacesScan == true -> AppRoute.QrRead.route
             isRegistered -> AppRoute.Home.route
             else -> AppRoute.Registration.route
         }

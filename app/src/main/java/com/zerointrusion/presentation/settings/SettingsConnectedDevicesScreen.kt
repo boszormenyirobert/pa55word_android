@@ -251,10 +251,12 @@ private fun ConnectedDevicesSettingsContent(
                             group.namespaces.forEachIndexed { index, namespace ->
                                 NamespaceConnectionCard(
                                     namespace = namespace,
-                                    isGateway = namespace.accountId == deviceInformation.accountId &&
-                                        namespace.namespaceId == deviceInformation.namespaceId &&
-                                        namespace.namespaceName == deviceInformation.namespaceName &&
-                                        namespace.namespaceUrl == deviceInformation.namespaceUrl,
+                                    isGateway = namespace.root || (
+                                        namespace.accountId == deviceInformation.accountId &&
+                                            namespace.namespaceId == deviceInformation.namespaceId &&
+                                            namespace.namespaceName == deviceInformation.namespaceName &&
+                                            namespace.namespaceUrl == deviceInformation.namespaceUrl
+                                        ),
                                     showDeleteConfirmation = namespacePendingDelete == namespace,
                                     onDeleteClick = { onDeleteClick(namespace) },
                                     onConfirmDelete = { onConfirmDelete(namespace) },

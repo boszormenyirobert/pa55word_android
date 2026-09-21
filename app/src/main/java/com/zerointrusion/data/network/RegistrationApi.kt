@@ -10,6 +10,7 @@ import retrofit2.http.HTTP
 import retrofit2.http.POST
 import retrofit2.http.Url
 import okhttp3.ResponseBody
+import okhttp3.RequestBody
 
 data class NamespaceDto(
     val namespaceId: String,
@@ -46,6 +47,25 @@ data class NewDeviceRegistrationDeviceDto(
 
 data class NewDeviceRegistrationDekDto(
     val desktopDeviceId: String,
+    val encDek: String,
+)
+
+data class MobileDeviceAdditionRequestDto(
+    val accountId: String,
+    val signingMobileDeviceId: String,
+    val device: MobileDeviceAdditionDeviceDto,
+    val dek: MobileDeviceAdditionDekDto,
+    val nonce: String,
+)
+
+data class MobileDeviceAdditionDeviceDto(
+    val mobileDeviceId: String,
+    val publicKey: String,
+    val deviceName: String,
+)
+
+data class MobileDeviceAdditionDekDto(
+    val mobileDeviceId: String,
     val encDek: String,
 )
 
@@ -175,6 +195,13 @@ interface RegistrationApi {
         @Url url: String,
         @Header("x-signature") signature: String,
         @Body request: NewDeviceRegistrationDto,
+    ): Response<Unit>
+
+    @POST
+    suspend fun registerMobileDevice(
+        @Url url: String,
+        @Header("x-signature") signature: String,
+        @Body request: RequestBody,
     ): Response<Unit>
 
     @POST

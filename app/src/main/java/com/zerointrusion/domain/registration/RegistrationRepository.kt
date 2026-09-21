@@ -7,5 +7,9 @@ interface RegistrationRepository {
 
     suspend fun register(input: RegistrationFormInput): RegistrationResult
 
+    suspend fun prepareMobileDeviceRegistration(input: RegistrationFormInput): MobileDeviceRegistrationPreparation
+
+    suspend fun awaitMobileDeviceRegistration(preparation: MobileDeviceRegistrationPreparation): RegistrationResult
+
     suspend fun syncFcmToken(state: RegistrationState): RegistrationState
 }

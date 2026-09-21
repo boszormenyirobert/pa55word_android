@@ -3,6 +3,9 @@ package com.zerointrusion.data.qr
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
 import com.zerointrusion.domain.common.RegistrationFailure
+import com.zerointrusion.domain.qr.AdditionMobileDeviceQrPayload
+import com.zerointrusion.domain.qr.AdditionalMobileNamespace
+import com.zerointrusion.domain.qr.AdditionalMobileNamespacesQrPayload
 import com.zerointrusion.domain.qr.DeviceRegistrationQrPayload
 import com.zerointrusion.domain.qr.NamespaceQrPayload
 import com.zerointrusion.domain.qr.NamespaceSyncQrPayload
@@ -17,6 +20,8 @@ internal class QrPayloadParser(
         const val DEVICE_REGISTRATION_TYPE = "deviceRegistration"
         const val NAMESPACE_TYPE = "namespace"
         const val NAMESPACE_SYNC_TYPE = "namespace_sync"
+        const val ADDITION_MOBILE_DEVICE_TYPE = "addition_mobile_device"
+        const val ADDITIONAL_MOBILE_NAMESPACES_TYPE = "additional_mobile_namespaces"
 
         val DEVICE_ID_REGEX = Regex("^[A-Za-z0-9]{10}$")
     }
@@ -29,20 +34,33 @@ internal class QrPayloadParser(
         val namespaceId: String?,
         val namespaceName: String?,
         val namespaceUrl: String?,
+        val namespaceUrls: List<String>?,
+        val mobileDeviceId: String?,
+        val namespaces: List<RawAdditionalMobileNamespace>?,
+    )
+
+    private data class RawAdditionalMobileNamespace(
+        val accountId: String?,
+        val desktopDeviceId: String?,
+        val namespaceId: String?,
+        val namespace: String?,
+        val url: String?,
+        val root: Boolean?,
     )
 
     fun parse(qrPayload: String): ScannedQrPayload {
+        if (qrPayload.trim().startsWith("[")) {
+            return parseAdditionalMobileNamespaces(qrPayload)
+        }
         val payload = parseRawPayload(qrPayload)
         val type = payload.type?.trim().orEmpty()
-        val desktopDeviceId = payload.desktopDeviceId?.trim().orEmpty()
-        val publicKey = payload.publicKey?.trim().orEmpty()
-
-        validateDesktopDeviceId(desktopDeviceId)
-        validatePublicKey(publicKey)
-
         return when (type) {
             DEVICE_REGISTRATION_TYPE -> {
+                val desktopDeviceId = payload.desktopDeviceId?.trim().orEmpty()
+                val publicKey = payload.publicKey?.trim().orEmpty()
                 val deviceName = payload.deviceName?.trim().orEmpty()
+                validateDesktopDeviceId(desktopDeviceId)
+                validatePublicKey(publicKey)
                 validateDeviceName(deviceName)
 
                 DeviceRegistrationQrPayload(
@@ -53,10 +71,14 @@ internal class QrPayloadParser(
             }
 
             NAMESPACE_TYPE -> {
+                val desktopDeviceId = payload.desktopDeviceId?.trim().orEmpty()
+                val publicKey = payload.publicKey?.trim().orEmpty()
                 val deviceName = payload.deviceName?.trim().orEmpty()
                 val namespaceId = payload.namespaceId?.trim().orEmpty()
                 val namespaceName = payload.namespaceName?.trim().orEmpty()
                 val namespaceUrl = payload.namespaceUrl?.trim().orEmpty()
+                validateDesktopDeviceId(desktopDeviceId)
+                validatePublicKey(publicKey)
                 validateDeviceName(deviceName)
                 if (namespaceId.isEmpty()) {
                     throw RegistrationFailure.Validation("The scanned QR payload does not contain a namespaceId.")
@@ -82,9 +104,13 @@ internal class QrPayloadParser(
             }
 
             NAMESPACE_SYNC_TYPE -> {
+                val desktopDeviceId = payload.desktopDeviceId?.trim().orEmpty()
+                val publicKey = payload.publicKey?.trim().orEmpty()
                 val deviceName = payload.deviceName?.trim().orEmpty()
                 val namespaceId = payload.namespaceId?.trim().orEmpty()
                 val namespaceUrl = payload.namespaceUrl?.trim().orEmpty()
+                validateDesktopDeviceId(desktopDeviceId)
+                validatePublicKey(publicKey)
                 validateDeviceName(deviceName)
                 validateNamespaceId(namespaceId)
                 validateNamespaceUrl(namespaceUrl)
@@ -98,10 +124,68 @@ internal class QrPayloadParser(
                 )
             }
 
+            ADDITION_MOBILE_DEVICE_TYPE -> {
+                val publicKey = payload.publicKey?.trim().orEmpty()
+                val deviceName = payload.deviceName?.trim().orEmpty()
+                val mobileDeviceId = payload.mobileDeviceId?.trim().orEmpty()
+                val namespaceUrls = payload.namespaceUrls.orEmpty()
+                    .map { it.trim().trimEnd('/') }
+                    .filter { it.isNotEmpty() }
+                    .ifEmpty {
+                        listOfNotNull(payload.namespaceUrl?.trim()?.trimEnd('/')?.takeIf { it.isNotEmpty() })
+                    }
+                validateDeviceName(deviceName)
+                validatePublicKey(publicKey)
+                validateMobileDeviceId(mobileDeviceId)
+                if (namespaceUrls.isEmpty() || namespaceUrls.size > 3) {
+                    throw RegistrationFailure.Validation("The scanned QR payload must contain between 1 and 3 namespace URLs.")
+                }
+                namespaceUrls.forEach(::validateNamespaceUrl)
+
+                AdditionMobileDeviceQrPayload(
+                    publicKey = publicKey,
+                    deviceName = deviceName,
+                    mobileDeviceId = mobileDeviceId,
+                    namespaceUrls = namespaceUrls,
+                )
+            }
+
+            ADDITIONAL_MOBILE_NAMESPACES_TYPE -> {
+                parseAdditionalMobileNamespaces(gson.toJson(payload.namespaces.orEmpty()))
+            }
+
             else -> throw RegistrationFailure.Validation(
-                "The scanned QR payload type must be deviceRegistration, namespace, or namespace_sync.",
+                "The scanned QR payload type is not supported.",
             )
         }
+    }
+
+    private fun parseAdditionalMobileNamespaces(qrPayload: String): AdditionalMobileNamespacesQrPayload {
+        val listType = object : com.google.gson.reflect.TypeToken<List<RawAdditionalMobileNamespace>>() {}.type
+        val rawNamespaces = try {
+            gson.fromJson<List<RawAdditionalMobileNamespace>>(qrPayload.trim(), listType)
+        } catch (_: JsonSyntaxException) {
+            throw RegistrationFailure.Validation("The scanned additional namespaces QR code is not valid JSON.")
+        }.orEmpty()
+        val namespaces = rawNamespaces.map { namespace ->
+            val accountId = namespace.accountId?.trim().orEmpty()
+            val desktopDeviceId = namespace.desktopDeviceId?.trim().orEmpty()
+            val namespaceId = namespace.namespaceId?.trim().orEmpty()
+            val namespaceName = namespace.namespace?.trim().orEmpty()
+            val namespaceUrl = namespace.url?.trim()?.trimEnd('/').orEmpty()
+            val root = namespace.root ?: false
+            if (accountId.isEmpty()) {
+                throw RegistrationFailure.Validation("The scanned QR payload contains a namespace without accountId.")
+            }
+            validateDesktopDeviceId(desktopDeviceId)
+            validateNamespaceId(namespaceId)
+            if (namespaceName.isEmpty()) {
+                throw RegistrationFailure.Validation("The scanned QR payload contains a namespace without namespace.")
+            }
+            validateNamespaceUrl(namespaceUrl)
+            AdditionalMobileNamespace(accountId, desktopDeviceId, namespaceId, namespaceName, namespaceUrl, root)
+        }
+        return AdditionalMobileNamespacesQrPayload(namespaces)
     }
 
     private fun parseRawPayload(qrPayload: String): RawQrRegistrationPayload {
@@ -125,6 +209,12 @@ internal class QrPayloadParser(
         }
         if (!DEVICE_ID_REGEX.matches(desktopDeviceId)) {
             throw RegistrationFailure.Validation("The scanned QR payload desktopDeviceId must be exactly 10 alphanumeric characters.")
+        }
+    }
+
+    private fun validateMobileDeviceId(mobileDeviceId: String) {
+        if (!DEVICE_ID_REGEX.matches(mobileDeviceId)) {
+            throw RegistrationFailure.Validation("The scanned QR payload mobileDeviceId must be exactly 10 alphanumeric characters.")
         }
     }
 

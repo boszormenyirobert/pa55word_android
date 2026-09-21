@@ -8,6 +8,8 @@ Source of truth:
 | Method | Endpoint | Signed | Nonce | Location | Notes |
 | --- | --- | --- | --- | --- | --- |
 | POST | `/api/v1/account` | No | Yes | Payload | Registration request includes `nonce` in the request body, but does not send an `x-signature` header. |
+| POST | `/api/v1/mobile-device` | Yes | Yes | Payload | Signed by the already registered mobile using the complete request JSON. |
+| GET | `/api/v1/mobile-device/{mobileDeviceId}/registration` | Yes | Yes | Query | SSE bootstrap signed by the new mobile using `{mobileDeviceId, nonce}`. |
 | POST | `/api/v1/namespace` | Yes | Yes | Payload | Namespace link request includes `nonce` in the request body and uses it in the signed payload. |
 | POST | `/api/v1/fcm` | Yes | Yes | Payload | `nonce` is present in the request body. |
 | GET | `/api/v1/root-device` | Yes | Yes | Query | `nonce` is sent as `?nonce={nonce}` and is also part of the signed payload. |
@@ -19,6 +21,6 @@ Source of truth:
 | GET | `/api/v1/account/{accountId}/{deviceId}` | Yes | Yes | Query | `nonce` is sent as `?nonce={nonce}`. |
 
 Summary:
-- Nonce in payload: 6 endpoints.
-- Nonce in query: 4 endpoints.
+- Nonce in payload: 7 endpoints.
+- Nonce in query: 5 endpoints.
 - No nonce: 0 endpoints.

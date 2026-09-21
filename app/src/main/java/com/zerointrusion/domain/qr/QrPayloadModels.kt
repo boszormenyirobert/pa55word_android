@@ -1,19 +1,17 @@
 package com.zerointrusion.domain.qr
 
 sealed interface ScannedQrPayload {
-    val desktopDeviceId: String
-    val publicKey: String
 }
 
 data class DeviceRegistrationQrPayload(
-    override val desktopDeviceId: String,
-    override val publicKey: String,
+    val desktopDeviceId: String,
+    val publicKey: String,
     val deviceName: String,
 ) : ScannedQrPayload
 
 data class NamespaceQrPayload(
-    override val desktopDeviceId: String,
-    override val publicKey: String,
+    val desktopDeviceId: String,
+    val publicKey: String,
     val deviceName: String,
     val namespaceId: String,
     val namespaceName: String,
@@ -21,9 +19,29 @@ data class NamespaceQrPayload(
 ) : ScannedQrPayload
 
 data class NamespaceSyncQrPayload(
-    override val desktopDeviceId: String,
-    override val publicKey: String,
+    val desktopDeviceId: String,
+    val publicKey: String,
     val deviceName: String,
     val namespaceId: String,
     val namespaceUrl: String,
+) : ScannedQrPayload
+
+data class AdditionMobileDeviceQrPayload(
+    val publicKey: String,
+    val deviceName: String,
+    val mobileDeviceId: String,
+    val namespaceUrls: List<String>,
+) : ScannedQrPayload
+
+data class AdditionalMobileNamespace(
+    val accountId: String,
+    val desktopDeviceId: String,
+    val namespaceId: String,
+    val namespace: String,
+    val url: String,
+    val root: Boolean,
+)
+
+data class AdditionalMobileNamespacesQrPayload(
+    val namespaces: List<AdditionalMobileNamespace>,
 ) : ScannedQrPayload

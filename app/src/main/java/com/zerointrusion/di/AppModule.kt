@@ -202,9 +202,11 @@ object AppModule {
         deviceService: DeviceService,
         namespaceService: NamespaceService,
         dekService: DekService,
+        signatureService: SignatureService,
         registrationStateStore: RegistrationStateStore,
         validator: RegistrationValidator,
         gson: Gson,
+        okHttpClient: OkHttpClient,
     ): RegistrationRepository = RegistrationRepositoryImpl(
         registrationApi = registrationApi,
         firebaseService = firebaseService,
@@ -212,9 +214,11 @@ object AppModule {
         deviceService = deviceService,
         namespaceService = namespaceService,
         dekService = dekService,
+        signatureService = signatureService,
         stateStore = registrationStateStore,
         validator = validator,
         gson = gson,
+        okHttpClient = okHttpClient,
     )
 
     @Provides

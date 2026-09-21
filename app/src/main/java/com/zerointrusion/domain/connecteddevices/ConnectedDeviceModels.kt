@@ -7,6 +7,7 @@ data class ConnectedDeviceNamespace(
     val namespaceName: String,
     val namespaceUrl: String,
     val deviceId: String,
+    val root: Boolean = false,
 )
 
 data class ConnectedDeviceGroup(

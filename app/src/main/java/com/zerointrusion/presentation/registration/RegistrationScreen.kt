@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -16,6 +17,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -28,6 +30,7 @@ import com.zerointrusion.presentation.common.ChecklistLine
 import com.zerointrusion.presentation.common.HeroPanel
 import com.zerointrusion.presentation.common.PillLabel
 import com.zerointrusion.presentation.common.PrimaryActionButton
+import com.zerointrusion.presentation.common.QrCodeImage
 import com.zerointrusion.presentation.common.RegistrationTextField
 import com.zerointrusion.presentation.common.StatusBanner
 
@@ -38,7 +41,10 @@ fun RegistrationScreen(
     onPhoneChanged: (String) -> Unit,
     onNamespaceNameChanged: (String) -> Unit,
     onApiUrlChanged: (String) -> Unit,
+    onAdditionalApiUrlChanged: (String) -> Unit,
+    onThirdApiUrlChanged: (String) -> Unit,
     onRegister: () -> Unit,
+    onRegisterNewMobile: () -> Unit,
 ) {
     AppBackground {
         Column(
@@ -112,6 +118,24 @@ fun RegistrationScreen(
                         keyboardType = KeyboardType.Uri,
                         imeAction = ImeAction.Done,
                     )
+                    RegistrationTextField(
+                        value = state.additionalApiUrl,
+                        onValueChange = onAdditionalApiUrlChanged,
+                        label = "Additional API URL (optional)",
+                        supporting = state.additionalApiUrlError ?: "Second existing-account server URL.",
+                        isError = state.additionalApiUrlError != null,
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Next,
+                    )
+                    RegistrationTextField(
+                        value = state.thirdApiUrl,
+                        onValueChange = onThirdApiUrlChanged,
+                        label = "Third API URL (optional)",
+                        supporting = state.thirdApiUrlError ?: "Third existing-account server URL.",
+                        isError = state.thirdApiUrlError != null,
+                        keyboardType = KeyboardType.Uri,
+                        imeAction = ImeAction.Done,
+                    )
                     if (!state.errorMessage.isNullOrBlank()) {
                         StatusBanner(
                             title = "Registration failed",
@@ -130,6 +154,32 @@ fun RegistrationScreen(
                             modifier = Modifier.weight(1f),
                         )
                     }
+                    OutlinedButton(
+                        onClick = onRegisterNewMobile,
+                        enabled = !state.isAwaitingMobileRegistration,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Text("New mobile to existing account")
+                    }
+                    state.mobileRegistrationQrPayload?.let { payload ->
+                        Text(
+                            text = "Scan this code with a mobile device already connected to the account.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        QrCodeImage(
+                            payload = payload,
+                            contentDescription = "New mobile registration QR code",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1f),
+                        )
+                        Text(
+                            text = "Waiting for approval...",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
                 }
             }
 
@@ -145,7 +195,7 @@ fun RegistrationScreen(
                         text = "What happens next",
                         style = MaterialTheme.typography.titleLarge,
                     )
-                    ChecklistLine("A 4096-bit RSA keypair is kept inside Android Keystore.")
+                    ChecklistLine("An RSA keypair is kept inside Android Keystore.")
                     ChecklistLine("A Base64 X.509 public key and RSA-OAEP encrypted DEK are generated locally.")
                     ChecklistLine("The returned account ID is stored securely after success.")
                     ChecklistLine("Sensitive crypto values are never rendered or logged in the UI.")

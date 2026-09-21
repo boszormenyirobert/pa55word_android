@@ -10,6 +10,7 @@ object AppConstants {
     const val NAMESPACE_ENDPOINT_PATH = "/api/v1/namespace"
     const val NAMESPACE_LINK_ENDPOINT_PATH = NAMESPACE_ENDPOINT_PATH + "/link"
     const val ROOT_DEVICE_ENDPOINT_PATH = "/api/v1/root-device"
+    const val MOBILE_DEVICE_ENDPOINT_PATH = "/api/v1/mobile-device"
     const val FCM_ENDPOINT_PATH = "/api/v1/fcm"
     const val AUTHENTICATION_ENDPOINT_PATH = "/api/v1/authentication"
     const val AUTHENTICATION_RESPONSE_ENDPOINT_PATH = AUTHENTICATION_ENDPOINT_PATH + "/response"

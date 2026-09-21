@@ -9,6 +9,8 @@ import com.zerointrusion.data.network.NewDeviceRegistrationDekDto
 import com.zerointrusion.data.network.NewDeviceRegistrationDeviceDto
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.qr.DeviceRegistrationFromQrFlow
+import com.zerointrusion.data.qr.AdditionalMobileNamespacesFromQrFlow
+import com.zerointrusion.data.qr.MobileDeviceAdditionFromQrFlow
 import com.zerointrusion.data.qr.NamespaceRegistrationFromQrFlow
 import com.zerointrusion.data.qr.QrPayloadParser
 import com.zerointrusion.data.repository.common.QR_LOG_TAG
@@ -26,6 +28,8 @@ import com.zerointrusion.data.storage.LocalConnectedNamespace
 import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.qr.DeviceRegistrationQrPayload
+import com.zerointrusion.domain.qr.AdditionMobileDeviceQrPayload
+import com.zerointrusion.domain.qr.AdditionalMobileNamespacesQrPayload
 import com.zerointrusion.domain.qr.NamespaceQrPayload
 import com.zerointrusion.domain.qr.NamespaceSyncQrPayload
 import com.zerointrusion.domain.qr.QrNamespaceRegistrationResult
@@ -46,6 +50,8 @@ internal class QrNamespaceRegistrationHandler(
     private val qrPayloadParser: QrPayloadParser,
     private val deviceRegistrationFromQrFlow: DeviceRegistrationFromQrFlow,
     private val namespaceRegistrationFromQrFlow: NamespaceRegistrationFromQrFlow,
+    private val mobileDeviceAdditionFromQrFlow: MobileDeviceAdditionFromQrFlow,
+    private val additionalMobileNamespacesFromQrFlow: AdditionalMobileNamespacesFromQrFlow,
 ) {
     suspend fun registerNamespaceFromQr(
         qrPayload: String,
@@ -64,10 +70,25 @@ internal class QrNamespaceRegistrationHandler(
             ?: throw RegistrationFailure.Validation("The stored registration state does not contain an encrypted DEK.")
 
         val qrData = qrPayloadParser.parse(qrPayload)
+        if (qrData is AdditionMobileDeviceQrPayload) {
+            return@withContext mobileDeviceAdditionFromQrFlow.register(
+                registrationState = registrationState,
+                payload = qrData,
+                storedEncDek = storedEncDek,
+            )
+        }
+        if (qrData is AdditionalMobileNamespacesQrPayload) {
+            return@withContext additionalMobileNamespacesFromQrFlow.register(
+                registrationState = registrationState,
+                payload = qrData,
+            )
+        }
         val qrType = when (qrData) {
             is DeviceRegistrationQrPayload -> "deviceRegistration"
             is NamespaceQrPayload -> "namespace"
             is NamespaceSyncQrPayload -> "namespace_sync"
+            is AdditionMobileDeviceQrPayload -> error("Handled above")
+            is AdditionalMobileNamespacesQrPayload -> error("Handled above")
         }
         val preparation = when (qrData) {
             is DeviceRegistrationQrPayload -> {
@@ -85,6 +106,8 @@ internal class QrNamespaceRegistrationHandler(
             )
 
             is NamespaceSyncQrPayload -> namespaceRegistrationFromQrFlow.prepareSync(qrData)
+            is AdditionMobileDeviceQrPayload -> error("Handled above")
+            is AdditionalMobileNamespacesQrPayload -> error("Handled above")
         }
 
         val rawDek = decryptRootDeviceDek(
@@ -172,8 +195,7 @@ internal class QrNamespaceRegistrationHandler(
         }
 
         QrNamespaceRegistrationResult(
-            namespaceName = preparation.namespaceEntry.namespaceName,
-            desktopDeviceId = preparation.scannedDesktopDeviceId,
+            message = "Namespace connected: ${preparation.namespaceEntry.namespaceName} (desktop: ${preparation.scannedDesktopDeviceId})",
         )
     }
 

@@ -428,12 +428,12 @@ class AppViewModel @Inject constructor(
                 )
             }
                 .onSuccess { result: QrNamespaceRegistrationResult ->
-                    Log.d(QR_LOG_TAG, "QR namespace connection succeeded for namespace=${result.namespaceName} desktopDeviceId=${result.desktopDeviceId}")
+                    Log.d(QR_LOG_TAG, "QR operation succeeded: ${result.message}")
                     _uiState.update {
                         it.copy(
                             qrNamespaceRegistrationState = QrNamespaceRegistrationUiState.Success(
-                                namespaceName = result.namespaceName,
-                                desktopDeviceId = result.desktopDeviceId,
+                                message = result.message,
+                                followUpQrPayload = result.followUpQrPayload,
                             ),
                         )
                     }

@@ -4,6 +4,8 @@ import com.google.gson.Gson
 import com.zerointrusion.data.firebase.FirebaseService
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.qr.DeviceRegistrationFromQrFlow
+import com.zerointrusion.data.qr.AdditionalMobileNamespacesFromQrFlow
+import com.zerointrusion.data.qr.MobileDeviceAdditionFromQrFlow
 import com.zerointrusion.data.qr.NamespaceRegistrationFromQrFlow
 import com.zerointrusion.data.qr.QrPayloadParser
 import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
@@ -45,6 +47,20 @@ class QrNamespaceRegistrationRepositoryImpl(
         gson = gson,
         validator = validator,
     )
+    private val mobileDeviceAdditionFromQrFlow = MobileDeviceAdditionFromQrFlow(
+        registrationApi = registrationApi,
+        accountDetailsStateHolder = accountDetailsStateHolder,
+        connectedDevicesLocalStore = connectedDevicesLocalStore,
+        dekService = dekService,
+        signatureService = signatureService,
+        gson = gson,
+    )
+    private val additionalMobileNamespacesFromQrFlow = AdditionalMobileNamespacesFromQrFlow(
+        stateStore = stateStore,
+        connectedDevicesLocalStore = connectedDevicesLocalStore,
+        fcmTokenSynchronizer = fcmTokenSynchronizer,
+        connectedDevicesRepository = connectedDevicesRepository,
+    )
     private val qrNamespaceRegistrationHandler = QrNamespaceRegistrationHandler(
         registrationApi = registrationApi,
         stateStore = stateStore,
@@ -57,6 +73,8 @@ class QrNamespaceRegistrationRepositoryImpl(
         qrPayloadParser = qrPayloadParser,
         deviceRegistrationFromQrFlow = deviceRegistrationFromQrFlow,
         namespaceRegistrationFromQrFlow = namespaceRegistrationFromQrFlow,
+        mobileDeviceAdditionFromQrFlow = mobileDeviceAdditionFromQrFlow,
+        additionalMobileNamespacesFromQrFlow = additionalMobileNamespacesFromQrFlow,
     )
 
     override suspend fun registerNamespaceFromQr(

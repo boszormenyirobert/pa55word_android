@@ -39,6 +39,18 @@ data class RegistrationResult(
     val accountId: String,
 )
 
+data class MobileDeviceRegistrationPreparation(
+    val qrPayload: String,
+    val mobileDeviceId: String,
+    val deviceName: String,
+    val namespaceName: String,
+    val namespaceUrl: String,
+    val namespaceUrls: List<String>,
+    val namespaceId: String,
+    val email: String,
+    val phone: String,
+)
+
 data class RegistrationState(
     val accountId: String,
     @SerializedName("mobileDeviceId")
@@ -52,6 +64,8 @@ data class RegistrationState(
     val encDek: String?,
     val root: Boolean = false,
     val fcmToken: String? = null,
+    val pendingAdditionalNamespacesScan: Boolean = false,
+    val completedAdditionalNamespaceKeys: List<String>? = null,
 ) {
     val deviceId: String
         get() = mobileDeviceId
@@ -62,6 +76,7 @@ data class RegistrationFormInput(
     val phone: String,
     val namespaceName: String,
     val apiUrl: String,
+    val additionalApiUrls: List<String> = emptyList(),
 )
 
 data class RegistrationFormValidation(
