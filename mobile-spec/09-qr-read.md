@@ -84,7 +84,6 @@ After the new mobile receives and stores its SSE bootstrap payload, it opens QR 
 - `namespaceName` is omitted from the QR payload.
 - The app resolves the namespace locally by normalized `namespaceUrl`.
 - The app skips the QR phone-registration `POST /api/v1/account` request.
-- The signed namespace-link requests go to `POST /api/v1/namespace/link` instead of `POST /api/v1/namespace`.
 
 Phone registration request from QR shape:
 ```json
@@ -127,4 +126,4 @@ Notes:
 - QR scanning is local.
 - Device-only QR updates the local namespace list and then registers the desktop root-device relation remotely.
 - Namespace QR first performs phone account registration on the scanned namespace using the phone's existing identity data plus the scanned namespace data, stores the new namespace locally, and then registers the desktop root-device relation remotely.
-- Namespace_sync QR resolves an already known namespace by URL, submits one signed namespace-link request to `/namespace/link`, and then registers the desktop root-device relation remotely.
+- Namespace_sync QR resolves an already known namespace by URL and then registers the desktop root-device relation remotely.

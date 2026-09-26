@@ -16,34 +16,20 @@ internal const val REG_LOG_TAG = "ZeroIntrusionRegistration"
 internal const val ACCOUNT_LOG_TAG = "ZeroIntrusionAccount"
 internal const val AUTHENTICATION_LOG_TAG = "ZeroIntrusionAuthentication"
 
-internal data class RootDeviceFetchSignaturePayload(
-    val accountId: String,
-    val deviceId: String,
-    val nonce: String,
-)
-
 internal data class AuthenticationSignedRequestPayload(
     val accountId: String,
     val mobileDeviceId: String,
     val nonce: String,
 )
 
-internal data class AuthenticationSessionRevocationSignedRequestPayload(
-    val accountId: String,
-    val deviceId: String,
-    val desktopId: String,
-    val attestationId: String,
-    val nonce: String,
-)
+internal fun buildHealthUrl(baseUrl: String): String =
+    baseUrl.trim().trimEnd('/') + AppConstants.HEALTH_ENDPOINT_PATH
 
 internal fun buildRegistrationUrl(baseUrl: String): String =
     baseUrl.trim().trimEnd('/') + AppConstants.REGISTRATION_ENDPOINT_PATH
 
 internal fun buildAuthenticationResponseUrl(baseUrl: String): String =
     baseUrl.trim().trimEnd('/') + AppConstants.AUTHENTICATION_RESPONSE_ENDPOINT_PATH
-
-internal fun buildAuthenticationDirectResponseUrl(baseUrl: String): String =
-    baseUrl.trim().trimEnd('/') + AppConstants.AUTHENTICATION_DIRECT_RESPONSE_ENDPOINT_PATH
 
 internal fun buildAuthenticationSessionsUrl(
     baseUrl: String,
@@ -77,12 +63,6 @@ internal fun buildMobileDeviceBootstrapUrl(
 ): String = baseUrl.trim().trimEnd('/') + AppConstants.MOBILE_DEVICE_ENDPOINT_PATH + "/" +
     mobileDeviceId.trim() + "/registration?nonce=" + nonce.trim()
 
-internal fun buildRootDeviceFetchUrl(
-    baseUrl: String,
-    nonce: String,
-): String = baseUrl.trim().trimEnd('/') +
-    AppConstants.ROOT_DEVICE_ENDPOINT_PATH + "?nonce=" + nonce.trim()
-
 internal fun buildConnectedDevicesUrl(
     baseUrl: String,
     accountId: String,
@@ -91,6 +71,10 @@ internal fun buildConnectedDevicesUrl(
 ): String = baseUrl.trim().trimEnd('/') +
     AppConstants.REGISTRATION_ENDPOINT_PATH + "/" + accountId.trim() + "/" + mobileDeviceId.trim() +
     "?nonce=" + nonce.trim()
+
+internal fun buildAccountLifecycleUrl(baseUrl: String, status: Boolean = false): String =
+    baseUrl.trim().trimEnd('/') + AppConstants.REGISTRATION_ENDPOINT_PATH +
+        if (status) "/status" else ""
 
 internal fun buildSignedAccountMobileDeviceNonceJson(
     gson: Gson,
@@ -104,24 +88,6 @@ internal fun buildSignedAccountMobileDeviceNonceJson(
     append(',')
     append("\"mobileDeviceId\":")
     append(gson.toJson(mobileDeviceId))
-    append(',')
-    append("\"nonce\":")
-    append(gson.toJson(nonce))
-    append('}')
-}
-
-internal fun buildSignedAccountDeviceNonceJson(
-    gson: Gson,
-    accountId: String,
-    deviceId: String,
-    nonce: String,
-): String = buildString {
-    append('{')
-    append("\"accountId\":")
-    append(gson.toJson(accountId))
-    append(',')
-    append("\"deviceId\":")
-    append(gson.toJson(deviceId))
     append(',')
     append("\"nonce\":")
     append(gson.toJson(nonce))

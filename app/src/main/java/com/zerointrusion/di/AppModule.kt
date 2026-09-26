@@ -226,9 +226,15 @@ object AppModule {
     fun provideNamespacesRepository(
         connectedDevicesLocalStore: ConnectedDevicesLocalStore,
         registrationStateStore: RegistrationStateStore,
+        registrationApi: RegistrationApi,
+        signatureService: SignatureService,
+        gson: Gson,
     ): NamespacesRepository = NamespacesRepositoryImpl(
         connectedDevicesLocalStore = connectedDevicesLocalStore,
         stateStore = registrationStateStore,
+        registrationApi = registrationApi,
+        signatureService = signatureService,
+        gson = gson,
     )
 
     @Provides

@@ -19,18 +19,6 @@ data class NamespaceDto(
     val root: Boolean? = null,
 )
 
-data class DeviceDto(
-    val deviceId: String,
-    val publicKey: String,
-    val deviceName: String? = null,
-    val desktopDeviceId: String? = null,
-)
-
-data class DekDto(
-    val deviceId: String,
-    val encDek: String,
-)
-
 data class NewDeviceRegistrationDto(
     val accountId: String,
     val device: NewDeviceRegistrationDeviceDto,
@@ -67,17 +55,6 @@ data class MobileDeviceAdditionDeviceDto(
 data class MobileDeviceAdditionDekDto(
     val mobileDeviceId: String,
     val encDek: String,
-)
-
-data class RootDeviceDekResponseDto(
-    val dek: RootDeviceDekDto?,
-)
-
-data class RootDeviceDekDto(
-    val id: Long?,
-    val accountId: String?,
-    val deviceId: String?,
-    val encDek: String?,
 )
 
 data class AccountRegistrationRequestDto(
@@ -170,7 +147,18 @@ data class AuthenticationSessionRevocationResponseRequestDto(
     val nonce: String,
 )
 
+data class AccountLifecycleRequestDto(
+    val accountId: String,
+    val mobileDeviceId: String,
+    val nonce: String,
+)
+
 interface RegistrationApi {
+    @GET
+    suspend fun checkServerHealth(
+        @Url url: String,
+    ): Response<ResponseBody>
+
     @POST
     suspend fun registerAccount(
         @Url url: String,
@@ -183,12 +171,6 @@ interface RegistrationApi {
         @Header("x-signature") signature: String,
         @Body request: FcmRegistrationRequestDto,
     ): Response<Unit>
-
-    @GET
-    suspend fun fetchRootDeviceDek(
-        @Url url: String,
-        @Header("x-signature") signature: String,
-    ): Response<RootDeviceDekResponseDto>
 
     @POST
     suspend fun registerNewDevice(
@@ -211,13 +193,6 @@ interface RegistrationApi {
         @Body request: AuthenticationResponseRequestDto,
     ): Response<AuthenticationResponseDto>
 
-    @POST
-    suspend fun sendAuthenticationDirectResponse(
-        @Url url: String,
-        @Header("x-signature") signature: String,
-        @Body request: AuthenticationResponseRequestDto,
-    ): Response<AuthenticationResponseDto>
-
     @GET
     suspend fun fetchAuthenticationSessions(
         @Url url: String,
@@ -235,5 +210,19 @@ interface RegistrationApi {
     suspend fun getAccountDetails(
         @Url url: String,
         @Header("x-signature") signature: String,
+    ): Response<ResponseBody>
+
+    @POST
+    suspend fun getAccountStatus(
+        @Url url: String,
+        @Header("x-signature") signature: String,
+        @Body request: AccountLifecycleRequestDto,
+    ): Response<ResponseBody>
+
+    @HTTP(method = "DELETE", hasBody = true)
+    suspend fun deleteAccount(
+        @Url url: String,
+        @Header("x-signature") signature: String,
+        @Body request: AccountLifecycleRequestDto,
     ): Response<ResponseBody>
 }

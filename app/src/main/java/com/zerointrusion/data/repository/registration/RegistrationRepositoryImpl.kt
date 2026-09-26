@@ -31,6 +31,7 @@ class RegistrationRepositoryImpl(
     gson: Gson,
     okHttpClient: OkHttpClient,
 ) : RegistrationRepository {
+    private val serverHealthChecker = RegistrationServerHealthChecker(registrationApi)
     private val fcmTokenSynchronizer = FcmTokenSynchronizer(
         firebaseService = firebaseService,
         stateStore = stateStore,
@@ -60,11 +61,15 @@ class RegistrationRepositoryImpl(
 
     override fun observeRegistrationState(): Flow<RegistrationState?> = stateStore.observeState()
 
-    override suspend fun register(input: RegistrationFormInput): RegistrationResult =
-        accountRegistrationHandler.register(input)
+    override suspend fun register(input: RegistrationFormInput): RegistrationResult {
+        serverHealthChecker.requireReachableServers(input)
+        return accountRegistrationHandler.register(input)
+    }
 
-    override suspend fun prepareMobileDeviceRegistration(input: RegistrationFormInput): MobileDeviceRegistrationPreparation =
-        mobileDeviceBootstrapHandler.prepare(input)
+    override suspend fun prepareMobileDeviceRegistration(input: RegistrationFormInput): MobileDeviceRegistrationPreparation {
+        serverHealthChecker.requireReachableServers(input)
+        return mobileDeviceBootstrapHandler.prepare(input)
+    }
 
     override suspend fun awaitMobileDeviceRegistration(preparation: MobileDeviceRegistrationPreparation): RegistrationResult =
         mobileDeviceBootstrapHandler.await(preparation)

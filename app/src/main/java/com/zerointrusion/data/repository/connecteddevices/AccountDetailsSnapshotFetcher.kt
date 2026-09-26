@@ -8,8 +8,6 @@ import com.zerointrusion.data.repository.common.buildConnectedDevicesUrl
 import com.zerointrusion.data.repository.common.buildSignedAccountMobileDeviceNonceJson
 import com.zerointrusion.data.repository.common.mapNetworkException
 import com.zerointrusion.data.repository.common.newRequestNonce
-import com.zerointrusion.data.repository.common.resolveNamespaceEndpointTargets
-import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
 import com.zerointrusion.data.security.DekService
 import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
@@ -38,6 +36,7 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
     private val gson: Gson,
 ) {
     private val connectedDevicesResponseParser = ConnectedDevicesResponseParser(gson)
+    private val snapshotMerger = AccountDetailsSnapshotMerger()
 
     internal suspend fun fetchSnapshot(): AccountDetailsSnapshot = withContext(Dispatchers.IO) {
         val registrationState = stateStore.observeState().first()
@@ -77,7 +76,7 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
             namespaceUrl = registrationState.namespaceUrl.trim().trimEnd('/'),
             accountId = registrationState.accountId.trim(),
         )
-        val pendingTargets = ArrayDeque(buildInitialFetchTargets(homeTarget, existingNamespaces))
+        val pendingTargets = ArrayDeque(snapshotMerger.initialTargets(homeTarget, existingNamespaces))
         val fetchedTargetKeys = mutableSetOf<String>()
         val snapshots = mutableListOf<AccountDetailsSnapshot>()
 
@@ -90,49 +89,12 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
             val snapshot = fetchSnapshotForTarget(registrationState, target)
             snapshots += snapshot
 
-            buildDiscoveredFetchTargets(target, snapshot.namespaces)
+            snapshotMerger.discoveredTargets(target, snapshot.namespaces)
                 .filterNot { discoveredTarget -> fetchedTargetKeys.contains(discoveredTarget.storageIdentity()) }
                 .forEach { discoveredTarget -> pendingTargets.addLast(discoveredTarget) }
         }
 
-        val mergedGroups = snapshots
-            .flatMap { snapshot -> snapshot.groups }
-            .distinctBy { group -> group.accountId.trim().lowercase() + "|" + group.deviceId.trim().lowercase() }
-            .sortedWith(compareBy({ it.accountId.lowercase() }, { it.deviceId.lowercase() }))
-
-        val mergedNamespaces = snapshots
-            .flatMap { snapshot -> snapshot.namespaces }
-            .map { namespace -> namespace.withCarriedForwardAttestationId(existingNamespaces) }
-            .distinctBy { namespace ->
-                listOf(
-                    namespace.accountId.trim().lowercase(),
-                    namespace.desktopDeviceId.trim().lowercase(),
-                    namespace.namespaceId.trim().lowercase(),
-                    namespace.namespaceUrl.trim().trimEnd('/').lowercase(),
-                ).joinToString(separator = "|")
-            }
-            .sortedWith(compareBy({ it.namespaceName.lowercase() }, { it.desktopDeviceId.lowercase() }))
-
-        AccountDetailsSnapshot(
-            groups = mergedGroups,
-            namespaces = mergedNamespaces,
-        )
-    }
-
-    // The backend never returns attestationId per namespace; carry forward the value this phone last
-    // recorded locally when approving that exact device's login, so it survives snapshot refreshes and
-    // can later disambiguate active sessions that share a namespace.
-    private fun NamespaceEntry.withCarriedForwardAttestationId(existingNamespaces: List<NamespaceEntry>): NamespaceEntry {
-        if (!attestationId.isNullOrBlank()) {
-            return this
-        }
-        val previousAttestationId = existingNamespaces.firstOrNull { existing ->
-            existing.accountId.trim().equals(accountId.trim(), ignoreCase = true) &&
-                existing.desktopDeviceId.trim().equals(desktopDeviceId.trim(), ignoreCase = true) &&
-                existing.namespaceId.trim().equals(namespaceId.trim(), ignoreCase = true) &&
-                existing.namespaceUrl.trim().trimEnd('/').equals(namespaceUrl.trim().trimEnd('/'), ignoreCase = true)
-        }?.attestationId?.trim()?.takeIf { it.isNotEmpty() } ?: return this
-        return copy(attestationId = previousAttestationId)
+        snapshotMerger.mergeSnapshots(snapshots, existingNamespaces)
     }
 
     private suspend fun fetchSnapshotForTarget(
@@ -203,35 +165,6 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
             groups = parsedResponse.groups,
             namespaces = parsedResponse.namespaces,
         )
-    }
-
-    private fun buildInitialFetchTargets(
-        homeTarget: AccountDetailsFetchTarget,
-        existingNamespaces: List<NamespaceEntry>,
-    ): List<AccountDetailsFetchTarget> = (
-        buildDiscoveredFetchTargets(homeTarget, existingNamespaces) + homeTarget
-        ).distinctBy { target -> target.storageIdentity() }
-
-    private fun buildDiscoveredFetchTargets(
-        currentTarget: AccountDetailsFetchTarget,
-        namespaces: List<NamespaceEntry>,
-    ): List<AccountDetailsFetchTarget> = resolveNamespaceEndpointTargets(
-        namespaces = namespaces,
-        referenceNamespaceUrl = currentTarget.namespaceUrl,
-        referenceAccountId = currentTarget.accountId,
-    ).map { target ->
-        AccountDetailsFetchTarget(
-            namespaceUrl = target.namespaceUrl,
-            accountId = target.accountId,
-        )
-    }
-            .distinctBy { target -> target.storageIdentity() }
-
-    private data class AccountDetailsFetchTarget(
-        val namespaceUrl: String,
-        val accountId: String,
-    ) {
-        fun storageIdentity(): String = namespaceUrl.lowercase() + "|" + accountId.lowercase()
     }
 
     fun summarizeGroups(groups: List<com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup>): String =

@@ -78,6 +78,8 @@ data class AppUiState(
     val namespaces: List<NamespaceEntry> = emptyList(),
     val namespaceSelectionErrorMessage: String? = null,
     val namespaceManagementErrorMessage: String? = null,
+    val accountDeletionInProgress: Boolean = false,
+    val accountDeletionErrorMessage: String? = null,
     val homeNavigationRequestKey: Long = 0L,
     val notificationOverlay: NotificationOverlayUiState = NotificationOverlayUiState(),
 ) {

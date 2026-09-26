@@ -12,6 +12,7 @@ import com.zerointrusion.data.repository.common.buildAuthenticationSessionRevoca
 import com.zerointrusion.data.repository.common.buildAuthenticationSessionsUrl
 import com.zerointrusion.data.repository.common.buildSignedAccountMobileDeviceNonceJson
 import com.zerointrusion.data.repository.common.mapNetworkException
+import com.zerointrusion.data.repository.common.newRequestNonce
 import com.zerointrusion.data.repository.common.resolveNamespaceEndpointTargets
 import com.zerointrusion.data.repository.common.serverFailure
 import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
@@ -27,7 +28,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import java.util.UUID
 
 internal class AuthenticationSessionHandler(
     private val registrationApi: RegistrationApi,
@@ -153,7 +153,7 @@ internal class AuthenticationSessionHandler(
         desktopDeviceId: String,
         attestationId: String,
     ): NamespaceRevocationOutcome {
-        val nonce = newNonce()
+        val nonce = newRequestNonce()
         val requestPayload = AuthenticationSessionRevocationResponseRequestDto(
             accountId = accountId,
             mobileDeviceId = mobileDeviceId,
@@ -205,7 +205,7 @@ internal class AuthenticationSessionHandler(
         mobileDeviceId: String,
         availableNamespaces: List<com.zerointrusion.domain.namespaces.NamespaceEntry>,
     ): NamespaceSessionFetchOutcome {
-        val nonce = newNonce()
+        val nonce = newRequestNonce()
         val requestPayload = AuthenticationSignedRequestPayload(
             accountId = requestNamespace.accountId,
             mobileDeviceId = mobileDeviceId,
@@ -278,8 +278,6 @@ internal class AuthenticationSessionHandler(
             }
         }
         ?: throw RegistrationFailure.Validation("No registered account is stored on this device.")
-
-    private fun newNonce(): String = UUID.randomUUID().toString().replace("-", "")
 
     private fun AuthenticationSessionDto.toDomain(): ActiveDesktopSession {
         val resolvedDeviceId = desktopDeviceId?.trim().orEmpty()

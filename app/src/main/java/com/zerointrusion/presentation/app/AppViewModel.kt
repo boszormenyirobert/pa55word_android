@@ -230,9 +230,46 @@ class AppViewModel @Inject constructor(
 
     fun refreshAccountDetailsSnapshot() {
         viewModelScope.launch {
-            runCatching { connectedDevicesRepository.fetchConnectedDevices() }
+            runCatching {
+                namespacesRepository.validateStoredAccounts()
+                connectedDevicesRepository.fetchConnectedDevices()
+            }
                 .onFailure {
                     // Leave visible state untouched; background refresh is best-effort.
+                }
+        }
+    }
+
+    fun deleteAccount(namespaceUrl: String, accountId: String) {
+        if (_uiState.value.accountDeletionInProgress) {
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    accountDeletionInProgress = true,
+                    accountDeletionErrorMessage = null,
+                )
+            }
+            runCatching { namespacesRepository.deleteAccount(namespaceUrl, accountId) }
+                .onSuccess {
+                    _uiState.update {
+                        it.copy(
+                            accountDeletionInProgress = false,
+                            accountDeletionErrorMessage = null,
+                        )
+                    }
+                }
+                .onFailure { throwable ->
+                    val message = (throwable as? RegistrationFailure)?.message
+                        ?: throwable.message
+                        ?: "Account deletion failed."
+                    _uiState.update {
+                        it.copy(
+                            accountDeletionInProgress = false,
+                            accountDeletionErrorMessage = message,
+                        )
+                    }
                 }
         }
     }

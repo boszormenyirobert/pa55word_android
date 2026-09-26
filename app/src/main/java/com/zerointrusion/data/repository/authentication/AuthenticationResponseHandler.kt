@@ -8,6 +8,7 @@ import com.zerointrusion.data.network.AuthenticationResponseRequestDto
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.repository.common.REG_LOG_TAG
 import com.zerointrusion.data.repository.common.buildAuthenticationResponseUrl
+import com.zerointrusion.data.repository.common.newRequestNonce
 import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
 import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
@@ -23,7 +24,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.time.Instant
-import java.util.UUID
 
 internal class AuthenticationResponseHandler(
     private val registrationApi: RegistrationApi,
@@ -140,14 +140,14 @@ internal class AuthenticationResponseHandler(
             accountId = responseAccountId,
             mobileDeviceId = registrationState.deviceId,
             approved = approved,
-            nonce = newNonce(),
+            nonce = newRequestNonce(),
             envelop = AuthenticationAttestationEnvelopeDto(
                 desktopDeviceId = normalizedRequestingDeviceId,
                 mobileDeviceId = registrationState.deviceId,
                 namespaces = if (approved) listOf(resolvedTargetNamespace.namespaceId) else emptyList(),
                 iat = issuedAtEpochSeconds,
                 exp = expiryEpochSeconds,
-                nonce = newNonce(),
+                nonce = newRequestNonce(),
             ),
         )
         val responseUrl = buildAuthenticationResponseUrl(resolvedTargetNamespace.namespaceUrl)
@@ -248,8 +248,6 @@ internal class AuthenticationResponseHandler(
             accountDetailsStateHolder.replaceSnapshot(currentSnapshot.copy(namespaces = updatedNamespaces))
         }
     }
-
-    private fun newNonce(): String = UUID.randomUUID().toString().replace("-", "")
 
     private fun mapFailureMessage(
         url: String,

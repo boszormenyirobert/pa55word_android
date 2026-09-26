@@ -26,6 +26,7 @@ import com.zerointrusion.presentation.namespaces.NamespacesScreen
 import com.zerointrusion.presentation.qrread.QrNamespaceDeviceSelectionScreen
 import com.zerointrusion.presentation.qrread.QrReadScreen
 import com.zerointrusion.presentation.settings.RecoveryConnectionScreen
+import com.zerointrusion.presentation.settings.AccountsScreen
 import com.zerointrusion.presentation.settings.SettingsScreen
 import com.zerointrusion.presentation.settings.SettingsConnectedDevicesScreen
 import com.zerointrusion.presentation.registration.RegistrationScreen
@@ -160,6 +161,9 @@ fun ZeroIntrusionAppRoot(
             }
             composable(AppRoute.Settings.route) {
                 SettingsScreen(
+                    onOpenAccounts = {
+                        navController.navigate(AppRoute.Accounts.route)
+                    },
                     onOpenConnectedDevices = {
                         navController.navigate(AppRoute.SettingsConnectedDevices.route)
                     },
@@ -169,6 +173,15 @@ fun ZeroIntrusionAppRoot(
                     onOpenDeviceInformation = {
                         navController.navigate(AppRoute.DeviceInformation.route)
                     },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.Accounts.route) {
+                AccountsScreen(
+                    namespaces = appState.namespaces,
+                    deleting = appState.accountDeletionInProgress,
+                    errorMessage = appState.accountDeletionErrorMessage,
+                    onDeleteAccount = appViewModel::deleteAccount,
                     onBack = { navController.popBackStack() },
                 )
             }

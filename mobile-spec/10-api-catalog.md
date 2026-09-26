@@ -101,48 +101,6 @@ Response payload shape:
 }
 ```
 
-## POST /api/v1/namespace/link
-
-Used by:
-- QR namespace_sync flow namespace-link requests.
-
-Signed:
-- Yes.
-
-Signed header:
-- `x-signature: <base64-signature>`
-
-Request payload shape:
-- Same as `POST /api/v1/namespace`.
-
-Behavior notes:
-- `namespace_sync` QR omits `namespaceName` in the QR payload.
-- The app resolves the display name and target account from the locally stored namespace snapshot, keyed by normalized `namespaceUrl`.
-
-Signed payload shape:
-```json
-{
-  "accountId": "string",
-  "mobileDeviceId": "string",
-  "desktopDeviceId": "string",
-  "namespaceId": "string",
-  "name": "string",
-  "url": "string",
-  "nonce": "string"
-}
-```
-
-Response payload shape:
-```json
-{
-  "authorized": true,
-  "status": "authorized",
-  "notificationId": "string",
-  "session": {},
-  "attestationId": {
-    "attestationId": "string"
-  }
-}
 ```
 
 Notes:

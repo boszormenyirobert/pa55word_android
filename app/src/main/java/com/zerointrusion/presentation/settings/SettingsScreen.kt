@@ -32,6 +32,7 @@ import com.zerointrusion.ui.theme.Yellow
 
 @Composable
 fun SettingsScreen(
+    onOpenAccounts: () -> Unit,
     onOpenConnectedDevices: () -> Unit,
     onOpenRecoveryConnection: () -> Unit,
     onOpenDeviceInformation: () -> Unit,
@@ -65,6 +66,14 @@ fun SettingsScreen(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                Button(
+                    onClick = onOpenAccounts,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
+                ) {
+                    Text("Accounts")
+                }
+
                 Button(
                     onClick = onOpenConnectedDevices,
                     modifier = Modifier.fillMaxWidth(),

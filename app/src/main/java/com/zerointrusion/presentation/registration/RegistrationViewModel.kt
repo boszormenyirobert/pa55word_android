@@ -66,7 +66,10 @@ class RegistrationViewModel @Inject constructor(
         )
         Log.d(REG_LOG_TAG, "REG submit tapped. apiUrl=${input.apiUrl.trim()} namespace=${input.namespaceName.trim()}")
         val validation = validator.validateForm(input)
-        if (!validation.isValid) {
+        val additionalUrlErrors = input.additionalApiUrls.map { url ->
+            url.trim().takeIf { it.isNotEmpty() }?.let(validator::validateNamespaceUrl)
+        }
+        if (!validation.isValid || additionalUrlErrors.any { it != null }) {
             Log.e(
                 REG_LOG_TAG,
                 "REG validation failed. email=${validation.emailError} phone=${validation.phoneError} namespace=${validation.namespaceNameError} apiUrl=${validation.apiUrlError}",
@@ -77,6 +80,8 @@ class RegistrationViewModel @Inject constructor(
                     phoneError = validation.phoneError,
                     namespaceNameError = validation.namespaceNameError,
                     apiUrlError = validation.apiUrlError,
+                    additionalApiUrlError = additionalUrlErrors.getOrNull(0),
+                    thirdApiUrlError = additionalUrlErrors.getOrNull(1),
                     errorMessage = null,
                 )
             }

@@ -9,4 +9,8 @@ interface NamespacesRepository {
     suspend fun setSelectedNamespace(namespace: NamespaceEntry): RegistrationState
 
     suspend fun deleteNamespace(namespace: NamespaceEntry)
+
+    suspend fun validateStoredAccounts()
+
+    suspend fun deleteAccount(namespaceUrl: String, accountId: String): Boolean
 }
