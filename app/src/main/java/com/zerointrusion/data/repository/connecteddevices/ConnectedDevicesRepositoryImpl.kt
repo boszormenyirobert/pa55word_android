@@ -21,8 +21,7 @@ class ConnectedDevicesRepositoryImpl(
     override suspend fun fetchConnectedDevices(): List<ConnectedDeviceGroup> {
         val snapshot = accountDetailsSnapshotFetcher.fetchSnapshot()
         accountDetailsStateHolder.replaceSnapshot(snapshot)
-        val mergedEntries = connectedDevicesLocalStore.currentEntries() + snapshot.namespaces.toLocalConnectedDeviceEntries()
-        connectedDevicesLocalStore.replaceEntries(mergedEntries)
+        connectedDevicesLocalStore.replaceEntries(snapshot.namespaces.toLocalConnectedDeviceEntries())
         Log.d(
             ACCOUNT_LOG_TAG,
             "ACCOUNT details parsed response. groups=${accountDetailsSnapshotFetcher.summarizeGroups(snapshot.groups)}",

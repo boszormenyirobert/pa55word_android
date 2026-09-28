@@ -86,7 +86,11 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
                 continue
             }
 
-            val snapshot = fetchSnapshotForTarget(registrationState, target)
+            val snapshot = fetchSnapshotForTarget(
+                registrationState = registrationState,
+                target = target,
+                isHomeTarget = target.storageIdentity() == homeTarget.storageIdentity(),
+            )
             snapshots += snapshot
 
             snapshotMerger.discoveredTargets(target, snapshot.namespaces)
@@ -100,6 +104,7 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
     private suspend fun fetchSnapshotForTarget(
         registrationState: RegistrationState,
         target: AccountDetailsFetchTarget,
+        isHomeTarget: Boolean,
     ): AccountDetailsSnapshot {
         val nonce = newRequestNonce()
 
@@ -142,6 +147,14 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
                 ACCOUNT_LOG_TAG,
                 "ACCOUNT details fetch failed. http=${response.code()} namespaceUrl=${target.namespaceUrl} accountId=${target.accountId} url=$requestUrl",
             )
+            if (isHomeTarget && response.code() in setOf(401, 404, 410)) {
+                connectedDevicesLocalStore.replaceEntries(emptyList())
+                stateStore.clear()
+                Log.w(
+                    ACCOUNT_LOG_TAG,
+                    "ACCOUNT details cleared local registration because the current mobile device no longer exists on the server.",
+                )
+            }
             throw RegistrationFailure.Server(
                 errorBody ?: "Request failed with HTTP ${response.code()} at $requestUrl.",
             )
