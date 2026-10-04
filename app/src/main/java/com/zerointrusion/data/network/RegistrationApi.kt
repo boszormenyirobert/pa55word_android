@@ -153,6 +153,40 @@ data class AccountLifecycleRequestDto(
     val nonce: String,
 )
 
+data class DeleteAccountDeviceRequestDto(
+    val accountId: String,
+    val mobileDeviceId: String,
+    val targetDesktopDeviceId: String? = null,
+    val targetMobileDeviceId: String? = null,
+    val nonce: String,
+)
+
+data class AccountDeviceNamespaceDto(
+    val namespaceId: String? = null,
+    val namespace: String? = null,
+    val url: String? = null,
+    val root: Boolean? = null,
+)
+
+data class AccountDeviceDto(
+    val mobileDeviceId: String? = null,
+    val desktopDeviceId: String? = null,
+    val deviceName: String? = null,
+    val lastTimeUsed: String? = null,
+    val namespaces: List<AccountDeviceNamespaceDto>? = null,
+)
+
+data class AccountDevicesResponseDto(
+    val success: Boolean? = null,
+    val error: String? = null,
+    val devices: List<AccountDeviceDto>? = null,
+)
+
+data class DeleteAccountDeviceResponseDto(
+    val success: Boolean? = null,
+    val error: String? = null,
+)
+
 interface RegistrationApi {
     @GET
     suspend fun checkServerHealth(
@@ -224,5 +258,18 @@ interface RegistrationApi {
         @Url url: String,
         @Header("x-signature") signature: String,
         @Body request: AccountLifecycleRequestDto,
+    ): Response<ResponseBody>
+
+    @GET
+    suspend fun loadAccountDevices(
+        @Url url: String,
+        @Header("x-signature") signature: String,
+    ): Response<ResponseBody>
+
+    @HTTP(method = "DELETE", hasBody = true)
+    suspend fun deleteAccountDevice(
+        @Url url: String,
+        @Header("x-signature") signature: String,
+        @Body request: DeleteAccountDeviceRequestDto,
     ): Response<ResponseBody>
 }

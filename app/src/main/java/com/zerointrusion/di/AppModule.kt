@@ -243,10 +243,18 @@ object AppModule {
         accountDetailsSnapshotFetcher: AccountDetailsSnapshotFetcher,
         accountDetailsStateHolder: AccountDetailsStateHolder,
         connectedDevicesLocalStore: ConnectedDevicesLocalStore,
+        registrationStateStore: RegistrationStateStore,
+        registrationApi: RegistrationApi,
+        signatureService: SignatureService,
+        gson: Gson,
     ): ConnectedDevicesRepository = ConnectedDevicesRepositoryImpl(
         accountDetailsSnapshotFetcher = accountDetailsSnapshotFetcher,
         accountDetailsStateHolder = accountDetailsStateHolder,
         connectedDevicesLocalStore = connectedDevicesLocalStore,
+        stateStore = registrationStateStore,
+        registrationApi = registrationApi,
+        signatureService = signatureService,
+        gson = gson,
     )
 
     @Provides

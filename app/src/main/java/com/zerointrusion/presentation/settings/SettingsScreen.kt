@@ -33,9 +33,8 @@ import com.zerointrusion.ui.theme.Yellow
 @Composable
 fun SettingsScreen(
     onOpenAccounts: () -> Unit,
-    onOpenConnectedDevices: () -> Unit,
     onOpenRecoveryConnection: () -> Unit,
-    onOpenDeviceInformation: () -> Unit,
+    onOpenDevices: () -> Unit,
     onBack: () -> Unit,
 ) {
     Column(
@@ -71,23 +70,15 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
                 ) {
-                    Text("Accounts")
+                    Text("Accounts - Servers")
                 }
 
                 Button(
-                    onClick = onOpenConnectedDevices,
+                    onClick = onOpenDevices,
                     modifier = Modifier.fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
                 ) {
-                    Text("Connected devices")
-                }
-
-                Button(
-                    onClick = onOpenDeviceInformation,
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
-                ) {
-                    Text("Device information")
+                    Text("Devices")
                 }
 
                 Button(

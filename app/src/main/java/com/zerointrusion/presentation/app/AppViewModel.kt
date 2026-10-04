@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
+import com.zerointrusion.domain.connecteddevices.RemovableAccountDevice
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.notification.BackendPushNotification
@@ -239,6 +240,67 @@ class AppViewModel @Inject constructor(
                 }
         }
     }
+
+        fun loadRemovableDevices() {
+            if (_uiState.value.deviceRemovalState is DeviceRemovalUiState.InProgress) {
+                return
+            }
+
+            viewModelScope.launch {
+                _uiState.update { it.copy(deviceRemovalState = DeviceRemovalUiState.InProgress) }
+                runCatching { connectedDevicesRepository.loadRemovableDevices() }
+                    .onSuccess { devices ->
+                        _uiState.update { it.copy(deviceRemovalState = DeviceRemovalUiState.Success(devices)) }
+                    }
+                    .onFailure { throwable ->
+                        val message = (throwable as? RegistrationFailure)?.message
+                            ?: throwable.message
+                            ?: "The account devices could not be loaded."
+                        _uiState.update { it.copy(deviceRemovalState = DeviceRemovalUiState.Error(message)) }
+                    }
+            }
+        }
+
+        fun deleteDevice(device: RemovableAccountDevice) {
+            val currentState = _uiState.value.deviceRemovalState as? DeviceRemovalUiState.Success ?: return
+            if (currentState.deletingDeviceId != null) {
+                return
+            }
+
+            val removesCurrentMobile = device.targetMobileDeviceId == _uiState.value.registrationState?.deviceId
+            _uiState.update {
+                it.copy(
+                    deviceRemovalState = currentState.copy(
+                        deletingDeviceId = device.id,
+                        errorMessage = null,
+                    ),
+                )
+            }
+            viewModelScope.launch {
+                runCatching { connectedDevicesRepository.deleteDevice(device) }
+                    .onSuccess {
+                        if (removesCurrentMobile) {
+                            _uiState.update { it.copy(deviceRemovalState = DeviceRemovalUiState.Idle) }
+                        } else {
+                            loadRemovableDevices()
+                        }
+                    }
+                    .onFailure { throwable ->
+                        val message = (throwable as? RegistrationFailure)?.message
+                            ?: throwable.message
+                            ?: "The account device could not be deleted."
+                        _uiState.update { state ->
+                            val successfulState = state.deviceRemovalState as? DeviceRemovalUiState.Success
+                            state.copy(
+                                deviceRemovalState = successfulState?.copy(
+                                    deletingDeviceId = null,
+                                    errorMessage = message,
+                                ) ?: DeviceRemovalUiState.Error(message),
+                            )
+                        }
+                    }
+            }
+        }
 
     fun deleteAccount(namespaceUrl: String, accountId: String) {
         if (_uiState.value.accountDeletionInProgress) {

@@ -81,11 +81,11 @@ class NamespacesRepositoryImpl(
         }
 
         val entries = connectedDevicesLocalStore.currentEntries()
-        val unavailableAccounts = entries.asAccountTargets().filter { target ->
+        val unavailableNamespaces = entries.asNamespaceTargets().filter { target ->
             checkAccountStatus(target, mobileDeviceId)
         }.toSet()
-        if (unavailableAccounts.isNotEmpty()) {
-            pruneAccounts(entries, unavailableAccounts)
+        if (unavailableNamespaces.isNotEmpty()) {
+            pruneNamespaces(entries, unavailableNamespaces)
         }
     }
 
@@ -127,7 +127,7 @@ class NamespacesRepositoryImpl(
         return@withContext remainingEntries.asAccountTargets().isEmpty()
     }
 
-    private suspend fun checkAccountStatus(target: AccountTarget, mobileDeviceId: String): Boolean {
+    private suspend fun checkAccountStatus(target: NamespaceTarget, mobileDeviceId: String): Boolean {
         val nonce = newRequestNonce()
         val request = AccountLifecycleRequestDto(
             accountId = target.accountId,
@@ -161,6 +161,23 @@ class NamespacesRepositoryImpl(
         return remainingEntries
     }
 
+    private suspend fun pruneNamespaces(
+        entries: List<LocalConnectedDeviceEntry>,
+        namespaces: Set<NamespaceTarget>,
+    ) {
+        val remainingEntries = entries.mapNotNull { entry ->
+            val remainingNamespaces = entry.namespaces.filterNot { namespace ->
+                NamespaceTarget(
+                    namespaceUrl = namespace.url.normalizedUrl(),
+                    accountId = namespace.accountId.trim(),
+                    desktopDeviceId = namespace.desktopDeviceId.trim(),
+                ) in namespaces
+            }
+            entry.takeIf { remainingNamespaces.isNotEmpty() }?.copy(namespaces = remainingNamespaces)
+        }
+        connectedDevicesLocalStore.replaceEntries(remainingEntries)
+    }
+
     private suspend fun replaceGatewayIfRemoved(
         removedAccounts: Set<AccountTarget>,
         remainingNamespaces: List<NamespaceEntry>,
@@ -185,9 +202,28 @@ class NamespacesRepositoryImpl(
         fun isValid(): Boolean = namespaceUrl.isNotEmpty() && accountId.isNotEmpty()
     }
 
+    private data class NamespaceTarget(
+        val namespaceUrl: String,
+        val accountId: String,
+        val desktopDeviceId: String,
+    ) {
+        fun isValid(): Boolean =
+            namespaceUrl.isNotEmpty() && accountId.isNotEmpty() && desktopDeviceId.isNotEmpty()
+    }
+
     private fun List<LocalConnectedDeviceEntry>.asAccountTargets(): List<AccountTarget> = flatMap { entry ->
         entry.namespaces.map { namespace ->
             AccountTarget(namespace.url.normalizedUrl(), namespace.accountId.trim())
+        }
+    }.filter { it.isValid() }.distinct()
+
+    private fun List<LocalConnectedDeviceEntry>.asNamespaceTargets(): List<NamespaceTarget> = flatMap { entry ->
+        entry.namespaces.map { namespace ->
+            NamespaceTarget(
+                namespaceUrl = namespace.url.normalizedUrl(),
+                accountId = namespace.accountId.trim(),
+                desktopDeviceId = namespace.desktopDeviceId.trim(),
+            )
         }
     }.filter { it.isValid() }.distinct()
 

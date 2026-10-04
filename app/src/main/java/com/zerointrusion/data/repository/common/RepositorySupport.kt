@@ -72,6 +72,17 @@ internal fun buildConnectedDevicesUrl(
     AppConstants.REGISTRATION_ENDPOINT_PATH + "/" + accountId.trim() + "/" + mobileDeviceId.trim() +
     "?nonce=" + nonce.trim()
 
+internal fun buildAccountDeviceRemovalUrl(baseUrl: String): String =
+    baseUrl.trim().trimEnd('/') + "/api/v1/account/devices/mobile"
+
+internal fun buildAccountDevicesListUrl(
+    baseUrl: String,
+    accountId: String,
+    mobileDeviceId: String,
+    nonce: String,
+): String = baseUrl.trim().trimEnd('/') + "/api/v1/account/devices/" + accountId.trim() + "/" +
+    mobileDeviceId.trim() + "?nonce=" + nonce.trim()
+
 internal fun buildAccountLifecycleUrl(baseUrl: String, status: Boolean = false): String =
     baseUrl.trim().trimEnd('/') + AppConstants.REGISTRATION_ENDPOINT_PATH +
         if (status) "/status" else ""

@@ -3,6 +3,7 @@ package com.zerointrusion.presentation.app
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
 import com.zerointrusion.domain.authentication.NamespaceAuthenticationResult
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
+import com.zerointrusion.domain.connecteddevices.RemovableAccountDevice
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.notification.BackendPushNotification
 import com.zerointrusion.domain.registration.RegistrationState
@@ -42,6 +43,17 @@ sealed class ConnectedDevicesUiState {
     data class Error(val message: String) : ConnectedDevicesUiState()
 }
 
+sealed class DeviceRemovalUiState {
+    data object Idle : DeviceRemovalUiState()
+    data object InProgress : DeviceRemovalUiState()
+    data class Success(
+        val devices: List<RemovableAccountDevice>,
+        val deletingDeviceId: String? = null,
+        val errorMessage: String? = null,
+    ) : DeviceRemovalUiState()
+    data class Error(val message: String) : DeviceRemovalUiState()
+}
+
 sealed class DesktopSessionsUiState {
     data object Idle : DesktopSessionsUiState()
     data object InProgress : DesktopSessionsUiState()
@@ -71,6 +83,7 @@ data class AppUiState(
     val fcmSyncState: FcmSyncUiState = FcmSyncUiState.Idle,
     val qrNamespaceRegistrationState: QrNamespaceRegistrationUiState = QrNamespaceRegistrationUiState.Idle,
     val connectedDevicesState: ConnectedDevicesUiState = ConnectedDevicesUiState.Idle,
+    val deviceRemovalState: DeviceRemovalUiState = DeviceRemovalUiState.Idle,
     val desktopSessionsState: DesktopSessionsUiState = DesktopSessionsUiState.Idle,
     val liveDesktopSessions: List<ActiveDesktopSession> = emptyList(),
     val liveDesktopSessionRevokingAttestationId: String? = null,

@@ -16,3 +16,18 @@ data class ConnectedDeviceGroup(
     val deviceName: String? = null,
     val namespaces: List<ConnectedDeviceNamespace>,
 )
+
+data class RemovableAccountDevice(
+    val accountId: String,
+    val namespaceUrl: String,
+    val targetDesktopDeviceId: String? = null,
+    val targetMobileDeviceId: String? = null,
+    val deviceName: String? = null,
+    val lastTimeUsed: String? = null,
+) {
+    val id: String
+        get() = targetMobileDeviceId ?: targetDesktopDeviceId.orEmpty()
+
+    val isMobile: Boolean
+        get() = targetMobileDeviceId != null
+}

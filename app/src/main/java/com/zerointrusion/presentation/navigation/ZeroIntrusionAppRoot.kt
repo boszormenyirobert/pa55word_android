@@ -19,6 +19,8 @@ import com.zerointrusion.presentation.authentication.DesktopSessionsScreen
 import com.zerointrusion.presentation.auth.SecurityScreen
 import com.zerointrusion.presentation.common.LoadingScreen
 import com.zerointrusion.presentation.connecteddevices.ConnectedDevicesScreen
+import com.zerointrusion.presentation.connecteddevices.DeviceRemovalScreen
+import com.zerointrusion.presentation.deviceinformation.DevicesScreen
 import com.zerointrusion.presentation.deviceinformation.DeviceInformationScreen
 import com.zerointrusion.presentation.deviceinformation.DeviceInformationUiModel
 import com.zerointrusion.presentation.home.PostLoginHomeScreen
@@ -164,14 +166,11 @@ fun ZeroIntrusionAppRoot(
                     onOpenAccounts = {
                         navController.navigate(AppRoute.Accounts.route)
                     },
-                    onOpenConnectedDevices = {
-                        navController.navigate(AppRoute.SettingsConnectedDevices.route)
-                    },
                     onOpenRecoveryConnection = {
                         navController.navigate(AppRoute.RecoveryConnection.route)
                     },
-                    onOpenDeviceInformation = {
-                        navController.navigate(AppRoute.DeviceInformation.route)
+                    onOpenDevices = {
+                        navController.navigate(AppRoute.Devices.route)
                     },
                     onBack = { navController.popBackStack() },
                 )
@@ -226,6 +225,26 @@ fun ZeroIntrusionAppRoot(
                     namespaces = appState.namespaces,
                     errorMessage = appState.namespaceSelectionErrorMessage,
                     onNamespaceSelected = appViewModel::setSelectedNamespace,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.Devices.route) {
+                DevicesScreen(
+                    onOpenDeviceInformation = {
+                        navController.navigate(AppRoute.DeviceInformation.route)
+                    },
+                    onOpenRemoveDevices = {
+                        navController.navigate(AppRoute.DeviceRemoval.route)
+                    },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.DeviceRemoval.route) {
+                DeviceRemovalScreen(
+                    currentMobileDeviceId = appState.registrationState?.deviceId.orEmpty(),
+                    state = appState.deviceRemovalState,
+                    onLoad = appViewModel::loadRemovableDevices,
+                    onDelete = appViewModel::deleteDevice,
                     onBack = { navController.popBackStack() },
                 )
             }
