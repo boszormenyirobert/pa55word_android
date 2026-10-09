@@ -19,8 +19,9 @@ Request ownership:
 - This view owns authentication response submission requests.
 
 Post-login background behavior:
-- Desktop-session polling runs every 15 seconds from the post-login app root while the user remains authenticated and registered.
+- Desktop-session polling runs immediately and then every 30 seconds while the authenticated, registered app is in the foreground. It refreshes immediately again whenever the app returns to the foreground.
 - This screen renders the shared in-memory live-session state produced by that background poller.
+- Session polling also queries the current phone's mobile registrations when no desktop connections remain. A successful empty session response clears the old live-session list rather than treating the absence of desktop connections as a refresh error.
 
 Incoming message shape:
 ```json

@@ -105,23 +105,26 @@ internal class QrNamespaceRegistrationHandler(
                 storedEncDek = storedEncDek,
             )
 
-            is NamespaceSyncQrPayload -> namespaceRegistrationFromQrFlow.prepareSync(qrData)
+            is NamespaceSyncQrPayload -> namespaceRegistrationFromQrFlow.prepareSync(
+                qrData,
+                registrationState.deviceId,
+            )
             is AdditionMobileDeviceQrPayload -> error("Handled above")
             is AdditionalMobileNamespacesQrPayload -> error("Handled above")
         }
 
-        val rawDek = decryptRootDeviceDek(
-            dekService = dekService,
-            fetchedEncDek = storedEncDek,
-            storedEncDek = storedEncDek,
-        )
+        val rawDek = if (qrData is NamespaceSyncQrPayload) {
+            dekService.decryptDek(requireNotNull(preparation.targetEncDek))
+        } else {
+            decryptRootDeviceDek(
+                dekService = dekService,
+                fetchedEncDek = storedEncDek,
+                storedEncDek = storedEncDek,
+            )
+        }
         val reEncryptedDek = dekService.encryptDek(rawDek, preparation.scannedPublicKey)
         val nonce = newRequestNonce()
-        val resolvedRootDeviceAccountId = when (qrData) {
-            is NamespaceSyncQrPayload -> rootDeviceAccountId?.trim().takeUnless { it.isNullOrEmpty() }
-                ?: preparation.targetNamespaceAccountId
-            else -> preparation.targetNamespaceAccountId
-        }
+        val resolvedRootDeviceAccountId = preparation.targetNamespaceAccountId
         val desktopRegistrationDto = NewDeviceRegistrationDto(
             accountId = resolvedRootDeviceAccountId,
             device = NewDeviceRegistrationDeviceDto(

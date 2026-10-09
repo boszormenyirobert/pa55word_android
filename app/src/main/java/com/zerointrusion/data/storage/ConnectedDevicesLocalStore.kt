@@ -9,6 +9,7 @@ import com.google.gson.reflect.TypeToken
 import com.zerointrusion.core.AppConstants
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceNamespace
+import com.zerointrusion.domain.connecteddevices.MobileNamespaceRegistration
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import java.io.IOException
 import java.security.GeneralSecurityException
@@ -19,6 +20,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class LocalConnectedNamespace(
     val accountId: String,
@@ -44,6 +47,30 @@ interface ConnectedDevicesLocalStore {
     suspend fun replaceEntries(entries: List<LocalConnectedDeviceEntry>)
 
     suspend fun upsertEntry(entry: LocalConnectedDeviceEntry)
+
+    fun currentMobileRegistrations(): List<MobileNamespaceRegistration>
+
+    fun observeMobileRegistrations(): Flow<List<MobileNamespaceRegistration>>
+
+    suspend fun replaceMobileRegistrations(registrations: List<MobileNamespaceRegistration>)
+
+    suspend fun updateMobileRegistrations(
+        transform: (List<MobileNamespaceRegistration>) -> List<MobileNamespaceRegistration>,
+    )
+}
+
+internal suspend fun ConnectedDevicesLocalStore.removeAccountConnections(
+    matches: (url: String, accountId: String) -> Boolean,
+): List<LocalConnectedDeviceEntry> {
+    val remaining = currentEntries().mapNotNull { entry ->
+        val namespaces = entry.namespaces.filterNot { matches(it.url, it.accountId) }
+        entry.takeIf { namespaces.isNotEmpty() }?.copy(namespaces = namespaces)
+    }
+    replaceEntries(remaining)
+    updateMobileRegistrations { registrations ->
+        registrations.filterNot { matches(it.namespaceUrl, it.accountId) }
+    }
+    return remaining
 }
 
 @Singleton
@@ -53,6 +80,33 @@ class EncryptedConnectedDevicesLocalStore @Inject constructor(
 ) : ConnectedDevicesLocalStore {
     private val encryptedPreferences = openEncryptedPreferences()
     private val stateFlow = MutableStateFlow(readEntriesSafely())
+    private val mobileRegistrationsFlow = MutableStateFlow(currentMobileRegistrations())
+    private val mobileRegistrationsMutex = Mutex()
+
+    override fun observeMobileRegistrations(): Flow<List<MobileNamespaceRegistration>> =
+        mobileRegistrationsFlow.asStateFlow()
+
+    override fun currentMobileRegistrations(): List<MobileNamespaceRegistration> {
+        val json = encryptedPreferences.getString(MOBILE_REGISTRATIONS_KEY, null) ?: return emptyList()
+        val type = object : TypeToken<List<MobileNamespaceRegistration>>() {}.type
+        return gson.fromJson<List<MobileNamespaceRegistration>>(json, type).orEmpty()
+    }
+
+    override suspend fun replaceMobileRegistrations(registrations: List<MobileNamespaceRegistration>) {
+        updateMobileRegistrations { registrations }
+    }
+
+    override suspend fun updateMobileRegistrations(
+        transform: (List<MobileNamespaceRegistration>) -> List<MobileNamespaceRegistration>,
+    ) = withContext(Dispatchers.IO) {
+        mobileRegistrationsMutex.withLock {
+            val registrations = transform(currentMobileRegistrations()).distinct()
+            encryptedPreferences.edit()
+                .putString(MOBILE_REGISTRATIONS_KEY, gson.toJson(registrations))
+                .apply()
+            mobileRegistrationsFlow.value = registrations
+        }
+    }
 
     override fun observeEntries(): Flow<List<LocalConnectedDeviceEntry>> = stateFlow.asStateFlow()
 
@@ -141,6 +195,7 @@ class EncryptedConnectedDevicesLocalStore @Inject constructor(
 
     private companion object {
         const val CONNECTED_DEVICES_STORAGE_LOG_TAG = "ZeroIntrusionStorage"
+        const val MOBILE_REGISTRATIONS_KEY = "mobile_namespace_registrations"
     }
 }
 

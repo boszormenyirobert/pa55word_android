@@ -7,6 +7,7 @@ sealed class AppRoute(val route: String) {
     data object Home : AppRoute("home")
     data object Settings : AppRoute("settings")
     data object Accounts : AppRoute("accounts")
+    data object AddDatabase : AppRoute("add-database")
     data object SettingsConnectedDevices : AppRoute("settings-connected-devices")
     data object RecoveryConnection : AppRoute("recovery-connection")
     data object Devices : AppRoute("devices")

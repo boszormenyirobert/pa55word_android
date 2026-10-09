@@ -19,8 +19,10 @@ import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
 import com.zerointrusion.domain.namespaces.NamespacesRepository
 import com.zerointrusion.domain.qr.QrNamespaceRegistrationRepository
 import com.zerointrusion.domain.registration.RegistrationRepository
+import com.zerointrusion.domain.registration.RegistrationValidator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,8 +40,10 @@ class AppViewModel @Inject constructor(
     private val qrNamespaceRegistrationRepository: QrNamespaceRegistrationRepository,
     private val authenticationRepository: AuthenticationRepository,
     private val notificationRepository: NotificationRepository,
+    private val registrationValidator: RegistrationValidator,
 ) : ViewModel() {
     private companion object {
+        const val AUTHENTICATION_LOG_TAG = "ZeroIntrusionAuthentication"
         const val QR_LOG_TAG = "ZeroIntrusionQr"
         const val NAMESPACE_QR_TYPE = "namespace"
         const val NAMESPACE_SYNC_QR_TYPE = "namespace_sync"
@@ -67,6 +71,11 @@ class AppViewModel @Inject constructor(
     )
 
     init {
+        viewModelScope.launch {
+            namespacesRepository.observeAccounts().collect { accounts ->
+                _uiState.update { it.copy(accounts = accounts) }
+            }
+        }
         viewModelScope.launch {
             registrationRepository.observeRegistrationState().collect { state ->
                 _uiState.update {
@@ -168,6 +177,59 @@ class AppViewModel @Inject constructor(
         _uiState.update { it.copy(qrNamespaceRegistrationState = QrNamespaceRegistrationUiState.Idle) }
     }
 
+    fun clearAddDatabaseState() {
+        if (!_uiState.value.addDatabaseState.isSubmitting) {
+            _uiState.update { it.copy(addDatabaseState = AddDatabaseUiState()) }
+        }
+    }
+
+    fun onDatabaseNameChanged(name: String) {
+        if (_uiState.value.addDatabaseState.isSubmitting) return
+        _uiState.update {
+            it.copy(addDatabaseState = it.addDatabaseState.copy(name = name, nameError = null, errorMessage = null))
+        }
+    }
+
+    fun onDatabaseUrlChanged(url: String) {
+        if (_uiState.value.addDatabaseState.isSubmitting) return
+        _uiState.update {
+            it.copy(addDatabaseState = it.addDatabaseState.copy(url = url, urlError = null, errorMessage = null))
+        }
+    }
+
+    fun addDatabase() {
+        val form = _uiState.value.addDatabaseState
+        if (form.isSubmitting || form.isSuccess) return
+        val validation = registrationValidator.validateNamespaceForm(form.name, form.url)
+        if (!validation.isValid) {
+            _uiState.update {
+                it.copy(addDatabaseState = form.copy(
+                    nameError = validation.namespaceNameError,
+                    urlError = validation.namespaceUrlError,
+                ))
+            }
+            return
+        }
+        _uiState.update { it.copy(addDatabaseState = form.copy(isSubmitting = true, errorMessage = null)) }
+        viewModelScope.launch {
+            try {
+                namespacesRepository.addDatabase(form.name, form.url)
+                _uiState.update {
+                    it.copy(addDatabaseState = it.addDatabaseState.copy(isSubmitting = false, isSuccess = true))
+                }
+            } catch (exception: CancellationException) {
+                _uiState.update { it.copy(addDatabaseState = it.addDatabaseState.copy(isSubmitting = false)) }
+                throw exception
+            } catch (exception: Exception) {
+                val message = exception.message ?: "Database registration failed."
+                Log.e("ZeroIntrusionRegistration", "Database registration failed.", exception)
+                _uiState.update {
+                    it.copy(addDatabaseState = it.addDatabaseState.copy(isSubmitting = false, errorMessage = message))
+                }
+            }
+        }
+    }
+
     fun setSelectedNamespace(namespace: NamespaceEntry) {
         viewModelScope.launch {
             runCatching { namespacesRepository.setSelectedNamespace(namespace) }
@@ -267,7 +329,6 @@ class AppViewModel @Inject constructor(
                 return
             }
 
-            val removesCurrentMobile = device.targetMobileDeviceId == _uiState.value.registrationState?.deviceId
             _uiState.update {
                 it.copy(
                     deviceRemovalState = currentState.copy(
@@ -279,7 +340,7 @@ class AppViewModel @Inject constructor(
             viewModelScope.launch {
                 runCatching { connectedDevicesRepository.deleteDevice(device) }
                     .onSuccess {
-                        if (removesCurrentMobile) {
+                        if (!_uiState.value.isRegistered) {
                             _uiState.update { it.copy(deviceRemovalState = DeviceRemovalUiState.Idle) }
                         } else {
                             loadRemovableDevices()
@@ -380,27 +441,27 @@ class AppViewModel @Inject constructor(
 
         liveDesktopSessionsRefreshInFlight = true
         viewModelScope.launch {
-            runCatching {
-                authenticationRepository.fetchActiveDesktopSessions(
+            try {
+                val sessions = authenticationRepository.fetchActiveDesktopSessions(
                     namespaceId = namespaceId,
                     namespaceUrl = namespaceUrl,
                 )
+                _uiState.update { state ->
+                    state.copy(
+                        liveDesktopSessions = sessions,
+                        desktopSessionsState = when (val desktopState = state.desktopSessionsState) {
+                            is DesktopSessionsUiState.Success -> desktopState.copy(sessions = sessions)
+                            else -> state.desktopSessionsState
+                        },
+                    )
+                }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                Log.w(AUTHENTICATION_LOG_TAG, "Background desktop-session refresh failed.", exception)
+            } finally {
+                liveDesktopSessionsRefreshInFlight = false
             }
-                .onSuccess { sessions ->
-                    _uiState.update { state ->
-                        state.copy(
-                            liveDesktopSessions = sessions,
-                            desktopSessionsState = when (val desktopState = state.desktopSessionsState) {
-                                is DesktopSessionsUiState.Success -> desktopState.copy(sessions = sessions)
-                                else -> state.desktopSessionsState
-                            },
-                        )
-                    }
-                }
-                .onFailure {
-                    // Keep the last visible main-screen live-session state if a background refresh fails.
-                }
-            liveDesktopSessionsRefreshInFlight = false
         }
     }
 

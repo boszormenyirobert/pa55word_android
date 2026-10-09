@@ -7,7 +7,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -29,6 +32,7 @@ import com.zerointrusion.presentation.qrread.QrNamespaceDeviceSelectionScreen
 import com.zerointrusion.presentation.qrread.QrReadScreen
 import com.zerointrusion.presentation.settings.RecoveryConnectionScreen
 import com.zerointrusion.presentation.settings.AccountsScreen
+import com.zerointrusion.presentation.settings.AddDatabaseScreen
 import com.zerointrusion.presentation.settings.SettingsScreen
 import com.zerointrusion.presentation.settings.SettingsConnectedDevicesScreen
 import com.zerointrusion.presentation.registration.RegistrationScreen
@@ -48,6 +52,7 @@ fun ZeroIntrusionAppRoot(
     val appState by appViewModel.uiState.collectAsStateWithLifecycle()
     val registrationState by registrationViewModel.uiState.collectAsStateWithLifecycle()
     val navController = rememberNavController()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     LaunchedEffect(appState.currentRoute) {
         if (navController.currentDestination?.route != appState.currentRoute) {
@@ -80,17 +85,19 @@ fun ZeroIntrusionAppRoot(
         }
     }
 
-    LaunchedEffect(appState.isAuthenticated, appState.isRegistered) {
+    LaunchedEffect(appState.isAuthenticated, appState.isRegistered, lifecycleOwner) {
         if (!appState.isAuthenticated || !appState.isRegistered) {
             return@LaunchedEffect
         }
 
-        appViewModel.refreshAccountDetailsSnapshot()
-        appViewModel.refreshLiveDesktopSessions()
-        while (isActive) {
-            delay(SHARED_ACCOUNT_DETAILS_POLL_INTERVAL_MILLIS)
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             appViewModel.refreshAccountDetailsSnapshot()
             appViewModel.refreshLiveDesktopSessions()
+            while (isActive) {
+                delay(SHARED_ACCOUNT_DETAILS_POLL_INTERVAL_MILLIS)
+                appViewModel.refreshAccountDetailsSnapshot()
+                appViewModel.refreshLiveDesktopSessions()
+            }
         }
     }
 
@@ -177,11 +184,33 @@ fun ZeroIntrusionAppRoot(
             }
             composable(AppRoute.Accounts.route) {
                 AccountsScreen(
-                    namespaces = appState.namespaces,
+                    namespaces = appState.accounts,
                     deleting = appState.accountDeletionInProgress,
                     errorMessage = appState.accountDeletionErrorMessage,
                     onDeleteAccount = appViewModel::deleteAccount,
+                    onAddDatabase = {
+                        appViewModel.clearAddDatabaseState()
+                        navController.navigate(AppRoute.AddDatabase.route)
+                    },
                     onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.AddDatabase.route) {
+                LaunchedEffect(appState.addDatabaseState.isSuccess) {
+                    if (appState.addDatabaseState.isSuccess) {
+                        navController.popBackStack(AppRoute.Accounts.route, inclusive = false)
+                        appViewModel.clearAddDatabaseState()
+                    }
+                }
+                AddDatabaseScreen(
+                    state = appState.addDatabaseState,
+                    onNameChanged = appViewModel::onDatabaseNameChanged,
+                    onUrlChanged = appViewModel::onDatabaseUrlChanged,
+                    onSubmit = appViewModel::addDatabase,
+                    onBack = {
+                        appViewModel.clearAddDatabaseState()
+                        navController.popBackStack()
+                    },
                 )
             }
             composable(AppRoute.RecoveryConnection.route) {

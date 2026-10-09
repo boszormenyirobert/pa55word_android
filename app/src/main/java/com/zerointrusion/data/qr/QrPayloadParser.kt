@@ -34,6 +34,7 @@ internal class QrPayloadParser(
         val namespaceId: String?,
         val namespaceName: String?,
         val namespaceUrl: String?,
+        val targetUrl: String?,
         val namespaceUrls: List<String>?,
         val mobileDeviceId: String?,
         val namespaces: List<RawAdditionalMobileNamespace>?,
@@ -59,14 +60,20 @@ internal class QrPayloadParser(
                 val desktopDeviceId = payload.desktopDeviceId?.trim().orEmpty()
                 val publicKey = payload.publicKey?.trim().orEmpty()
                 val deviceName = payload.deviceName?.trim().orEmpty()
+                val targetUrl = payload.targetUrl?.trim().orEmpty()
                 validateDesktopDeviceId(desktopDeviceId)
                 validatePublicKey(publicKey)
                 validateDeviceName(deviceName)
+                if (targetUrl.isEmpty()) {
+                    throw RegistrationFailure.Validation("The scanned QR payload does not contain a targetUrl.")
+                }
+                validateNamespaceUrl(targetUrl)
 
                 DeviceRegistrationQrPayload(
                     desktopDeviceId = desktopDeviceId,
                     publicKey = publicKey,
                     deviceName = deviceName,
+                    targetUrl = targetUrl,
                 )
             }
 

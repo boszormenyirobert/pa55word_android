@@ -36,6 +36,16 @@ data class QrNamespaceDeviceOption(
     val deviceName: String,
 )
 
+data class AddDatabaseUiState(
+    val name: String = "",
+    val url: String = "",
+    val nameError: String? = null,
+    val urlError: String? = null,
+    val errorMessage: String? = null,
+    val isSubmitting: Boolean = false,
+    val isSuccess: Boolean = false,
+)
+
 sealed class ConnectedDevicesUiState {
     data object Idle : ConnectedDevicesUiState()
     data object InProgress : ConnectedDevicesUiState()
@@ -89,6 +99,8 @@ data class AppUiState(
     val liveDesktopSessionRevokingAttestationId: String? = null,
     val liveDesktopSessionRevokeErrorMessage: String? = null,
     val namespaces: List<NamespaceEntry> = emptyList(),
+    val accounts: List<NamespaceEntry> = emptyList(),
+    val addDatabaseState: AddDatabaseUiState = AddDatabaseUiState(),
     val namespaceSelectionErrorMessage: String? = null,
     val namespaceManagementErrorMessage: String? = null,
     val accountDeletionInProgress: Boolean = false,

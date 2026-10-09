@@ -23,7 +23,10 @@ import com.zerointrusion.data.storage.toNamespaceEntries
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
+import com.zerointrusion.domain.connecteddevices.MobileNamespaceRegistration
 import com.zerointrusion.domain.connecteddevices.RemovableAccountDevice
+import com.zerointrusion.domain.namespaces.NamespaceEntry
+import com.zerointrusion.domain.registration.RegistrationState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -43,9 +46,13 @@ class ConnectedDevicesRepositoryImpl(
         connectedDevicesLocalStore.observeEntries().map { entries -> entries.toConnectedDeviceGroups() }
 
     override suspend fun fetchConnectedDevices(): List<ConnectedDeviceGroup> {
+        val registrationsBeforeRefresh = connectedDevicesLocalStore.currentMobileRegistrations()
         val snapshot = accountDetailsSnapshotFetcher.fetchSnapshot()
         accountDetailsStateHolder.replaceSnapshot(snapshot)
         connectedDevicesLocalStore.replaceEntries(snapshot.namespaces.toLocalConnectedDeviceEntries())
+        connectedDevicesLocalStore.updateMobileRegistrations { current ->
+            mergeRefreshedMobileRegistrations(registrationsBeforeRefresh, current, snapshot.mobileRegistrations)
+        }
         Log.d(
             ACCOUNT_LOG_TAG,
             "ACCOUNT details parsed response. groups=${accountDetailsSnapshotFetcher.summarizeGroups(snapshot.groups)}",
@@ -100,8 +107,7 @@ class ConnectedDevicesRepositoryImpl(
         }
 
         if (targetMobileDeviceId == state.deviceId.trim()) {
-            connectedDevicesLocalStore.replaceEntries(emptyList())
-            stateStore.clear()
+            fetchConnectedDevices()
         }
     }
 
@@ -153,22 +159,10 @@ class ConnectedDevicesRepositoryImpl(
         }
     }
 
-    private fun accountTargets(state: com.zerointrusion.domain.registration.RegistrationState): List<AccountTarget> {
-        val storedTargets = connectedDevicesLocalStore.currentEntries().toNamespaceEntries().map { namespace ->
-            AccountTarget(namespace.namespaceUrl, namespace.accountId)
-        }
-        return (storedTargets + AccountTarget(state.namespaceUrl, state.accountId))
-            .mapNotNull { target ->
-            val namespaceUrl = target.namespaceUrl.trim().trimEnd('/')
-            val accountId = target.accountId.trim()
-            AccountTarget(namespaceUrl, accountId).takeIf { namespaceUrl.isNotEmpty() && accountId.isNotEmpty() }
-            }.distinctBy { target -> target.namespaceUrl.lowercase() + "|" + target.accountId.lowercase() }
-            .sortedWith(compareBy({ it.namespaceUrl.lowercase() }, { it.accountId.lowercase() }))
-    }
-
-    private data class AccountTarget(
-        val namespaceUrl: String,
-        val accountId: String,
+    private fun accountTargets(state: RegistrationState): List<AccountTarget> = resolveDeviceRemovalAccountTargets(
+        state = state,
+        namespaces = connectedDevicesLocalStore.currentEntries().toNamespaceEntries(),
+        mobileRegistrations = connectedDevicesLocalStore.currentMobileRegistrations(),
     )
 
     private inline fun <reified T> parseResponse(body: String, operation: String): T {
@@ -207,6 +201,30 @@ class ConnectedDevicesRepositoryImpl(
         }
         return listOfNotNull(mobileTarget, desktopTarget)
     }
+}
+
+internal data class AccountTarget(
+    val namespaceUrl: String,
+    val accountId: String,
+)
+
+internal fun resolveDeviceRemovalAccountTargets(
+    state: RegistrationState,
+    namespaces: List<NamespaceEntry>,
+    mobileRegistrations: List<MobileNamespaceRegistration>,
+): List<AccountTarget> {
+    val storedTargets = namespaces.map { AccountTarget(it.namespaceUrl, it.accountId) }
+    val mobileTargets = mobileRegistrations
+        .filter { it.mobileDeviceId.trim() == state.deviceId.trim() }
+        .map { AccountTarget(it.namespaceUrl, it.accountId) }
+    return (storedTargets + mobileTargets + AccountTarget(state.namespaceUrl, state.accountId))
+        .mapNotNull { target ->
+            val namespaceUrl = target.namespaceUrl.trim().trimEnd('/')
+            val accountId = target.accountId.trim()
+            AccountTarget(namespaceUrl, accountId).takeIf { namespaceUrl.isNotEmpty() && accountId.isNotEmpty() }
+        }
+        .distinctBy { it.namespaceUrl.lowercase() + "|" + it.accountId.lowercase() }
+        .sortedWith(compareBy({ it.namespaceUrl.lowercase() }, { it.accountId.lowercase() }))
 }
 
 internal fun List<RemovableAccountDevice>.filterUniqueRemovableDevices(

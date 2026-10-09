@@ -54,6 +54,7 @@ fun AccountsScreen(
     deleting: Boolean,
     errorMessage: String?,
     onDeleteAccount: (namespaceUrl: String, accountId: String) -> Unit,
+    onAddDatabase: () -> Unit,
     onBack: () -> Unit,
 ) {
     val accounts = remember(namespaces) {
@@ -95,6 +96,16 @@ fun AccountsScreen(
             style = MaterialTheme.typography.headlineMedium,
             color = White,
         )
+
+        OutlinedButton(
+            onClick = onAddDatabase,
+            enabled = !deleting,
+            border = BorderStroke(2.dp, Yellow),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Add new database", color = White)
+        }
 
         errorMessage?.takeIf { it.isNotBlank() }?.let { message ->
             Text(text = message, color = ErrorTextLight, style = MaterialTheme.typography.bodyMedium)

@@ -7,6 +7,7 @@ data class DeviceRegistrationQrPayload(
     val desktopDeviceId: String,
     val publicKey: String,
     val deviceName: String,
+    val targetUrl: String,
 ) : ScannedQrPayload
 
 data class NamespaceQrPayload(

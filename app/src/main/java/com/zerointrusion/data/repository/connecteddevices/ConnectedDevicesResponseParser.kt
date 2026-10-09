@@ -6,6 +6,7 @@ import com.google.gson.JsonSyntaxException
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceNamespace
+import com.zerointrusion.domain.connecteddevices.MobileNamespaceRegistration
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 
 internal class ConnectedDevicesResponseParser(
@@ -14,6 +15,7 @@ internal class ConnectedDevicesResponseParser(
     data class ParsedConnectedDevices(
         val groups: List<ConnectedDeviceGroup>,
         val namespaces: List<NamespaceEntry>,
+        val mobileRegistrations: List<MobileNamespaceRegistration> = emptyList(),
     )
 
     private data class ConnectedAccountsEnvelopeDto(
@@ -25,12 +27,19 @@ internal class ConnectedDevicesResponseParser(
         val accountId: String?,
         val devices: List<ConnectedAccountDeviceDto>?,
         val namespaces: List<ConnectedNamespaceDto>?,
+        val dek: List<ConnectedDekDto>?,
+    )
+
+    private data class ConnectedDekDto(
+        val mobileDeviceId: String?,
+        val encDek: String?,
     )
 
     private data class ConnectedAccountDeviceDto(
         val accountId: String?,
         val deviceId: String?,
         val desktopDeviceId: String?,
+        val mobileDeviceId: String?,
         val deviceName: String?,
         val publicKey: String?,
         val namespaces: List<ConnectedNamespaceDto>?,
@@ -45,9 +54,14 @@ internal class ConnectedDevicesResponseParser(
         val namespace: String?,
         val url: String?,
         val root: Boolean?,
-    )
+    ) {
+        val normalizedName: String
+            get() = listOf(name, namespace).firstOrNull { !it.isNullOrBlank() }?.trim().orEmpty()
+        val normalizedUrl: String
+            get() = url?.trim().orEmpty()
+    }
 
-    fun parse(rawBody: String): ParsedConnectedDevices {
+    fun parse(rawBody: String, mobileDeviceId: String? = null): ParsedConnectedDevices {
         val envelope = try {
             gson.fromJson(rawBody, ConnectedAccountsEnvelopeDto::class.java)
         } catch (_: JsonSyntaxException) {
@@ -100,7 +114,7 @@ internal class ConnectedDevicesResponseParser(
                     namespace.desktopDeviceId?.trim()?.takeIf { it.isNotEmpty() }
                 }.distinct()
 
-                if (legacyDeviceIds.isEmpty()) {
+                if (legacyDeviceIds.isEmpty() && deviceDtos.none { !it.mobileDeviceId.isNullOrBlank() }) {
                     throw RegistrationFailure.Server("The backend returned a connected devices entry without any deviceId.")
                 }
 
@@ -181,6 +195,35 @@ internal class ConnectedDevicesResponseParser(
         return ParsedConnectedDevices(
             groups = groups,
             namespaces = namespaces,
+            mobileRegistrations = envelope.accounts.orEmpty().flatMap { account ->
+                account.devices.orEmpty().flatMap { device ->
+                    val deviceId = device.mobileDeviceId?.trim().orEmpty()
+                    if (deviceId.isEmpty() || (mobileDeviceId != null && deviceId != mobileDeviceId)) {
+                        return@flatMap emptyList()
+                    }
+                    val accountId = account.accountId?.trim().orEmpty()
+                    val encDek = account.dek.orEmpty()
+                        .firstOrNull { it.mobileDeviceId?.trim() == deviceId }
+                        ?.encDek?.trim().orEmpty()
+                    device.namespaces.orEmpty().map { namespace ->
+                        val namespaceId = namespace.namespaceId?.trim().orEmpty()
+                        val namespaceName = namespace.normalizedName
+                        val namespaceUrl = namespace.normalizedUrl.trimEnd('/')
+                        if (accountId.isEmpty() || namespaceId.isEmpty() || namespaceName.isEmpty() || namespaceUrl.isEmpty()) {
+                            throw RegistrationFailure.Server("The backend returned an invalid mobile namespace registration.")
+                        }
+                        MobileNamespaceRegistration(
+                            accountId = accountId,
+                            mobileDeviceId = deviceId,
+                            namespaceId = namespaceId,
+                            namespaceName = namespaceName,
+                            namespaceUrl = namespaceUrl,
+                            encDek = encDek,
+                            root = namespace.root == true,
+                        )
+                    }
+                }
+            }.distinct(),
         )
     }
 
@@ -204,11 +247,8 @@ internal class ConnectedDevicesResponseParser(
         val accountId = namespaceDto.accountId?.trim().orEmpty()
         val deviceId = namespaceDto.desktopDeviceId?.trim()?.takeIf { it.isNotEmpty() } ?: deviceIdFallback
         val namespaceId = namespaceDto.namespaceId?.trim().orEmpty()
-        val namespaceName = listOf(namespaceDto.name, namespaceDto.namespace)
-            .firstOrNull { !it.isNullOrBlank() }
-            ?.trim()
-            .orEmpty()
-        val namespaceUrl = namespaceDto.url?.trim().orEmpty()
+        val namespaceName = namespaceDto.normalizedName
+        val namespaceUrl = namespaceDto.normalizedUrl
 
         if (accountId.isEmpty() || deviceId.isEmpty() || namespaceId.isEmpty() || namespaceName.isEmpty() || namespaceUrl.isEmpty()) {
             return@mapNotNull null
@@ -233,11 +273,8 @@ internal class ConnectedDevicesResponseParser(
         publicKey: String?,
     ): List<NamespaceEntry> = mapNotNull { namespaceDto ->
         val namespaceId = namespaceDto.namespaceId?.trim().orEmpty()
-        val namespaceName = listOf(namespaceDto.name, namespaceDto.namespace)
-            .firstOrNull { !it.isNullOrBlank() }
-            ?.trim()
-            .orEmpty()
-        val namespaceUrl = namespaceDto.url?.trim().orEmpty()
+        val namespaceName = namespaceDto.normalizedName
+        val namespaceUrl = namespaceDto.normalizedUrl
 
         if (namespaceId.isEmpty() || namespaceName.isEmpty() || namespaceUrl.isEmpty()) {
             return@mapNotNull null

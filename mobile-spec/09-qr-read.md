@@ -17,9 +17,12 @@ QR device payload shape:
   "type": "deviceRegistration",
   "desktopDeviceId": "string",
   "publicKey": "string",
-  "deviceName": "string"
+  "deviceName": "string",
+  "targetUrl": "http://192.168.178.20:3000"
 }
 ```
+
+For `deviceRegistration`, `targetUrl` is required and must match the current registration's server base URL (ignoring surrounding whitespace, trailing slashes, and case). A mismatch aborts the operation with an error before the desktop registration request is sent; the app does not automatically switch servers.
 
 QR namespace payload shape:
 ```json
@@ -83,6 +86,8 @@ After the new mobile receives and stores its SSE bootstrap payload, it opens QR 
 `namespace_sync` follows a different flow from `namespace`:
 - `namespaceName` is omitted from the QR payload.
 - The app resolves the namespace locally by normalized `namespaceUrl`.
+- Before resolving the account, the app always awaits an account-list refresh. A failed refresh aborts the operation, and a removed registration cannot be replaced by a stale cached match.
+- For the current phone, the first stored mobile registration matching that URL supplies the account ID, namespace, and encrypted DEK, even if multiple accounts match. No account-selection dropdown is shown, and the QR namespace ID does not override this ordering.
 - The app skips the QR phone-registration `POST /api/v1/account` request.
 
 Phone registration request from QR shape:

@@ -46,6 +46,7 @@ internal class AccountDetailsSnapshotMerger {
                 ).joinToString(separator = "|")
             }
             .sortedWith(compareBy({ it.namespaceName.lowercase() }, { it.desktopDeviceId.lowercase() })),
+        mobileRegistrations = snapshots.flatMap { it.mobileRegistrations }.distinct(),
     )
 
     private fun NamespaceEntry.withCarriedForwardAttestationId(existingNamespaces: List<NamespaceEntry>): NamespaceEntry {
@@ -66,5 +67,18 @@ internal data class AccountDetailsFetchTarget(
     val namespaceUrl: String,
     val accountId: String,
 ) {
-    fun storageIdentity(): String = namespaceUrl.lowercase() + "|" + accountId.lowercase()
+    fun storageIdentity(): String = namespaceUrl.trim().trimEnd('/').lowercase() + "|" + accountId.trim().lowercase()
+}
+
+internal fun AccountDetailsSnapshot.withoutAccounts(removedTargets: Set<String>): AccountDetailsSnapshot {
+    fun removed(url: String, accountId: String) =
+        AccountDetailsFetchTarget(url, accountId).storageIdentity() in removedTargets
+    return copy(
+        groups = groups.mapNotNull { group ->
+            val remaining = group.namespaces.filterNot { removed(it.namespaceUrl, it.accountId) }
+            group.takeIf { group.namespaces.isEmpty() || remaining.isNotEmpty() }?.copy(namespaces = remaining)
+        },
+        namespaces = namespaces.filterNot { removed(it.namespaceUrl, it.accountId) },
+        mobileRegistrations = mobileRegistrations.filterNot { removed(it.namespaceUrl, it.accountId) },
+    )
 }

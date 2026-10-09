@@ -13,6 +13,7 @@ import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
 import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.data.storage.toNamespaceEntries
+import com.zerointrusion.data.storage.removeAccountConnections
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.connecteddevices.AccountDetailsSnapshot
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
@@ -52,6 +53,7 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
             try {
                 dekService.decryptDek(encryptedDek)
             } catch (_: RegistrationFailure.Security) {
+                connectedDevicesLocalStore.replaceMobileRegistrations(emptyList())
                 stateStore.clear()
                 throw RegistrationFailure.Security(
                     "The locally stored registration DEK can no longer be decrypted with the current device private key. The Android Keystore keypair on this phone no longer matches the public key registered on the backend. Local registration was cleared. Re-register this phone.",
@@ -76,9 +78,16 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
             namespaceUrl = registrationState.namespaceUrl.trim().trimEnd('/'),
             accountId = registrationState.accountId.trim(),
         )
-        val pendingTargets = ArrayDeque(snapshotMerger.initialTargets(homeTarget, existingNamespaces))
+        val mobileTargets = connectedDevicesLocalStore.currentMobileRegistrations()
+            .filter { it.mobileDeviceId == registrationState.deviceId }
+            .map { AccountDetailsFetchTarget(it.namespaceUrl, it.accountId) }
+        val pendingTargets = ArrayDeque(
+            (snapshotMerger.initialTargets(homeTarget, existingNamespaces) + mobileTargets)
+                .distinctBy { it.storageIdentity() },
+        )
         val fetchedTargetKeys = mutableSetOf<String>()
         val snapshots = mutableListOf<AccountDetailsSnapshot>()
+        val removedTargets = mutableSetOf<String>()
 
         while (pendingTargets.isNotEmpty()) {
             val target = pendingTargets.removeFirst()
@@ -89,8 +98,12 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
             val snapshot = fetchSnapshotForTarget(
                 registrationState = registrationState,
                 target = target,
-                isHomeTarget = target.storageIdentity() == homeTarget.storageIdentity(),
             )
+            if (snapshot == null) {
+                removedTargets += target.storageIdentity()
+                pruneRemovedTarget(target)
+                continue
+            }
             snapshots += snapshot
 
             snapshotMerger.discoveredTargets(target, snapshot.namespaces)
@@ -98,14 +111,46 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
                 .forEach { discoveredTarget -> pendingTargets.addLast(discoveredTarget) }
         }
 
-        snapshotMerger.mergeSnapshots(snapshots, existingNamespaces)
+        val merged = snapshotMerger.mergeSnapshots(snapshots, existingNamespaces).withoutAccounts(removedTargets)
+        if (homeTarget.storageIdentity() in removedTargets) {
+            val replacement = merged.mobileRegistrations.firstOrNull {
+                it.mobileDeviceId == registrationState.deviceId && it.encDek.isNotBlank()
+            }
+            if (replacement == null) {
+                stateStore.clear()
+            } else {
+                stateStore.save(
+                    registrationState.copy(
+                        accountId = replacement.accountId,
+                        namespaceId = replacement.namespaceId,
+                        namespaceName = replacement.namespaceName,
+                        namespaceUrl = replacement.namespaceUrl,
+                        encDek = replacement.encDek,
+                    ),
+                )
+            }
+        }
+        merged
+    }
+
+    private suspend fun pruneRemovedTarget(target: AccountDetailsFetchTarget) {
+        val removed = setOf(target.storageIdentity())
+        connectedDevicesLocalStore.removeAccountConnections { url, accountId ->
+            AccountDetailsFetchTarget(url, accountId).storageIdentity() in removed
+        }
+        accountDetailsStateHolder.currentSnapshot()?.let { snapshot ->
+            accountDetailsStateHolder.replaceSnapshot(snapshot.withoutAccounts(removed))
+        }
+        Log.w(
+            ACCOUNT_LOG_TAG,
+            "Removed deregistered mobile connection. namespaceUrl=${target.namespaceUrl} accountId=${target.accountId}",
+        )
     }
 
     private suspend fun fetchSnapshotForTarget(
         registrationState: RegistrationState,
         target: AccountDetailsFetchTarget,
-        isHomeTarget: Boolean,
-    ): AccountDetailsSnapshot {
+    ): AccountDetailsSnapshot? {
         val nonce = newRequestNonce()
 
         val requestUrl = buildConnectedDevicesUrl(
@@ -147,13 +192,8 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
                 ACCOUNT_LOG_TAG,
                 "ACCOUNT details fetch failed. http=${response.code()} namespaceUrl=${target.namespaceUrl} accountId=${target.accountId} url=$requestUrl",
             )
-            if (isHomeTarget && response.code() in setOf(401, 404, 410)) {
-                connectedDevicesLocalStore.replaceEntries(emptyList())
-                stateStore.clear()
-                Log.w(
-                    ACCOUNT_LOG_TAG,
-                    "ACCOUNT details cleared local registration because the current mobile device no longer exists on the server.",
-                )
+            if (isRemovedAccountRegistration(response.code(), errorBody, gson)) {
+                return null
             }
             throw RegistrationFailure.Server(
                 errorBody ?: "Request failed with HTTP ${response.code()} at $requestUrl.",
@@ -169,7 +209,7 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
             ACCOUNT_LOG_TAG,
             "ACCOUNT details raw response body. namespaceUrl=${target.namespaceUrl} accountId=${target.accountId} url=$requestUrl body=$body",
         )
-        val parsedResponse = connectedDevicesResponseParser.parse(body)
+        val parsedResponse = connectedDevicesResponseParser.parse(body, registrationState.deviceId)
         Log.d(
             ACCOUNT_LOG_TAG,
             "ACCOUNT details raw response. namespaceUrl=${target.namespaceUrl} accountId=${target.accountId} url=$requestUrl namespaces=${gson.toJson(parsedResponse.namespaces)} body=$body",
@@ -177,6 +217,7 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
         return AccountDetailsSnapshot(
             groups = parsedResponse.groups,
             namespaces = parsedResponse.namespaces,
+            mobileRegistrations = parsedResponse.mobileRegistrations,
         )
     }
 

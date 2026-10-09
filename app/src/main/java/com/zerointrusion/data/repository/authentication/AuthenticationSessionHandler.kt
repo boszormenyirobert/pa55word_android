@@ -20,9 +20,11 @@ import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
 import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
+import com.zerointrusion.domain.connecteddevices.MobileNamespaceRegistration
 import com.zerointrusion.domain.authentication.DesktopSessionRevocationResult
 import com.zerointrusion.domain.common.RegistrationFailure
 import kotlinx.coroutines.async
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +48,9 @@ internal class AuthenticationSessionHandler(
         val requestedNamespaceUrl = namespaceUrl?.trim()?.trimEnd('/').orEmpty()
         runCatching { connectedDevicesRepository.fetchConnectedDevices() }
             .onFailure { exception ->
+                if (exception is CancellationException) {
+                    throw exception
+                }
                 if (accountDetailsStateHolder.currentSnapshot()?.namespaces.isNullOrEmpty()) {
                     throw exception
                 }
@@ -56,14 +61,11 @@ internal class AuthenticationSessionHandler(
                 )
             }
 
-        val availableNamespaces = accountDetailsStateHolder.currentSnapshot()?.namespaces.orEmpty()
-        if (availableNamespaces.isEmpty()) {
-            throw RegistrationFailure.Validation(
-                "No namespaces are available after refreshing account details for live-session fetch.",
-            )
-        }
+        val snapshot = accountDetailsStateHolder.currentSnapshot()
+        val availableNamespaces = snapshot?.namespaces.orEmpty()
         val requestNamespaces = resolveSessionRequests(
             availableNamespaces = availableNamespaces,
+            mobileRegistrations = snapshot?.mobileRegistrations.orEmpty(),
             registrationState = registrationState,
             requestedNamespaceId = requestedNamespaceId,
             requestedNamespaceUrl = requestedNamespaceUrl,
@@ -233,6 +235,9 @@ internal class AuthenticationSessionHandler(
                 signature = signature,
             )
         } catch (exception: Exception) {
+            if (exception is CancellationException) {
+                throw exception
+            }
             Log.e(AUTHENTICATION_LOG_TAG, "AUTH sessions fetch failed before HTTP response. url=$requestUrl namespaceId=${requestNamespace.namespaceId}", exception)
             return NamespaceSessionFetchOutcome(
                 failureMessage = mapNetworkException(requestUrl, exception).message
@@ -408,14 +413,28 @@ internal class AuthenticationSessionHandler(
 
     private fun resolveSessionRequests(
         availableNamespaces: List<com.zerointrusion.domain.namespaces.NamespaceEntry>,
+        mobileRegistrations: List<MobileNamespaceRegistration>,
         registrationState: com.zerointrusion.domain.registration.RegistrationState,
         requestedNamespaceId: String,
         requestedNamespaceUrl: String,
     ): List<NamespaceSessionRequest> {
+        val knownRequests = (
+            availableNamespaces.toSessionRequests(registrationState) +
+                mobileRegistrations.filter { it.mobileDeviceId.trim() == registrationState.deviceId.trim() }
+                    .map { registration ->
+                        NamespaceSessionRequest(
+                            accountId = registration.accountId,
+                            namespaceId = registration.namespaceId,
+                            deviceName = registrationState.deviceName,
+                            namespaceName = registration.namespaceName,
+                            namespaceUrl = registration.namespaceUrl,
+                        )
+                    }
+            ).distinctBy { it.storageIdentity() }
         val hasExplicitNamespaceRequest = requestedNamespaceId.isNotEmpty() || requestedNamespaceUrl.isNotEmpty()
 
         if (hasExplicitNamespaceRequest) {
-            val matchingNamespaces = availableNamespaces.filter { namespaceEntry ->
+            val matchingRequests = knownRequests.filter { namespaceEntry ->
                 val namespaceIdMatches = requestedNamespaceId.isEmpty() ||
                     namespaceEntry.namespaceId.trim().equals(requestedNamespaceId, ignoreCase = true)
                 val namespaceUrlMatches = requestedNamespaceUrl.isEmpty() ||
@@ -423,9 +442,8 @@ internal class AuthenticationSessionHandler(
                 namespaceIdMatches && namespaceUrlMatches
             }
 
-            if (matchingNamespaces.isNotEmpty()) {
-                return matchingNamespaces.toSessionRequests(registrationState)
-                    .distinctBy { it.storageIdentity() }
+            if (matchingRequests.isNotEmpty()) {
+                return matchingRequests
             }
 
             return listOf(
@@ -439,9 +457,8 @@ internal class AuthenticationSessionHandler(
             )
         }
 
-        if (availableNamespaces.isNotEmpty()) {
-            return availableNamespaces.toSessionRequests(registrationState)
-                .distinctBy { it.storageIdentity() }
+        if (knownRequests.isNotEmpty()) {
+            return knownRequests
         }
 
         return listOf(

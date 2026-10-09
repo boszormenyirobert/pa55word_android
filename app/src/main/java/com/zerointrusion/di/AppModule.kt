@@ -229,12 +229,18 @@ object AppModule {
         registrationApi: RegistrationApi,
         signatureService: SignatureService,
         gson: Gson,
+        keyStoreService: KeyStoreService,
+        namespaceService: NamespaceService,
+        validator: RegistrationValidator,
     ): NamespacesRepository = NamespacesRepositoryImpl(
         connectedDevicesLocalStore = connectedDevicesLocalStore,
         stateStore = registrationStateStore,
         registrationApi = registrationApi,
         signatureService = signatureService,
         gson = gson,
+        keyStoreService = keyStoreService,
+        namespaceService = namespaceService,
+        validator = validator,
     )
 
     @Provides

@@ -42,8 +42,8 @@ class QrNamespaceRegistrationRepositoryImpl(
     private val namespaceRegistrationFromQrFlow = NamespaceRegistrationFromQrFlow(
         registrationApi = registrationApi,
         keyStoreService = keyStoreService,
-        accountDetailsStateHolder = accountDetailsStateHolder,
         connectedDevicesRepository = connectedDevicesRepository,
+        connectedDevicesLocalStore = connectedDevicesLocalStore,
         gson = gson,
         validator = validator,
     )
