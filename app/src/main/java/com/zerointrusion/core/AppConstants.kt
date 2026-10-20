@@ -5,6 +5,7 @@ object AppConstants {
     const val ENCRYPTED_PREFS_NAME = "zero_intrusion_secure_registration"
     const val ENCRYPTED_PREFS_STATE_KEY = "registration_state"
     const val ENCRYPTED_PREFS_CONNECTED_DEVICES_KEY = "connected_devices_local_state"
+    const val ENCRYPTED_PREFS_RECOVERY_PENDING_KEY = "recovery_pending_state"
 
     const val HEALTH_ENDPOINT_PATH = "/api/v1/healthy"
     const val REGISTRATION_ENDPOINT_PATH = "/api/v1/account"

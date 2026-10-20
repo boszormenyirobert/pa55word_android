@@ -38,6 +38,7 @@ import javax.inject.Singleton
 
 interface KeyStoreService {
     fun ensureKeyPair()
+    fun createFreshKeyPair()
     fun getPublicKey(): PublicKey
     fun sign(data: ByteArray): ByteArray
     fun decrypt(
@@ -83,6 +84,18 @@ class AndroidKeyStoreService @Inject constructor(
                 .onSuccess { return }
         }
 
+        generateKeyPair(useStrongBox = false)
+    }
+
+    override fun createFreshKeyPair() {
+        val keyStore = loadKeyStore()
+        if (keyStore.containsAlias(AppConstants.KEYSTORE_ALIAS)) {
+            keyStore.deleteEntry(AppConstants.KEYSTORE_ALIAS)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && hasStrongBox()) {
+            runCatching { generateKeyPair(useStrongBox = true) }
+                .onSuccess { return }
+        }
         generateKeyPair(useStrongBox = false)
     }
 

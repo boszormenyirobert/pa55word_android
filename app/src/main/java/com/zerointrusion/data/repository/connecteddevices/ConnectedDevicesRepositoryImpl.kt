@@ -23,6 +23,7 @@ import com.zerointrusion.data.storage.toNamespaceEntries
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
+import com.zerointrusion.domain.connecteddevices.DatabaseAvailability
 import com.zerointrusion.domain.connecteddevices.MobileNamespaceRegistration
 import com.zerointrusion.domain.connecteddevices.RemovableAccountDevice
 import com.zerointrusion.domain.namespaces.NamespaceEntry
@@ -44,6 +45,13 @@ class ConnectedDevicesRepositoryImpl(
 ) : ConnectedDevicesRepository {
     override fun observeConnectedDevices(): Flow<List<ConnectedDeviceGroup>> =
         connectedDevicesLocalStore.observeEntries().map { entries -> entries.toConnectedDeviceGroups() }
+
+    override fun observeDatabaseAvailability(): Flow<List<DatabaseAvailability>> =
+        accountDetailsStateHolder.observeDatabaseAvailability()
+
+    override suspend fun refreshDatabaseAvailability(database: DatabaseAvailability) {
+        accountDetailsSnapshotFetcher.refreshAvailability(database)
+    }
 
     override suspend fun fetchConnectedDevices(): List<ConnectedDeviceGroup> {
         val registrationsBeforeRefresh = connectedDevicesLocalStore.currentMobileRegistrations()

@@ -3,6 +3,7 @@ package com.zerointrusion.presentation.app
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
 import com.zerointrusion.domain.authentication.NamespaceAuthenticationResult
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
+import com.zerointrusion.domain.connecteddevices.DatabaseAvailability
 import com.zerointrusion.domain.connecteddevices.RemovableAccountDevice
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.notification.BackendPushNotification
@@ -98,6 +99,7 @@ data class AppUiState(
     val liveDesktopSessions: List<ActiveDesktopSession> = emptyList(),
     val liveDesktopSessionRevokingAttestationId: String? = null,
     val liveDesktopSessionRevokeErrorMessage: String? = null,
+    val databaseAvailability: List<DatabaseAvailability> = emptyList(),
     val namespaces: List<NamespaceEntry> = emptyList(),
     val accounts: List<NamespaceEntry> = emptyList(),
     val addDatabaseState: AddDatabaseUiState = AddDatabaseUiState(),

@@ -7,6 +7,7 @@ import com.google.gson.GsonBuilder
 import com.zerointrusion.data.firebase.DefaultFirebaseService
 import com.zerointrusion.data.firebase.FirebaseService
 import com.zerointrusion.data.network.RegistrationApi
+import com.zerointrusion.data.network.RecoveryApi
 import com.zerointrusion.data.notification.NotificationRepositoryImpl
 import com.zerointrusion.data.repository.authentication.AuthenticationRepositoryImpl
 import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
@@ -16,6 +17,7 @@ import com.zerointrusion.data.repository.connecteddevices.InMemoryAccountDetails
 import com.zerointrusion.data.repository.namespaces.NamespacesRepositoryImpl
 import com.zerointrusion.data.repository.qr.QrNamespaceRegistrationRepositoryImpl
 import com.zerointrusion.data.repository.registration.RegistrationRepositoryImpl
+import com.zerointrusion.data.repository.recovery.RecoveryRepositoryImpl
 import com.zerointrusion.data.security.AndroidKeyStoreService
 import com.zerointrusion.data.security.DekService
 import com.zerointrusion.data.security.DefaultDekService
@@ -30,12 +32,15 @@ import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
 import com.zerointrusion.data.storage.EncryptedConnectedDevicesLocalStore
 import com.zerointrusion.data.storage.EncryptedRegistrationStateStore
 import com.zerointrusion.data.storage.RegistrationStateStore
+import com.zerointrusion.data.storage.EncryptedRecoveryPendingStateStore
+import com.zerointrusion.data.storage.RecoveryPendingStateStore
 import com.zerointrusion.domain.notification.NotificationRepository
 import com.zerointrusion.domain.authentication.AuthenticationRepository
 import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
 import com.zerointrusion.domain.namespaces.NamespacesRepository
 import com.zerointrusion.domain.qr.QrNamespaceRegistrationRepository
 import com.zerointrusion.domain.registration.RegistrationRepository
+import com.zerointrusion.domain.recovery.RecoveryRepository
 import com.zerointrusion.domain.registration.RegistrationValidator
 import dagger.Module
 import dagger.Provides
@@ -62,9 +67,10 @@ object AppModule {
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
         val builder = OkHttpClient.Builder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
-            .writeTimeout(20, TimeUnit.SECONDS)
+            .callTimeout(5, TimeUnit.SECONDS)
+            .connectTimeout(5, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.SECONDS)
+            .writeTimeout(5, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 val request = chain.request()
                 val requestUrl = request.url.toString()
@@ -113,6 +119,15 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideRecoveryApi(gson: Gson): RecoveryApi = Retrofit.Builder()
+        .baseUrl("https://localhost/")
+        .client(OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build())
+        .addConverterFactory(GsonConverterFactory.create(gson))
+        .build()
+        .create(RecoveryApi::class.java)
+
+    @Provides
+    @Singleton
     fun provideKeyStoreService(
         @ApplicationContext context: Context,
     ): KeyStoreService = AndroidKeyStoreService(context)
@@ -144,6 +159,13 @@ object AppModule {
         @ApplicationContext context: Context,
         gson: Gson,
     ): RegistrationStateStore = EncryptedRegistrationStateStore(context, gson)
+
+    @Provides
+    @Singleton
+    fun provideRecoveryPendingStateStore(
+        @ApplicationContext context: Context,
+        gson: Gson,
+    ): RecoveryPendingStateStore = EncryptedRecoveryPendingStateStore(context, gson)
 
     @Provides
     @Singleton
@@ -219,6 +241,32 @@ object AppModule {
         validator = validator,
         gson = gson,
         okHttpClient = okHttpClient,
+    )
+
+    @Provides
+    @Singleton
+    fun provideRecoveryRepository(
+        recoveryApi: RecoveryApi,
+        gson: Gson,
+        keyStoreService: KeyStoreService,
+        deviceService: DeviceService,
+        dekService: DekService,
+        signatureService: SignatureService,
+        recoveryPendingStateStore: RecoveryPendingStateStore,
+        registrationStateStore: RegistrationStateStore,
+        connectedDevicesLocalStore: ConnectedDevicesLocalStore,
+        firebaseService: FirebaseService,
+    ): RecoveryRepository = RecoveryRepositoryImpl(
+        recoveryApi = recoveryApi,
+        gson = gson,
+        keyStoreService = keyStoreService,
+        deviceService = deviceService,
+        dekService = dekService,
+        signatureService = signatureService,
+        pendingStore = recoveryPendingStateStore,
+        registrationStateStore = registrationStateStore,
+        connectedDevicesStore = connectedDevicesLocalStore,
+        firebaseService = firebaseService,
     )
 
     @Provides

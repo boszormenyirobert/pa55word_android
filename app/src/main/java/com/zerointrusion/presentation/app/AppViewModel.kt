@@ -115,6 +115,12 @@ class AppViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            connectedDevicesRepository.observeDatabaseAvailability().collect { availability ->
+                _uiState.update { state -> state.copy(databaseAvailability = availability) }
+            }
+        }
+
+        viewModelScope.launch {
             namespacesRepository.observeNamespaces().collect { namespaces ->
                 storedNamespaces = namespaces
                 _uiState.update { state ->
@@ -291,15 +297,14 @@ class AppViewModel @Inject constructor(
         }
     }
 
-    fun refreshAccountDetailsSnapshot() {
-        viewModelScope.launch {
-            runCatching {
-                namespacesRepository.validateStoredAccounts()
-                connectedDevicesRepository.fetchConnectedDevices()
-            }
-                .onFailure {
-                    // Leave visible state untouched; background refresh is best-effort.
-                }
+    suspend fun refreshAccountDetailsSnapshot() {
+        try {
+            namespacesRepository.validateStoredAccounts()
+            connectedDevicesRepository.fetchConnectedDevices()
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: Exception) {
+            // Leave visible state untouched; background refresh is best-effort.
         }
     }
 
@@ -431,6 +436,12 @@ class AppViewModel @Inject constructor(
         refreshLiveDesktopSessions(namespaceId = null, namespaceUrl = null)
     }
 
+    fun refreshDatabaseAvailability(database: com.zerointrusion.domain.connecteddevices.DatabaseAvailability) {
+        viewModelScope.launch {
+            connectedDevicesRepository.refreshDatabaseAvailability(database)
+        }
+    }
+
     private fun refreshLiveDesktopSessions(
         namespaceId: String?,
         namespaceUrl: String?,
@@ -518,6 +529,16 @@ class AppViewModel @Inject constructor(
                     )
                 }
             }
+        }
+    }
+
+    fun dismissLiveDesktopSessionRevokeError() {
+        _uiState.update { state ->
+            val desktopSessionsState = state.desktopSessionsState as? DesktopSessionsUiState.Success
+            state.copy(
+                liveDesktopSessionRevokeErrorMessage = null,
+                desktopSessionsState = desktopSessionsState?.copy(message = null) ?: state.desktopSessionsState,
+            )
         }
     }
 

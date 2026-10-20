@@ -26,9 +26,12 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -60,6 +63,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
+import com.zerointrusion.domain.connecteddevices.DatabaseAvailability
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.notification.BackendPushNotification
 import com.zerointrusion.presentation.app.QrNamespaceRegistrationUiState
@@ -67,6 +71,7 @@ import com.zerointrusion.ui.theme.Blue
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ActionDeclineRed
 import com.zerointrusion.ui.theme.ErrorTextLight
+import com.zerointrusion.ui.theme.Green
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
 import com.zerointrusion.ui.theme.Yellow
@@ -77,6 +82,7 @@ fun PostLoginHomeScreen(
     namespaceName: String,
     email: String,
     namespaces: List<NamespaceEntry>,
+    databaseAvailability: List<DatabaseAvailability>,
     liveDesktopSessions: List<ActiveDesktopSession>,
     liveDesktopSessionRevokingAttestationId: String?,
     liveDesktopSessionRevokeErrorMessage: String?,
@@ -87,6 +93,8 @@ fun PostLoginHomeScreen(
     onOpenQrRead: () -> Unit,
     onClearQrNamespaceRegistrationState: () -> Unit,
     onRevokeDesktopSession: (ActiveDesktopSession) -> Unit,
+    onRefreshDatabaseAvailability: (DatabaseAvailability) -> Unit,
+    onDismissLiveDesktopSessionRevokeError: () -> Unit,
     onAllowNotification: () -> Unit,
     onDeclineNotification: () -> Unit,
     onDismissNotificationError: () -> Unit,
@@ -190,6 +198,11 @@ fun PostLoginHomeScreen(
                 }
             }
 
+            DatabaseAvailabilityCard(
+                availability = databaseAvailability,
+                onRefreshDatabaseAvailability = onRefreshDatabaseAvailability,
+            )
+
             LiveDesktopSessionsCard(
                 sessions = liveDesktopSessions,
                 fallbackServerName = namespaceName,
@@ -198,11 +211,25 @@ fun PostLoginHomeScreen(
             )
 
             liveDesktopSessionRevokeErrorMessage?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = ErrorTextLight,
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ErrorTextLight,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onDismissLiveDesktopSessionRevokeError) {
+                        Icon(
+                            imageVector = Icons.Outlined.Close,
+                            contentDescription = "Dismiss desktop session revoke error",
+                            tint = ErrorTextLight,
+                        )
+                    }
+                }
             }
 
             if (!notificationsEnabled || !notificationsPermissionGranted) {
@@ -296,37 +323,103 @@ fun PostLoginHomeScreen(
                 namespaceName = namespaceName,
                 email = email,
             )
-        }
-
-        Row(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Button(
-                onClick = onAllowNotification,
-                modifier = Modifier.weight(1f),
-                enabled = hasNotification,
-                border = if (hasNotification) BorderStroke(2.dp, Yellow) else null,
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(vertical = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text("Allow")
+                Button(
+                    onClick = onAllowNotification,
+                    modifier = Modifier.weight(1f),
+                    enabled = hasNotification,
+                    border = if (hasNotification) BorderStroke(2.dp, Yellow) else null,
+                ) {
+                    Text("Allow")
+                }
+                Button(
+                    onClick = onDeclineNotification,
+                    modifier = Modifier.weight(1f),
+                    enabled = hasNotification,
+                    border = if (hasNotification) BorderStroke(2.dp, Yellow) else null,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ActionDeclineRed,
+                        contentColor = White,
+                        disabledContainerColor = ActionDeclineRed.copy(alpha = 0.45f),
+                        disabledContentColor = White.copy(alpha = 0.8f),
+                    ),
+                ) {
+                    Text("Decline")
+                }
             }
-            Button(
-                onClick = onDeclineNotification,
-                modifier = Modifier.weight(1f),
-                enabled = hasNotification,
-                border = if (hasNotification) BorderStroke(2.dp, Yellow) else null,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ActionDeclineRed,
-                    contentColor = White,
-                    disabledContainerColor = ActionDeclineRed.copy(alpha = 0.45f),
-                    disabledContentColor = White.copy(alpha = 0.8f),
-                ),
-            ) {
-                Text("Decline")
+        }
+    }
+}
+
+@Composable
+private fun DatabaseAvailabilityCard(
+    availability: List<DatabaseAvailability>,
+    onRefreshDatabaseAvailability: (DatabaseAvailability) -> Unit,
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = LightDark),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text(
+                text = "Database availability",
+                style = MaterialTheme.typography.titleMedium,
+                color = White,
+            )
+            if (availability.isEmpty()) {
+                Text(
+                    text = "Checking database availability...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = White,
+                )
+            } else {
+                availability.forEach { database ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .background(
+                                    color = if (database.isAvailable) Green else ActionDeclineRed,
+                                    shape = CircleShape,
+                                ),
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = database.namespaceName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = White,
+                            )
+                            if (database.namespaceName != database.namespaceUrl) {
+                                Text(
+                                    text = database.namespaceUrl,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = White.copy(alpha = 0.72f),
+                                )
+                            }
+                        }
+                        IconButton(onClick = { onRefreshDatabaseAvailability(database) }) {
+                            Icon(
+                                imageVector = Icons.Outlined.Refresh,
+                                contentDescription = "Refresh ${database.namespaceName} availability",
+                                tint = White,
+                            )
+                        }
+                    }
+                }
             }
         }
     }

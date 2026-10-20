@@ -19,8 +19,13 @@ Source of truth:
 | GET | `/api/v1/authentication/{accountId}` | Yes | Yes | Query | `nonce` is sent as `?deviceId={deviceId}&nonce={nonce}`. |
 | DELETE | `/api/v1/authentication/{accountId}/{desktopDeviceId}/{attestationId}` | Yes | Yes | Query | `nonce` is sent as `?nonce={nonce}`. |
 | GET | `/api/v1/account/{accountId}/{deviceId}` | Yes | Yes | Query | `nonce` is sent as `?nonce={nonce}`. |
+| POST | `/api/v1/recovery/candidate` | Yes | Yes | Payload | Includes `operation=candidate` and a persistent `requestId`. |
+| POST | `/api/v1/recovery/candidate/status` | Yes | Yes | Payload | Includes `operation=candidate_status`; no `requestId`. |
+| POST | `/api/v1/recovery/candidate/dek` | Yes | Yes | Payload | Includes `operation=candidate_dek`; no `requestId`. |
+| POST | `/api/v1/recovery/completion` | Yes | Yes | Payload | Includes `operation=completion` and a persistent `requestId`. |
+| POST | `/api/v1/recovery/candidate/cancellation` | Yes | Yes | Payload | Includes `operation=candidate_cancellation` and a persistent `requestId`. |
 
 Summary:
-- Nonce in payload: 7 endpoints.
+- Nonce in payload: 12 endpoints.
 - Nonce in query: 5 endpoints.
 - No nonce: 0 endpoints.

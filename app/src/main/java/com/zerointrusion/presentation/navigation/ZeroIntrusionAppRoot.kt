@@ -37,6 +37,7 @@ import com.zerointrusion.presentation.settings.SettingsScreen
 import com.zerointrusion.presentation.settings.SettingsConnectedDevicesScreen
 import com.zerointrusion.presentation.registration.RegistrationScreen
 import com.zerointrusion.presentation.registration.RegistrationViewModel
+import com.zerointrusion.presentation.recovery.RecoveryScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
@@ -136,8 +137,21 @@ fun ZeroIntrusionAppRoot(
                         onThirdApiUrlChanged = registrationViewModel::onThirdApiUrlChanged,
                         onRegister = registrationViewModel::register,
                         onRegisterNewMobile = registrationViewModel::registerNewMobileToExistingAccount,
+                        onStartRecovery = {
+                            navController.navigate(AppRoute.Recovery.route)
+                        },
                     )
                 }
+            }
+            composable(AppRoute.Recovery.route) {
+                RecoveryScreen(
+                    onBack = { navController.popBackStack() },
+                    onCompleted = {
+                        navController.navigate(AppRoute.Home.route) {
+                            popUpTo(AppRoute.Registration.route) { inclusive = true }
+                        }
+                    },
+                )
             }
             composable(AppRoute.Home.route) {
                 PostLoginHomeScreen(
@@ -145,6 +159,7 @@ fun ZeroIntrusionAppRoot(
                     namespaceName = appState.registrationState?.namespaceName.orEmpty(),
                     email = appState.registrationState?.email.orEmpty(),
                     namespaces = appState.namespaces,
+                    databaseAvailability = appState.databaseAvailability,
                     liveDesktopSessions = appState.liveDesktopSessions,
                     liveDesktopSessionRevokingAttestationId = appState.liveDesktopSessionRevokingAttestationId,
                     liveDesktopSessionRevokeErrorMessage = appState.liveDesktopSessionRevokeErrorMessage,
@@ -159,6 +174,8 @@ fun ZeroIntrusionAppRoot(
                     },
                     onClearQrNamespaceRegistrationState = appViewModel::clearQrNamespaceRegistrationState,
                     onRevokeDesktopSession = appViewModel::revokeDesktopSession,
+                    onRefreshDatabaseAvailability = appViewModel::refreshDatabaseAvailability,
+                    onDismissLiveDesktopSessionRevokeError = appViewModel::dismissLiveDesktopSessionRevokeError,
                     onAllowNotification = {
                         appViewModel.onNotificationDecision(NotificationDecision.Accept)
                     },

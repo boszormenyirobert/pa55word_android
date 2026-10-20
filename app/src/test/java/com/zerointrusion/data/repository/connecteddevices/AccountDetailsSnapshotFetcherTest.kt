@@ -84,10 +84,22 @@ class AccountDetailsSnapshotFetcherTest {
         }
     }
 
+    @Test
+    fun `unavailable secondary server does not hide reachable server data`() = runBlocking {
+        val fixture = Fixture(home = "active", unavailableAccount = "removed")
+
+        val snapshot = fixture.fetcher().fetchSnapshot()
+
+        assertEquals(listOf("active"), snapshot.mobileRegistrations.map { it.accountId })
+        assertEquals(listOf("active", "removed"), fixture.store.registrations.map { it.accountId })
+        assertEquals(listOf("active", "removed"), fixture.requests)
+    }
+
     private class Fixture(
         home: String,
         includeActive: Boolean = true,
         private val errorCode: String = "e_40101_2",
+        private val unavailableAccount: String? = null,
     ) {
         val state = MutableStateFlow<RegistrationState?>(
             RegistrationState(
@@ -112,6 +124,9 @@ class AccountDetailsSnapshotFetcherTest {
                 check(method == "getAccountDetails")
                 val account = if (args[0].toString().contains("active.example")) "active" else "removed"
                 requests += account
+                if (account == unavailableAccount) {
+                    throw IllegalStateException("$account server is unavailable")
+                }
                 if (account == "removed") {
                     Response.error<okhttp3.ResponseBody>(401, """{"internalCode":"$errorCode"}""".toResponseBody())
                 } else {

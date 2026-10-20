@@ -21,6 +21,156 @@ Signed requests:
 - `DELETE /api/v1/authentication/{accountId}/{desktopDeviceId}/{attestationId}?nonce={nonce}`
 - `GET /api/v1/account/{accountId}/{mobileDeviceId}?nonce={nonce}`
 
+Recovery signed requests:
+- `POST /api/v1/recovery/candidate`
+- `POST /api/v1/recovery/candidate/status`
+- `POST /api/v1/recovery/candidate/dek`
+- `POST /api/v1/recovery/completion`
+- `POST /api/v1/recovery/candidate/cancellation`
+
+Recovery request rules:
+- Every request body includes the exact `operation` value and a fresh UUID
+  `nonce`.
+- All modifying requests (`candidate`, `completion`,
+  `candidate_cancellation`) also include a UUID `requestId`.
+- The `x-signature` value is standard Base64 `SHA1withRSA` over the exact
+  UTF-8 JSON bytes sent as the body.
+- Retries reuse the same `requestId` and identical semantic payload, but use a
+  fresh `nonce` and signature.
+
+## Recovery endpoints
+
+These endpoints are used only by the unauthenticated first-launch recovery
+flow described in `14-first-launch-recovery.md`. The phone signs them with the
+new candidate key held in Android Keystore; the private key is never exported.
+
+### POST /api/v1/recovery/candidate
+
+Creates a recovery candidate after the user has scanned and approved a recovery
+QR code. A successful response is the point at which the app may show the
+pairing code to the user.
+
+```json
+{
+  "operation": "candidate",
+  "nonce": "uuid",
+  "requestId": "uuid",
+  "recoveryId": "uuid",
+  "candidateId": "uuid",
+  "mobileDeviceId": "device-id",
+  "publicKey": "base64-spki-der",
+  "deviceName": "Android device",
+  "pairingCodeHash": "lowercase-sha256-hex"
+}
+```
+
+Successful response (`201`):
+
+```json
+{
+  "recoveryId": "uuid",
+  "candidateId": "uuid",
+  "status": "waiting_for_selection",
+  "expiresAt": "UTC ISO-8601"
+}
+```
+
+### POST /api/v1/recovery/candidate/status
+
+Polls only the current candidate. This request has no `requestId`.
+
+```json
+{
+  "operation": "candidate_status",
+  "nonce": "uuid",
+  "recoveryId": "uuid",
+  "candidateId": "uuid",
+  "mobileDeviceId": "device-id"
+}
+```
+
+The client accepts `waiting_for_selection`, `selected`, `dek_ready`, and
+`completed` only as documented state transitions. A terminal response is not a
+success indication.
+
+### POST /api/v1/recovery/candidate/dek
+
+Retrieves the selected candidate's encrypted DEK and the account data required
+to create the final local registration. This request has no `requestId`.
+
+```json
+{
+  "operation": "candidate_dek",
+  "nonce": "uuid",
+  "recoveryId": "uuid",
+  "candidateId": "uuid",
+  "mobileDeviceId": "device-id"
+}
+```
+
+Successful response (`200`):
+
+```json
+{
+  "recoveryId": "uuid",
+  "candidateId": "uuid",
+  "accountId": "account-id",
+  "mobileDeviceId": "device-id",
+  "encDek": "base64",
+  "email": "user@example.com",
+  "phone": "+36123456789",
+  "namespaces": [
+    {
+      "namespaceId": "namespace-id",
+      "name": "Primary",
+      "url": "https://server.example"
+    }
+  ]
+}
+```
+
+The response must match the stored recovery, candidate, and mobile device IDs.
+The namespace whose normalized `url` equals the QR-approved `apiBaseUrl` is the
+root namespace for recovery activation.
+The client decrypts `encDek` with `RSA/ECB/OAEPWithSHA-1AndMGF1Padding` and
+requires exactly 32 plaintext bytes before persisting pending activation data.
+
+### POST /api/v1/recovery/completion
+
+Completes recovery after the decrypted DEK and full response have been saved to
+the protected pending-recovery store.
+
+```json
+{
+  "operation": "completion",
+  "nonce": "uuid",
+  "requestId": "uuid",
+  "recoveryId": "uuid",
+  "candidateId": "uuid",
+  "mobileDeviceId": "device-id"
+}
+```
+
+Successful response (`200`) contains `recoveryId`, `status=completed`,
+`accountId`, and `mobileDeviceId`. A lost response is retried explicitly with
+the stored completion request ID.
+
+### POST /api/v1/recovery/candidate/cancellation
+
+Cancels the current not-yet-active candidate. If it is selected, the backend
+cancels the entire recovery.
+
+```json
+{
+  "operation": "candidate_cancellation",
+  "nonce": "uuid",
+  "requestId": "uuid",
+  "recoveryId": "uuid",
+  "candidateId": "uuid",
+  "mobileDeviceId": "device-id"
+}
+```
+
 ## POST /api/v1/mobile-device
 
 Used by the registered phone after scanning an `addition_mobile_device` QR code. The registered phone decrypts its stored DEK and re-encrypts it for the new phone public key.

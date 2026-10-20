@@ -17,6 +17,7 @@ import com.zerointrusion.data.storage.removeAccountConnections
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.connecteddevices.AccountDetailsSnapshot
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
+import com.zerointrusion.domain.connecteddevices.DatabaseAvailability
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.registration.RegistrationState
 import javax.inject.Inject
@@ -24,6 +25,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.util.ArrayDeque
 
 @Singleton
@@ -88,6 +90,30 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
         val fetchedTargetKeys = mutableSetOf<String>()
         val snapshots = mutableListOf<AccountDetailsSnapshot>()
         val removedTargets = mutableSetOf<String>()
+        val targetFailures = mutableListOf<Exception>()
+        val availabilityByTarget = linkedMapOf<String, DatabaseAvailability>()
+
+        fun publishAvailability() {
+            accountDetailsStateHolder.replaceDatabaseAvailability(
+                availabilityByTarget.values.sortedBy { availability -> availability.namespaceName.lowercase() },
+            )
+        }
+
+        fun recordAvailability(target: AccountDetailsFetchTarget, isAvailable: Boolean) {
+            val namespace = existingNamespaces.firstOrNull { existing ->
+                AccountDetailsFetchTarget(existing.namespaceUrl, existing.accountId).storageIdentity() == target.storageIdentity()
+            }
+            val namespaceName = namespace?.namespaceName?.trim().takeUnless { it.isNullOrEmpty() }
+                ?: registrationState.namespaceName.takeIf { target.storageIdentity() == homeTarget.storageIdentity() }
+                ?: target.namespaceUrl
+            availabilityByTarget[target.storageIdentity()] = DatabaseAvailability(
+                accountId = target.accountId,
+                namespaceName = namespaceName,
+                namespaceUrl = target.namespaceUrl,
+                isAvailable = isAvailable,
+            )
+            publishAvailability()
+        }
 
         while (pendingTargets.isNotEmpty()) {
             val target = pendingTargets.removeFirst()
@@ -95,12 +121,30 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
                 continue
             }
 
-            val snapshot = fetchSnapshotForTarget(
-                registrationState = registrationState,
-                target = target,
-            )
+            val snapshot = try {
+                withTimeout(2_000L) {
+                    fetchSnapshotForTarget(
+                        registrationState = registrationState,
+                        target = target,
+                    )
+                }
+            } catch (exception: kotlinx.coroutines.CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                targetFailures += exception
+                recordAvailability(target, isAvailable = false)
+                Log.w(
+                    ACCOUNT_LOG_TAG,
+                    "ACCOUNT details fetch skipped unavailable server. namespaceUrl=${target.namespaceUrl} accountId=${target.accountId}",
+                    exception,
+                )
+                continue
+            }
+            recordAvailability(target, isAvailable = true)
             if (snapshot == null) {
                 removedTargets += target.storageIdentity()
+                availabilityByTarget.remove(target.storageIdentity())
+                publishAvailability()
                 pruneRemovedTarget(target)
                 continue
             }
@@ -109,6 +153,10 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
             snapshotMerger.discoveredTargets(target, snapshot.namespaces)
                 .filterNot { discoveredTarget -> fetchedTargetKeys.contains(discoveredTarget.storageIdentity()) }
                 .forEach { discoveredTarget -> pendingTargets.addLast(discoveredTarget) }
+        }
+
+        if (snapshots.isEmpty() && targetFailures.isNotEmpty()) {
+            throw targetFailures.first()
         }
 
         val merged = snapshotMerger.mergeSnapshots(snapshots, existingNamespaces).withoutAccounts(removedTargets)
@@ -131,6 +179,38 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
             }
         }
         merged
+    }
+
+    internal suspend fun refreshAvailability(database: DatabaseAvailability) = withContext(Dispatchers.IO) {
+        val registrationState = stateStore.observeState().first() ?: return@withContext
+        val target = AccountDetailsFetchTarget(database.namespaceUrl, database.accountId)
+        val isAvailable = try {
+            fetchSnapshotForTarget(registrationState, target)
+            true
+        } catch (exception: kotlinx.coroutines.CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            Log.w(
+                ACCOUNT_LOG_TAG,
+                "ACCOUNT availability refresh failed. namespaceUrl=${target.namespaceUrl} accountId=${target.accountId}",
+                exception,
+            )
+            false
+        }
+        accountDetailsStateHolder.replaceDatabaseAvailability(
+            accountDetailsStateHolder.observeDatabaseAvailability()
+                .first()
+                .map { availability ->
+                    if (
+                        availability.namespaceUrl.trim().trimEnd('/').equals(target.namespaceUrl, ignoreCase = true) &&
+                        availability.accountId.trim().equals(target.accountId, ignoreCase = true)
+                    ) {
+                        availability.copy(isAvailable = isAvailable)
+                    } else {
+                        availability
+                    }
+                },
+        )
     }
 
     private suspend fun pruneRemovedTarget(target: AccountDetailsFetchTarget) {

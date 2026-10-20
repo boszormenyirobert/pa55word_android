@@ -1,8 +1,12 @@
 package com.zerointrusion.presentation.qrscanner
 
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.pm.PackageManager
 import android.util.Log
 import android.util.Size
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
@@ -25,8 +29,14 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -48,9 +58,23 @@ fun QrScannerSheet(
     onPayloadScanned: (String) -> Unit,
     onScannerError: (String) -> Unit,
 ) {
+    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     val scanHandled = remember { AtomicBoolean(false) }
+    var hasCameraPermission by rememberSaveable {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    var permissionRequested by rememberSaveable { mutableStateOf(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        hasCameraPermission = granted
+        permissionRequested = true
+        if (!granted) {
+            onScannerError("Camera permission is required to scan the recovery QR code.")
+        }
+    }
     val barcodeScanner = remember {
         BarcodeScanning.getClient(
             BarcodeScannerOptions.Builder()
@@ -63,6 +87,13 @@ fun QrScannerSheet(
         onDispose {
             barcodeScanner.close()
             cameraExecutor.shutdown()
+        }
+    }
+
+    LaunchedEffect(hasCameraPermission, permissionRequested) {
+        if (!hasCameraPermission && !permissionRequested) {
+            permissionRequested = true
+            permissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
@@ -82,30 +113,46 @@ fun QrScannerSheet(
                 title = "Read target device QR",
                 body = "Point the camera at the desktop QR code. The app will extract deviceId, publicKey, namespaceName and namespaceUrl, then connect the phone and desktop to the target server.",
             )
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(360.dp),
-            ) {
-                AndroidView(
-                    factory = { viewContext ->
-                        PreviewView(viewContext).apply {
-                            implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-                            scaleType = PreviewView.ScaleType.FILL_CENTER
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                    update = { previewView ->
-                        previewView.bindQrCamera(
-                            lifecycleOwner = lifecycleOwner,
-                            cameraExecutor = cameraExecutor,
-                            barcodeScanner = barcodeScanner,
-                            scanHandled = scanHandled,
-                            onPayloadScanned = onPayloadScanned,
-                            onScannerError = onScannerError,
-                        )
-                    },
+            if (hasCameraPermission) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(360.dp),
+                ) {
+                    AndroidView(
+                        factory = { viewContext ->
+                            PreviewView(viewContext).apply {
+                                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+                                scaleType = PreviewView.ScaleType.FILL_CENTER
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        update = { previewView ->
+                            previewView.bindQrCamera(
+                                lifecycleOwner = lifecycleOwner,
+                                cameraExecutor = cameraExecutor,
+                                barcodeScanner = barcodeScanner,
+                                scanHandled = scanHandled,
+                                onPayloadScanned = onPayloadScanned,
+                                onScannerError = onScannerError,
+                            )
+                        },
+                    )
+                }
+            } else {
+                Text(
+                    text = "Camera access is required to scan the QR code.",
+                    style = MaterialTheme.typography.bodyMedium,
                 )
+                Button(
+                    onClick = {
+                        permissionRequested = true
+                        permissionLauncher.launch(Manifest.permission.CAMERA)
+                    },
+                    shape = RoundedCornerShape(18.dp),
+                ) {
+                    Text("Allow camera access")
+                }
             }
             Button(
                 onClick = onDismiss,

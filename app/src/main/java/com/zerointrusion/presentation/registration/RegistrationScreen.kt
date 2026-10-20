@@ -45,6 +45,7 @@ fun RegistrationScreen(
     onThirdApiUrlChanged: (String) -> Unit,
     onRegister: () -> Unit,
     onRegisterNewMobile: () -> Unit,
+    onStartRecovery: () -> Unit,
 ) {
     AppBackground {
         Column(
@@ -161,6 +162,13 @@ fun RegistrationScreen(
                         shape = RoundedCornerShape(16.dp),
                     ) {
                         Text("New mobile to existing account")
+                    }
+                    OutlinedButton(
+                        onClick = onStartRecovery,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                    ) {
+                        Text("Recovery")
                     }
                     state.mobileRegistrationQrPayload?.let { payload ->
                         Text(

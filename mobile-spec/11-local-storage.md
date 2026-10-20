@@ -40,6 +40,7 @@ Encryption configuration:
 Stored keys:
 - `registration_state`
 - `connected_devices_local_state`
+- `recovery_pending_state` (planned first-launch recovery implementation)
 
 ### registration_state
 
@@ -68,6 +69,7 @@ Shape:
 
 When written:
 - Initial phone registration success.
+- Successful recovery completion and local activation.
 - Default namespace selection change in `Device Information`.
 - FCM token synchronization when the token changes.
 
@@ -131,3 +133,33 @@ If encrypted preferences cannot be opened or decrypted after restore, reinstall,
 - `connected_devices_local_state` falls back to an empty list.
 
 The Android Keystore keypair is managed separately from the encrypted preferences file.
+
+## recovery_pending_state
+
+Meaning:
+- Durable, protected checkpoint for a recovery that has received and decrypted
+  its DEK but has not yet completed local activation.
+
+When written:
+- Before `POST /api/v1/recovery/completion`, after validating the candidate DEK
+  response and decrypting its 32-byte DEK.
+
+Contents:
+- Recovery and candidate UUIDs, mobile device ID, approved API origin, current
+  stage, expiration time, and the idempotent completion request ID.
+- Account ID, email, phone, candidate public key, encrypted DEK, and returned
+  namespace list.
+- The pairing code and its hash are retained only inside this encrypted
+  checkpoint so a candidate request can be retried with the same request ID
+  after process death. They are never logged or copied to normal registration
+  state. Signatures and raw plaintext DEKs are never persisted or logged.
+
+Activation:
+- After a successful completion response, the selected `root=true` namespace
+  becomes `registration_state`.
+- Every returned namespace is imported into the existing
+  `connected_devices_local_state` representation so `NamespacesRepository`
+  exposes the restored account's full namespace set.
+- The pending state is deleted only after both local registration writes
+  succeed. A failed or lost completion response leaves it available for an
+  explicit same-request-ID retry.
