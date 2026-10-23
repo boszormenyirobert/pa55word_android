@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
+import com.zerointrusion.domain.authentication.AuthenticationSessionAlreadyCompleted
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.connecteddevices.RemovableAccountDevice
 import com.zerointrusion.domain.common.RegistrationFailure
@@ -47,6 +48,7 @@ class AppViewModel @Inject constructor(
         const val QR_LOG_TAG = "ZeroIntrusionQr"
         const val NAMESPACE_QR_TYPE = "namespace"
         const val NAMESPACE_SYNC_QR_TYPE = "namespace_sync"
+        const val MOBILE_AUTHENTICATION_STATUS_POLL_MILLIS = 1_000L
         private val NAMESPACE_ID_KEYS = listOf("namespaceId", "namespace_id", "namespaceID")
         private val NAMESPACE_URL_KEYS = listOf("namespaceUrl", "namespace_url", "namespaceURL", "url")
     }
@@ -60,6 +62,8 @@ class AppViewModel @Inject constructor(
     private var pendingNamespaceQrPayload: String? = null
     private var liveDesktopSessionsRefreshInFlight: Boolean = false
     private var postApprovalSessionRefreshJob: Job? = null
+    private var mobileAuthenticationStatusPollingJob: Job? = null
+    private var mobileAuthenticationStatusNotificationId: String? = null
 
     private data class ScannedQrPayloadPreview(
         val type: String? = null,
@@ -96,6 +100,7 @@ class AppViewModel @Inject constructor(
                         ),
                     )
                 }
+                synchronizeMobileAuthenticationStatusPolling(_uiState.value.notificationOverlay)
 
                 if (state != null) {
                     ensureFcmTokenSync(state)
@@ -111,6 +116,7 @@ class AppViewModel @Inject constructor(
                         connectedDevicesState = ConnectedDevicesUiState.Success(groups),
                     )
                 }
+                synchronizeMobileAuthenticationStatusPolling(_uiState.value.notificationOverlay)
             }
         }
 
@@ -138,6 +144,11 @@ class AppViewModel @Inject constructor(
 
         viewModelScope.launch {
             notificationRepository.observeNotification().collect { notification ->
+                val overlay = resolveNotificationOverlay(
+                    notification = notification,
+                    registrationState = _uiState.value.registrationState,
+                    knownNamespaces = storedNamespaces,
+                )
                 _uiState.update { state ->
                     val previousNotificationTimestamp = state.notificationOverlay.notification?.receivedAtEpochMillis
                     val shouldForceHomeNavigation = notification != null && notification.receivedAtEpochMillis != previousNotificationTimestamp
@@ -147,13 +158,10 @@ class AppViewModel @Inject constructor(
                         } else {
                             state.homeNavigationRequestKey
                         },
-                        notificationOverlay = resolveNotificationOverlay(
-                            notification = notification,
-                            registrationState = state.registrationState,
-                            knownNamespaces = storedNamespaces,
-                        ),
+                        notificationOverlay = overlay,
                     )
                 }
+                synchronizeMobileAuthenticationStatusPolling(overlay)
             }
         }
     }
@@ -305,6 +313,12 @@ class AppViewModel @Inject constructor(
             throw exception
         } catch (_: Exception) {
             // Leave visible state untouched; background refresh is best-effort.
+        }
+    }
+
+    fun refreshAccountDetailsAfterRecovery() {
+        viewModelScope.launch {
+            refreshAccountDetailsSnapshot()
         }
     }
 
@@ -665,6 +679,7 @@ class AppViewModel @Inject constructor(
     fun onNotificationDecision(decision: NotificationDecision) {
         val notification = _uiState.value.notificationOverlay.notification ?: return
         val isMatch = _uiState.value.notificationOverlay.canRespond
+        stopMobileAuthenticationStatusPolling()
         if (!isMatch) {
             notificationRepository.clearNotification()
             _uiState.update { it.copy(notificationOverlay = NotificationOverlayUiState()) }
@@ -703,6 +718,10 @@ class AppViewModel @Inject constructor(
                     }
                 }
             }.onFailure { throwable ->
+                if (throwable is AuthenticationSessionAlreadyCompleted) {
+                    closeNotificationDecision(notificationId)
+                    return@onFailure
+                }
                 Log.e(QR_LOG_TAG, "Authentication response failed: ${throwable.message}", throwable)
                 notificationRepository.clearNotification()
                 _uiState.update {
@@ -720,6 +739,7 @@ class AppViewModel @Inject constructor(
     }
 
     fun dismissNotificationMismatch() {
+        stopMobileAuthenticationStatusPolling()
         notificationRepository.clearNotification()
         _uiState.update {
             it.copy(notificationOverlay = NotificationOverlayUiState())
@@ -777,6 +797,75 @@ class AppViewModel @Inject constructor(
         return "FCM sync failed: $typeName"
     }
 
+    private fun synchronizeMobileAuthenticationStatusPolling(overlay: NotificationOverlayUiState) {
+        val notification = overlay.notification
+        val notificationId = notification?.data?.get("notificationId")?.trim().orEmpty()
+        if (!overlay.canRespond || notification == null || notificationId.isEmpty()) {
+            stopMobileAuthenticationStatusPolling()
+            return
+        }
+        if (
+            mobileAuthenticationStatusNotificationId == notificationId &&
+                mobileAuthenticationStatusPollingJob?.isActive == true
+        ) {
+            return
+        }
+
+        val namespaceUrl = matchingNotificationNamespace(notification, storedNamespaces)
+            ?.namespaceUrl
+            ?.trim()
+            ?.trimEnd('/')
+            .orEmpty()
+        val mobileDeviceId = _uiState.value.registrationState?.deviceId?.trim().orEmpty()
+        if (namespaceUrl.isEmpty() || mobileDeviceId.isEmpty()) {
+            stopMobileAuthenticationStatusPolling()
+            return
+        }
+
+        stopMobileAuthenticationStatusPolling()
+        mobileAuthenticationStatusNotificationId = notificationId
+        mobileAuthenticationStatusPollingJob = viewModelScope.launch {
+            while (true) {
+                try {
+                    val status = authenticationRepository.fetchMobileAuthenticationStatus(
+                        namespaceUrl = namespaceUrl,
+                        accountId = notification.accountId,
+                        mobileDeviceId = mobileDeviceId,
+                        notificationId = notificationId,
+                    )
+                    if (status.isTerminal) {
+                        closeNotificationDecision(notificationId)
+                        return@launch
+                    }
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    Log.w(AUTHENTICATION_LOG_TAG, "Authentication status polling failed.", exception)
+                }
+                delay(MOBILE_AUTHENTICATION_STATUS_POLL_MILLIS)
+            }
+        }
+    }
+
+    private fun stopMobileAuthenticationStatusPolling() {
+        mobileAuthenticationStatusPollingJob?.cancel()
+        mobileAuthenticationStatusPollingJob = null
+        mobileAuthenticationStatusNotificationId = null
+    }
+
+    private fun closeNotificationDecision(notificationId: String) {
+        val activeNotificationId = _uiState.value.notificationOverlay.notification
+            ?.data
+            ?.get("notificationId")
+            ?.trim()
+        if (activeNotificationId != notificationId) {
+            return
+        }
+        stopMobileAuthenticationStatusPolling()
+        notificationRepository.clearNotification()
+        _uiState.update { it.copy(notificationOverlay = NotificationOverlayUiState()) }
+    }
+
     private fun resolveNotificationOverlay(
         notification: BackendPushNotification?,
         registrationState: RegistrationState?,
@@ -802,6 +891,14 @@ class AppViewModel @Inject constructor(
             )
         }
 
+        if (notification.data["notificationId"].isNullOrBlank()) {
+            return NotificationOverlayUiState(
+                notification = notification,
+                mismatchError = "Push notification blocked because the delivered Firebase data payload did not include notificationId.",
+                canRespond = false,
+            )
+        }
+
         if (!registrationState.deviceId.equals(notification.mobileDeviceId, ignoreCase = true)) {
             return NotificationOverlayUiState(
                 notification = notification,
@@ -820,19 +917,7 @@ class AppViewModel @Inject constructor(
         }
 
         val targetNamespaceUrl = notification.data.firstNonBlankValue(NAMESPACE_URL_KEYS)
-        val matchingNamespaces = knownNamespaces.filter {
-            val accountMatches = it.accountId.equals(notification.accountId, ignoreCase = true)
-            if (!accountMatches) {
-                false
-            } else {
-                val namespaceIdMatches = it.namespaceId.equals(targetNamespaceId, ignoreCase = true)
-                val namespaceUrlMatches = targetNamespaceUrl.isBlank() ||
-                    it.namespaceUrl.trim().trimEnd('/').equals(targetNamespaceUrl.trim().trimEnd('/'), ignoreCase = true)
-                namespaceIdMatches && namespaceUrlMatches
-            }
-        }
-
-        val matchingNamespace = matchingNamespaces.firstOrNull()
+        val matchingNamespace = matchingNotificationNamespace(notification, knownNamespaces)
 
         if (matchingNamespace == null) {
             return NotificationOverlayUiState(
@@ -847,6 +932,22 @@ class AppViewModel @Inject constructor(
             mismatchError = null,
             canRespond = true,
         )
+    }
+
+    private fun matchingNotificationNamespace(
+        notification: BackendPushNotification,
+        knownNamespaces: List<NamespaceEntry>,
+    ): NamespaceEntry? {
+        val targetNamespaceId = notification.data.firstNonBlankValue(NAMESPACE_ID_KEYS)
+        val targetNamespaceUrl = notification.data.firstNonBlankValue(NAMESPACE_URL_KEYS)
+        return knownNamespaces.firstOrNull { namespace ->
+            namespace.accountId.equals(notification.accountId, ignoreCase = true) &&
+                namespace.namespaceId.equals(targetNamespaceId, ignoreCase = true) &&
+                (targetNamespaceUrl.isBlank() || namespace.namespaceUrl.trim().trimEnd('/').equals(
+                    targetNamespaceUrl.trim().trimEnd('/'),
+                    ignoreCase = true,
+                ))
+        }
     }
 
     private fun String.toPreview(): String = when {

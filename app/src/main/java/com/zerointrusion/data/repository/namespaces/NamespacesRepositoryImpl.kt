@@ -2,6 +2,7 @@ package com.zerointrusion.data.repository.namespaces
 
 import com.google.gson.Gson
 import com.zerointrusion.data.network.AccountLifecycleRequestDto
+import com.zerointrusion.data.network.AccountApi
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.repository.common.buildAccountLifecycleUrl
 import com.zerointrusion.data.repository.common.buildSignedAccountMobileDeviceNonceJson
@@ -35,6 +36,7 @@ import kotlinx.coroutines.sync.withLock
 class NamespacesRepositoryImpl(
     private val connectedDevicesLocalStore: ConnectedDevicesLocalStore,
     private val stateStore: RegistrationStateStore,
+    private val accountApi: AccountApi,
     private val registrationApi: RegistrationApi,
     private val signatureService: SignatureService,
     private val gson: Gson,
@@ -188,7 +190,7 @@ class NamespacesRepositoryImpl(
         )
         val url = buildAccountLifecycleUrl(target.namespaceUrl)
         val response = try {
-            registrationApi.deleteAccount(url, signature, request)
+            accountApi.deleteAccount(url, signature, request)
         } catch (exception: Exception) {
             throw mapNetworkException(url, exception)
         }
@@ -214,7 +216,7 @@ class NamespacesRepositoryImpl(
         )
         val url = buildAccountLifecycleUrl(target.namespaceUrl, status = true)
         val response = try {
-            registrationApi.getAccountStatus(url, signature, request)
+            accountApi.getAccountStatus(url, signature, request)
         } catch (_: Exception) {
             return false
         }

@@ -1,7 +1,7 @@
 package com.zerointrusion.data.repository.authentication
 
 import com.google.gson.Gson
-import com.zerointrusion.data.network.RegistrationApi
+import com.zerointrusion.data.network.AuthenticationApi
 import com.zerointrusion.data.repository.connecteddevices.AccountDetailsStateHolder
 import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
@@ -10,7 +10,7 @@ import com.zerointrusion.domain.authentication.AuthenticationRepository
 import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
 
 class AuthenticationRepositoryImpl(
-    registrationApi: RegistrationApi,
+    authenticationApi: AuthenticationApi,
     accountDetailsStateHolder: AccountDetailsStateHolder,
     stateStore: RegistrationStateStore,
     signatureService: SignatureService,
@@ -19,7 +19,7 @@ class AuthenticationRepositoryImpl(
     connectedDevicesLocalStore: ConnectedDevicesLocalStore,
 ) : AuthenticationRepository {
     private val authenticationResponseHandler = AuthenticationResponseHandler(
-        registrationApi = registrationApi,
+        authenticationApi = authenticationApi,
         accountDetailsStateHolder = accountDetailsStateHolder,
         stateStore = stateStore,
         signatureService = signatureService,
@@ -28,12 +28,17 @@ class AuthenticationRepositoryImpl(
         connectedDevicesLocalStore = connectedDevicesLocalStore,
     )
     private val authenticationSessionHandler = AuthenticationSessionHandler(
-        registrationApi = registrationApi,
+        authenticationApi = authenticationApi,
         accountDetailsStateHolder = accountDetailsStateHolder,
         stateStore = stateStore,
         signatureService = signatureService,
         gson = gson,
         connectedDevicesRepository = connectedDevicesRepository,
+    )
+    private val mobileAuthenticationStatusHandler = MobileAuthenticationStatusHandler(
+        authenticationApi = authenticationApi,
+        signatureService = signatureService,
+        gson = gson,
     )
 
     override suspend fun respondToAuthentication(
@@ -66,5 +71,17 @@ class AuthenticationRepositoryImpl(
         session: com.zerointrusion.domain.authentication.ActiveDesktopSession,
     ) = authenticationSessionHandler.revokeDesktopSession(
         session = session,
+    )
+
+    override suspend fun fetchMobileAuthenticationStatus(
+        namespaceUrl: String,
+        accountId: String,
+        mobileDeviceId: String,
+        notificationId: String,
+    ) = mobileAuthenticationStatusHandler.fetch(
+        namespaceUrl = namespaceUrl,
+        accountId = accountId,
+        mobileDeviceId = mobileDeviceId,
+        notificationId = notificationId,
     )
 }

@@ -6,6 +6,9 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.zerointrusion.data.firebase.DefaultFirebaseService
 import com.zerointrusion.data.firebase.FirebaseService
+import com.zerointrusion.data.network.AccountApi
+import com.zerointrusion.data.network.AuthenticationApi
+import com.zerointrusion.data.network.FcmApi
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.network.RecoveryApi
 import com.zerointrusion.data.notification.NotificationRepositoryImpl
@@ -119,6 +122,42 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideAuthenticationApi(
+        okHttpClient: OkHttpClient,
+        gson: Gson,
+    ): AuthenticationApi = Retrofit.Builder()
+        .baseUrl("https://localhost/")
+        .client(okHttpClient)
+        .addConverterFactory(GsonConverterFactory.create(gson))
+        .build()
+        .create(AuthenticationApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideAccountApi(
+        okHttpClient: OkHttpClient,
+        gson: Gson,
+    ): AccountApi = Retrofit.Builder()
+        .baseUrl("https://localhost/")
+        .client(okHttpClient)
+        .addConverterFactory(GsonConverterFactory.create(gson))
+        .build()
+        .create(AccountApi::class.java)
+
+    @Provides
+    @Singleton
+    fun provideFcmApi(
+        okHttpClient: OkHttpClient,
+        gson: Gson,
+    ): FcmApi = Retrofit.Builder()
+        .baseUrl("https://localhost/")
+        .client(okHttpClient)
+        .addConverterFactory(GsonConverterFactory.create(gson))
+        .build()
+        .create(FcmApi::class.java)
+
+    @Provides
+    @Singleton
     fun provideRecoveryApi(gson: Gson): RecoveryApi = Retrofit.Builder()
         .baseUrl("https://localhost/")
         .client(OkHttpClient.Builder().followRedirects(false).followSslRedirects(false).build())
@@ -183,7 +222,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideAccountDetailsSnapshotFetcher(
-        registrationApi: RegistrationApi,
+        accountApi: AccountApi,
         registrationStateStore: RegistrationStateStore,
         accountDetailsStateHolder: AccountDetailsStateHolder,
         connectedDevicesLocalStore: ConnectedDevicesLocalStore,
@@ -191,7 +230,7 @@ object AppModule {
         signatureService: SignatureService,
         gson: Gson,
     ): AccountDetailsSnapshotFetcher = AccountDetailsSnapshotFetcher(
-        registrationApi = registrationApi,
+        accountApi = accountApi,
         stateStore = registrationStateStore,
         accountDetailsStateHolder = accountDetailsStateHolder,
         connectedDevicesLocalStore = connectedDevicesLocalStore,
@@ -204,10 +243,10 @@ object AppModule {
     @Singleton
     fun provideFirebaseService(
         @ApplicationContext context: Context,
-        registrationApi: RegistrationApi,
+        fcmApi: FcmApi,
         signatureService: SignatureService,
         gson: Gson,
-    ): FirebaseService = DefaultFirebaseService(context, registrationApi, signatureService, gson)
+    ): FirebaseService = DefaultFirebaseService(context, fcmApi, signatureService, gson)
 
     @Provides
     @Singleton
@@ -274,6 +313,7 @@ object AppModule {
     fun provideNamespacesRepository(
         connectedDevicesLocalStore: ConnectedDevicesLocalStore,
         registrationStateStore: RegistrationStateStore,
+        accountApi: AccountApi,
         registrationApi: RegistrationApi,
         signatureService: SignatureService,
         gson: Gson,
@@ -283,6 +323,7 @@ object AppModule {
     ): NamespacesRepository = NamespacesRepositoryImpl(
         connectedDevicesLocalStore = connectedDevicesLocalStore,
         stateStore = registrationStateStore,
+        accountApi = accountApi,
         registrationApi = registrationApi,
         signatureService = signatureService,
         gson = gson,
@@ -298,7 +339,7 @@ object AppModule {
         accountDetailsStateHolder: AccountDetailsStateHolder,
         connectedDevicesLocalStore: ConnectedDevicesLocalStore,
         registrationStateStore: RegistrationStateStore,
-        registrationApi: RegistrationApi,
+        accountApi: AccountApi,
         signatureService: SignatureService,
         gson: Gson,
     ): ConnectedDevicesRepository = ConnectedDevicesRepositoryImpl(
@@ -306,7 +347,7 @@ object AppModule {
         accountDetailsStateHolder = accountDetailsStateHolder,
         connectedDevicesLocalStore = connectedDevicesLocalStore,
         stateStore = registrationStateStore,
-        registrationApi = registrationApi,
+        accountApi = accountApi,
         signatureService = signatureService,
         gson = gson,
     )
@@ -342,7 +383,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideAuthenticationRepository(
-        registrationApi: RegistrationApi,
+        authenticationApi: AuthenticationApi,
         accountDetailsStateHolder: AccountDetailsStateHolder,
         registrationStateStore: RegistrationStateStore,
         signatureService: SignatureService,
@@ -350,7 +391,7 @@ object AppModule {
         connectedDevicesRepository: ConnectedDevicesRepository,
         connectedDevicesLocalStore: ConnectedDevicesLocalStore,
     ): AuthenticationRepository = AuthenticationRepositoryImpl(
-        registrationApi = registrationApi,
+        authenticationApi = authenticationApi,
         accountDetailsStateHolder = accountDetailsStateHolder,
         stateStore = registrationStateStore,
         signatureService = signatureService,

@@ -32,6 +32,7 @@ import com.zerointrusion.ui.theme.Yellow
 fun RecoveryConnectionScreen(
     email: String,
     phone: String,
+    onStartRecovery: () -> Unit,
     onBack: () -> Unit,
 ) {
     Column(
@@ -65,6 +66,15 @@ fun RecoveryConnectionScreen(
                 RecoveryField(label = "User email", value = email)
                 RecoveryField(label = "Phone", value = phone)
             }
+        }
+
+        OutlinedButton(
+            onClick = onStartRecovery,
+            border = BorderStroke(2.dp, Yellow),
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text("Recovery", color = White)
         }
 
         OutlinedButton(

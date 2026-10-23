@@ -5,7 +5,7 @@ import com.google.gson.Gson
 import com.zerointrusion.data.network.AuthenticationSessionDto
 import com.zerointrusion.data.network.AuthenticationSessionRevocationResponseRequestDto
 import com.zerointrusion.data.network.AuthenticationSessionRevocationResponseDto
-import com.zerointrusion.data.network.RegistrationApi
+import com.zerointrusion.data.network.AuthenticationApi
 import com.zerointrusion.data.repository.common.AUTHENTICATION_LOG_TAG
 import com.zerointrusion.data.repository.common.AuthenticationSignedRequestPayload
 import com.zerointrusion.data.repository.common.buildAuthenticationSessionRevocationUrl
@@ -32,7 +32,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 internal class AuthenticationSessionHandler(
-    private val registrationApi: RegistrationApi,
+    private val authenticationApi: AuthenticationApi,
     private val accountDetailsStateHolder: AccountDetailsStateHolder,
     private val stateStore: RegistrationStateStore,
     private val signatureService: SignatureService,
@@ -175,7 +175,7 @@ internal class AuthenticationSessionHandler(
         Log.d(AUTHENTICATION_LOG_TAG, "AUTH session revoke start. url=$requestUrl")
         Log.d(AUTHENTICATION_LOG_TAG, "HTTP DELETE $requestUrl payload=$requestBodyJson")
         val response = try {
-            registrationApi.revokeAuthenticationSession(
+            authenticationApi.revokeAuthenticationSession(
                 url = requestUrl,
                 signature = signature,
                 request = requestPayload,
@@ -230,7 +230,7 @@ internal class AuthenticationSessionHandler(
         Log.d(AUTHENTICATION_LOG_TAG, "AUTH sessions fetch start. url=$requestUrl namespaceId=${requestNamespace.namespaceId}")
         Log.d(AUTHENTICATION_LOG_TAG, "HTTP GET $requestUrl payload=$requestBodyJson")
         val response = try {
-            registrationApi.fetchAuthenticationSessions(
+            authenticationApi.fetchAuthenticationSessions(
                 url = requestUrl,
                 signature = signature,
             )

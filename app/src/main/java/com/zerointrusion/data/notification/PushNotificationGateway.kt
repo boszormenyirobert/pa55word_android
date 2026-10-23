@@ -59,7 +59,7 @@ class PushNotificationGateway @Inject constructor(
 
         val pendingIntent = PendingIntent.getActivity(
             appContext,
-            notification.receivedAtEpochMillis.toInt(),
+            notification.systemNotificationId(),
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
@@ -74,7 +74,7 @@ class PushNotificationGateway @Inject constructor(
             .setContentIntent(pendingIntent)
             .build()
 
-        NotificationManagerCompat.from(appContext).notify(notification.receivedAtEpochMillis.toInt(), systemNotification)
+        NotificationManagerCompat.from(appContext).notify(notification.systemNotificationId(), systemNotification)
     }
 
     private fun createChannelIfNeeded() {
@@ -95,9 +95,15 @@ class PushNotificationGateway @Inject constructor(
         return ProcessLifecycleOwner.get().lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
     }
 
+    private fun BackendPushNotification.systemNotificationId(): Int {
+        return data[NOTIFICATION_ID_KEY]?.trim()?.takeIf { it.isNotEmpty() }?.hashCode()
+            ?: receivedAtEpochMillis.toInt()
+    }
+
     companion object {
         private const val NOTIFICATION_LOG_TAG = "ZeroIntrusionNotification"
         private const val CHANNEL_ID = "zero_intrusion_backend_push"
         private const val CHANNEL_NAME = "Backend Push Notifications"
+        private const val NOTIFICATION_ID_KEY = "notificationId"
     }
 }

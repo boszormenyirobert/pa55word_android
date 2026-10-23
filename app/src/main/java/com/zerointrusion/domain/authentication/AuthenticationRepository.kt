@@ -34,6 +34,30 @@ data class AuthenticationResponseResult(
         get() = namespaceResults.any { it.success }
 }
 
+enum class MobileAuthenticationStatus {
+    PENDING,
+    AUTHORIZED,
+    REJECTED,
+    EXPIRED,
+    NOT_FOUND;
+
+    val isTerminal: Boolean
+        get() = this != PENDING
+
+    companion object {
+        fun fromWire(value: String): MobileAuthenticationStatus = when (value.trim().lowercase()) {
+            "pending" -> PENDING
+            "authorized" -> AUTHORIZED
+            "rejected" -> REJECTED
+            "expired" -> EXPIRED
+            "not_found" -> NOT_FOUND
+            else -> throw IllegalArgumentException("Unsupported mobile authentication status: $value")
+        }
+    }
+}
+
+class AuthenticationSessionAlreadyCompleted : Exception()
+
 interface AuthenticationRepository {
     suspend fun respondToAuthentication(
         notificationId: String,
@@ -53,4 +77,11 @@ interface AuthenticationRepository {
     suspend fun revokeDesktopSession(
         session: ActiveDesktopSession,
     ): DesktopSessionRevocationResult
+
+    suspend fun fetchMobileAuthenticationStatus(
+        namespaceUrl: String,
+        accountId: String,
+        mobileDeviceId: String,
+        notificationId: String,
+    ): MobileAuthenticationStatus
 }

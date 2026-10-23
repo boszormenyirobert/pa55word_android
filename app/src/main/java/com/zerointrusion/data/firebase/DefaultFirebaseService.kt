@@ -6,8 +6,8 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.messaging.FirebaseMessaging
 import com.zerointrusion.core.AppConstants
 import com.zerointrusion.data.network.AccountErrorResponseDto
+import com.zerointrusion.data.network.FcmApi
 import com.zerointrusion.data.network.FcmRegistrationRequestDto
-import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.repository.common.newRequestNonce
 import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.domain.common.RegistrationFailure
@@ -26,7 +26,7 @@ import kotlinx.coroutines.withContext
 @Singleton
 class DefaultFirebaseService @Inject constructor(
     private val context: Context,
-    private val registrationApi: RegistrationApi,
+    private val fcmApi: FcmApi,
     private val signatureService: SignatureService,
     private val gson: Gson,
 ) : FirebaseService {
@@ -75,7 +75,7 @@ class DefaultFirebaseService @Inject constructor(
                 val signature = signatureService.signJsonString(requestBodyJson)
                 android.util.Log.d("ZeroIntrusionRegistration", "HTTP POST $fcmUrl payload=$requestBodyJson")
 
-                val response = registrationApi.registerFcmToken(
+                val response = fcmApi.registerFcmToken(
                     url = fcmUrl,
                     signature = signature,
                     request = requestPayload,

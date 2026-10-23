@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +23,8 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
@@ -33,9 +36,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Delete
 import com.zerointrusion.domain.connecteddevices.RemovableAccountDevice
 import com.zerointrusion.presentation.app.DeviceRemovalUiState
 import com.zerointrusion.ui.theme.ActionDeclineRed
@@ -218,16 +224,36 @@ private fun DeviceRemovalCard(
                     color = Yellow,
                 )
             }
-            Text(
-                text = device.deviceName ?: device.id,
-                style = MaterialTheme.typography.titleMedium,
-                color = White,
-            )
-            Text(
-                text = "ID: ${device.id}",
-                style = MaterialTheme.typography.bodySmall,
-                color = White.copy(alpha = 0.72f),
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    Text(
+                        text = device.deviceName ?: device.id,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = White,
+                    )
+                    Text(
+                        text = "ID: ${device.id}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = White.copy(alpha = 0.72f),
+                    )
+                }
+                IconButton(
+                    onClick = onRequestDelete,
+                    enabled = !deleting && !showConfirmation,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Delete,
+                        contentDescription = "Remove ${device.deviceName ?: device.id}",
+                        tint = ActionDeclineRed,
+                    )
+                }
+            }
             Text(
                 text = "Server: ${device.namespaceUrl}",
                 style = MaterialTheme.typography.bodySmall,
@@ -252,15 +278,6 @@ private fun DeviceRemovalCard(
                 }
                 OutlinedButton(onClick = onCancelDelete, modifier = Modifier.fillMaxWidth()) {
                     Text("Cancel")
-                }
-            } else {
-                Button(
-                    onClick = onRequestDelete,
-                    enabled = !deleting,
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = ActionDeclineRed),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(if (deleting) "Removing..." else "Remove")
                 }
             }
         }

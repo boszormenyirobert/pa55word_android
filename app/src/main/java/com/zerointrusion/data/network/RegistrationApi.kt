@@ -200,13 +200,6 @@ interface RegistrationApi {
     ): Response<ResponseBody>
 
     @POST
-    suspend fun registerFcmToken(
-        @Url url: String,
-        @Header("x-signature") signature: String,
-        @Body request: FcmRegistrationRequestDto,
-    ): Response<Unit>
-
-    @POST
     suspend fun registerNewDevice(
         @Url url: String,
         @Header("x-signature") signature: String,
@@ -220,56 +213,4 @@ interface RegistrationApi {
         @Body request: RequestBody,
     ): Response<Unit>
 
-    @POST
-    suspend fun sendAuthenticationResponse(
-        @Url url: String,
-        @Header("x-signature") signature: String,
-        @Body request: AuthenticationResponseRequestDto,
-    ): Response<AuthenticationResponseDto>
-
-    @GET
-    suspend fun fetchAuthenticationSessions(
-        @Url url: String,
-        @Header("x-signature") signature: String,
-    ): Response<List<AuthenticationSessionDto>>
-
-    @HTTP(method = "DELETE", hasBody = true)
-    suspend fun revokeAuthenticationSession(
-        @Url url: String,
-        @Header("x-signature") signature: String,
-        @Body request: AuthenticationSessionRevocationResponseRequestDto,
-    ): Response<AuthenticationSessionRevocationResponseDto>
-
-    @GET
-    suspend fun getAccountDetails(
-        @Url url: String,
-        @Header("x-signature") signature: String,
-    ): Response<ResponseBody>
-
-    @POST
-    suspend fun getAccountStatus(
-        @Url url: String,
-        @Header("x-signature") signature: String,
-        @Body request: AccountLifecycleRequestDto,
-    ): Response<ResponseBody>
-
-    @HTTP(method = "DELETE", hasBody = true)
-    suspend fun deleteAccount(
-        @Url url: String,
-        @Header("x-signature") signature: String,
-        @Body request: AccountLifecycleRequestDto,
-    ): Response<ResponseBody>
-
-    @GET
-    suspend fun loadAccountDevices(
-        @Url url: String,
-        @Header("x-signature") signature: String,
-    ): Response<ResponseBody>
-
-    @HTTP(method = "DELETE", hasBody = true)
-    suspend fun deleteAccountDevice(
-        @Url url: String,
-        @Header("x-signature") signature: String,
-        @Body request: DeleteAccountDeviceRequestDto,
-    ): Response<ResponseBody>
 }

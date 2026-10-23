@@ -7,7 +7,7 @@ import com.zerointrusion.data.network.AccountDeviceDto
 import com.zerointrusion.data.network.AccountDevicesResponseDto
 import com.zerointrusion.data.network.DeleteAccountDeviceRequestDto
 import com.zerointrusion.data.network.DeleteAccountDeviceResponseDto
-import com.zerointrusion.data.network.RegistrationApi
+import com.zerointrusion.data.network.AccountApi
 import com.zerointrusion.data.repository.common.ACCOUNT_LOG_TAG
 import com.zerointrusion.data.repository.common.buildAccountDeviceRemovalUrl
 import com.zerointrusion.data.repository.common.buildAccountDevicesListUrl
@@ -39,7 +39,7 @@ class ConnectedDevicesRepositoryImpl(
     private val accountDetailsStateHolder: AccountDetailsStateHolder,
     private val connectedDevicesLocalStore: ConnectedDevicesLocalStore,
     private val stateStore: RegistrationStateStore,
-    private val registrationApi: RegistrationApi,
+    private val accountApi: AccountApi,
     private val signatureService: SignatureService,
     private val gson: Gson,
 ) : ConnectedDevicesRepository {
@@ -97,7 +97,7 @@ class ConnectedDevicesRepositoryImpl(
         )
         val url = buildAccountDeviceRemovalUrl(device.namespaceUrl)
         val response = try {
-            registrationApi.deleteAccountDevice(
+            accountApi.deleteAccountDevice(
                 url = url,
                 signature = signatureService.signJsonString(gson.toJson(request)),
                 request = request,
@@ -140,7 +140,7 @@ class ConnectedDevicesRepositoryImpl(
             nonce = nonce,
         )
         val response = try {
-            registrationApi.loadAccountDevices(
+            accountApi.loadAccountDevices(
                 url = url,
                 signature = signatureService.signJsonString(
                     buildSignedAccountMobileDeviceNonceJson(

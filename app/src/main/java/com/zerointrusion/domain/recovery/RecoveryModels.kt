@@ -29,6 +29,7 @@ data class RecoveryPendingState(
     val pairingCodeHash: String,
     val candidateRequestId: String,
     val stage: RecoveryStage,
+    val isAdditionalNamespaceRecovery: Boolean = false,
     val expiresAt: String? = null,
     val completionRequestId: String? = null,
     val accountId: String? = null,

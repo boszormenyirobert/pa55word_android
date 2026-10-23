@@ -3,6 +3,7 @@ package com.zerointrusion.data.repository.namespaces
 import com.google.gson.Gson
 import com.zerointrusion.core.AppConstants
 import com.zerointrusion.data.network.AccountRegistrationRequestDto
+import com.zerointrusion.data.network.AccountApi
 import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.qr.NamespaceRegistrationFromQrFlow
 import com.zerointrusion.data.security.DefaultNamespaceService
@@ -237,6 +238,12 @@ class AddDatabaseTest {
             check(method == "getPublicKey")
             publicKey
         }
+        val accountApi = proxy(AccountApi::class.java) { method, _ ->
+            when (method) {
+                "deleteAccount" -> Response.success(Unit)
+                else -> error("Unexpected account API call: $method")
+            }
+        }
         val api = proxy(RegistrationApi::class.java) { method, args ->
             when (method) {
                 "checkServerHealth" -> {
@@ -254,8 +261,7 @@ class AddDatabaseTest {
                     if (accountCode == 200) Response.success(body.toResponseBody())
                     else Response.error<okhttp3.ResponseBody>(accountCode, """{"message":"rejected"}""".toResponseBody())
                 }
-                "deleteAccount" -> Response.success(Unit)
-                else -> error("Unexpected API call: $method")
+                else -> error("Unexpected registration API call: $method")
             }
         }
         val repository = NamespacesRepositoryImpl(
@@ -265,6 +271,7 @@ class AddDatabaseTest {
                 override suspend fun save(state: RegistrationState) { this@Fixture.state.value = state }
                 override suspend fun clear() { state.value = null }
             },
+            accountApi,
             api,
             proxy(SignatureService::class.java) { _, _ -> "signature" },
             Gson(), keys, DefaultNamespaceService(), RegistrationValidator(),

@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +36,13 @@ fun RecoveryScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     var scannerVisible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        viewModel.refreshOnScreenOpened()
+    }
+    DisposableEffect(Unit) {
+        onDispose(viewModel::onScreenExited)
+    }
 
     AppBackground {
         Column(
@@ -98,6 +107,13 @@ fun RecoveryScreen(
                     modifier = Modifier.fillMaxWidth(),
                 )
             } else {
+                OutlinedButton(
+                    onClick = { scannerVisible = true },
+                    enabled = !state.isWorking,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Scan another recovery code")
+                }
                 PrimaryActionButton(
                     text = "Refresh recovery status",
                     onClick = viewModel::retry,

@@ -40,6 +40,16 @@ internal fun buildAuthenticationSessionsUrl(
     AppConstants.AUTHENTICATION_ENDPOINT_PATH + "/" + accountId.trim() +
     "?mobileDeviceId=" + mobileDeviceId.trim() + "&nonce=" + nonce.trim()
 
+internal fun buildMobileAuthenticationStatusUrl(
+    baseUrl: String,
+    accountId: String,
+    notificationId: String,
+    mobileDeviceId: String,
+    nonce: String,
+): String = baseUrl.trim().trimEnd('/') +
+    AppConstants.AUTHENTICATION_ENDPOINT_PATH + "/mobile-status/" + accountId.trim() + "/" +
+    notificationId.trim() + "?mobileDeviceId=" + mobileDeviceId.trim() + "&nonce=" + nonce.trim()
+
 internal fun buildAuthenticationSessionRevocationUrl(
     baseUrl: String,
     accountId: String,
@@ -99,6 +109,28 @@ internal fun buildSignedAccountMobileDeviceNonceJson(
     append(',')
     append("\"mobileDeviceId\":")
     append(gson.toJson(mobileDeviceId))
+    append(',')
+    append("\"nonce\":")
+    append(gson.toJson(nonce))
+    append('}')
+}
+
+internal fun buildMobileAuthenticationStatusJson(
+    gson: Gson,
+    accountId: String,
+    mobileDeviceId: String,
+    notificationId: String,
+    nonce: String,
+): String = buildString {
+    append('{')
+    append("\"accountId\":")
+    append(gson.toJson(accountId))
+    append(',')
+    append("\"mobileDeviceId\":")
+    append(gson.toJson(mobileDeviceId))
+    append(',')
+    append("\"notificationId\":")
+    append(gson.toJson(notificationId))
     append(',')
     append("\"nonce\":")
     append(gson.toJson(nonce))

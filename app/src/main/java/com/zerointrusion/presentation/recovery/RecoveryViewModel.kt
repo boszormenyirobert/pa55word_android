@@ -11,6 +11,7 @@ import com.zerointrusion.domain.recovery.RecoveryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import java.util.UUID
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,26 +27,38 @@ class RecoveryViewModel @Inject constructor(
     val uiState = _uiState.asStateFlow()
     private var pollingJob: Job? = null
 
-    init {
+    fun refreshOnScreenOpened() {
         viewModelScope.launch {
-            repository.current()?.let { pending ->
-                _uiState.update {
-                    it.copy(
-                        stage = pending.stage,
-                        pairingCode = pending.pairingCode.takeIf { pending.stage.name == "WAITING_FOR_SELECTION" },
-                        expiresAt = pending.expiresAt,
-                    )
-                }
-                poll()
+            val pending = repository.current()
+            if (pending == null) {
+                _uiState.value = RecoveryUiState()
+                return@launch
             }
+            _uiState.update {
+                it.copy(
+                    stage = pending.stage,
+                    pairingCode = pending.pairingCode.takeIf { pending.stage.name == "WAITING_FOR_SELECTION" },
+                    expiresAt = pending.expiresAt,
+                    isCompleted = false,
+                    errorMessage = null,
+                )
+            }
+            poll()
         }
+    }
+
+    fun onScreenExited() {
+        pollingJob?.cancel()
+        _uiState.value = RecoveryUiState()
     }
 
     fun onQrScanned(rawPayload: String) {
         val result = runCatching { parseRecoveryQr(rawPayload) }
-        _uiState.update {
-            it.copy(scannedQr = result.getOrNull(), errorMessage = result.exceptionOrNull()?.message)
-        }
+        pollingJob?.cancel()
+        _uiState.value = RecoveryUiState(
+            scannedQr = result.getOrNull(),
+            errorMessage = result.exceptionOrNull()?.message,
+        )
     }
 
     fun onScannerError(message: String) {
@@ -75,7 +88,10 @@ class RecoveryViewModel @Inject constructor(
         }
     }
 
-    fun retry() = poll()
+    fun retry() {
+        _uiState.update { it.copy(isWorking = true, errorMessage = null) }
+        poll()
+    }
 
     fun retryFcm() {
         viewModelScope.launch {
@@ -89,7 +105,11 @@ class RecoveryViewModel @Inject constructor(
         pollingJob?.cancel()
         pollingJob = viewModelScope.launch {
             while (true) {
-                val progress = runCatching { repository.refresh() }.getOrElse { failure ->
+                val progress = try {
+                    repository.refresh()
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (failure: Exception) {
                     _uiState.update { it.copy(isWorking = false, errorMessage = failure.message ?: "Recovery status could not be refreshed.") }
                     return@launch
                 }

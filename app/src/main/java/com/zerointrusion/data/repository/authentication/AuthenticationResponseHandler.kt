@@ -5,7 +5,7 @@ import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.zerointrusion.data.network.AuthenticationAttestationEnvelopeDto
 import com.zerointrusion.data.network.AuthenticationResponseRequestDto
-import com.zerointrusion.data.network.RegistrationApi
+import com.zerointrusion.data.network.AuthenticationApi
 import com.zerointrusion.data.repository.common.REG_LOG_TAG
 import com.zerointrusion.data.repository.common.buildAuthenticationResponseUrl
 import com.zerointrusion.data.repository.common.newRequestNonce
@@ -16,6 +16,7 @@ import com.zerointrusion.data.storage.RegistrationStateStore
 import com.zerointrusion.data.storage.toNamespaceEntries
 import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
 import com.zerointrusion.domain.authentication.AuthenticationResponseResult
+import com.zerointrusion.domain.authentication.AuthenticationSessionAlreadyCompleted
 import com.zerointrusion.domain.authentication.NamespaceAuthenticationResult
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.namespaces.NamespaceEntry
@@ -26,7 +27,7 @@ import kotlinx.coroutines.withContext
 import java.time.Instant
 
 internal class AuthenticationResponseHandler(
-    private val registrationApi: RegistrationApi,
+    private val authenticationApi: AuthenticationApi,
     private val accountDetailsStateHolder: AccountDetailsStateHolder,
     private val stateStore: RegistrationStateStore,
     private val signatureService: SignatureService,
@@ -160,12 +161,15 @@ internal class AuthenticationResponseHandler(
         Log.d(REG_LOG_TAG, "HTTP POST $responseUrl payload=$requestBodyJson")
         Log.d(REG_LOG_TAG, "Authentication response signature: $signature")
         val namespaceOutcome = try {
-            val response = registrationApi.sendAuthenticationResponse(
+            val response = authenticationApi.sendAuthenticationResponse(
                 url = responseUrl,
                 signature = signature,
                 request = requestPayload,
             )
             if (!response.isSuccessful) {
+                if (response.code() == 409) {
+                    throw AuthenticationSessionAlreadyCompleted()
+                }
                 val errorBody = response.errorBody()?.string()
                 failureOutcome(
                     errorBody ?: "Authentication response failed with HTTP ${response.code()} at $responseUrl.",
@@ -178,6 +182,9 @@ internal class AuthenticationResponseHandler(
                 )
             }
         } catch (exception: Exception) {
+            if (exception is AuthenticationSessionAlreadyCompleted) {
+                throw exception
+            }
             failureOutcome(mapFailureMessage(responseUrl, exception))
         }
         val namespaceOutcomes = listOf(namespaceOutcome)

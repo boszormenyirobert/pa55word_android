@@ -40,7 +40,7 @@ Encryption configuration:
 Stored keys:
 - `registration_state`
 - `connected_devices_local_state`
-- `recovery_pending_state` (planned first-launch recovery implementation)
+- `recovery_pending_state`
 
 ### registration_state
 

@@ -37,6 +37,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 interface KeyStoreService {
+    fun hasKeyPair(): Boolean
     fun ensureKeyPair()
     fun createFreshKeyPair()
     fun getPublicKey(): PublicKey
@@ -73,6 +74,8 @@ interface SignatureService {
 class AndroidKeyStoreService @Inject constructor(
     private val context: Context,
 ) : KeyStoreService {
+    override fun hasKeyPair(): Boolean = loadKeyStore().containsAlias(AppConstants.KEYSTORE_ALIAS)
+
     override fun ensureKeyPair() {
         val keyStore = loadKeyStore()
         if (keyStore.containsAlias(AppConstants.KEYSTORE_ALIAS)) {

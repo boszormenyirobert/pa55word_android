@@ -40,9 +40,11 @@ Recovery request rules:
 
 ## Recovery endpoints
 
-These endpoints are used only by the unauthenticated first-launch recovery
-flow described in `14-first-launch-recovery.md`. The phone signs them with the
-new candidate key held in Android Keystore; the private key is never exported.
+These endpoints are used by both first-launch recovery and authenticated
+current-namespace recovery described in `14-first-launch-recovery.md`.
+First-launch recovery signs with a new candidate key; authenticated recovery
+reuses the phone's existing Android Keystore key. The private key is never
+exported.
 
 ### POST /api/v1/recovery/candidate
 

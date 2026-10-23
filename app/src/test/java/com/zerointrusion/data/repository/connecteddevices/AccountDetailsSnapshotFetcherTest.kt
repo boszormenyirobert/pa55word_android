@@ -1,7 +1,7 @@
 package com.zerointrusion.data.repository.connecteddevices
 
 import com.google.gson.Gson
-import com.zerointrusion.data.network.RegistrationApi
+import com.zerointrusion.data.network.AccountApi
 import com.zerointrusion.data.security.DekService
 import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
@@ -117,7 +117,7 @@ class AccountDetailsSnapshotFetcherTest {
         val requests = mutableListOf<String>()
         private val holder = InMemoryAccountDetailsStateHolder()
 
-        private val api = proxy(RegistrationApi::class.java) { method, args ->
+        private val api = proxy(AccountApi::class.java) { method, args ->
                 if (method == "deleteAccountDevice") {
                     return@proxy Response.success("""{"success":true}""".toResponseBody())
                 }

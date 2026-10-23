@@ -147,6 +147,7 @@ fun ZeroIntrusionAppRoot(
                 RecoveryScreen(
                     onBack = { navController.popBackStack() },
                     onCompleted = {
+                        appViewModel.refreshAccountDetailsAfterRecovery()
                         navController.navigate(AppRoute.Home.route) {
                             popUpTo(AppRoute.Registration.route) { inclusive = true }
                         }
@@ -234,6 +235,9 @@ fun ZeroIntrusionAppRoot(
                 RecoveryConnectionScreen(
                     email = appState.registrationState?.email.orEmpty(),
                     phone = appState.registrationState?.phone.orEmpty(),
+                    onStartRecovery = {
+                        navController.navigate(AppRoute.Recovery.route)
+                    },
                     onBack = { navController.popBackStack() },
                 )
             }

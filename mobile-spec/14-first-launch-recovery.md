@@ -5,8 +5,11 @@ without creating a new account or asking the user to export a private key or
 DEK.
 
 Scope:
-- This is distinct from the authenticated Settings `Recovery Connection` view.
-- It starts only when no `registration_state` is present.
+- The same recovery route is also available from authenticated Settings
+  `Recovery Connection` for the current namespace server.
+- With no `registration_state`, recovery creates a fresh candidate keypair and
+  restores a full registration. With a stored registration, it reuses the
+  existing keypair and mobile device ID.
 - The normal `POST /api/v1/account` registration and the existing
   new-mobile-to-existing-account flow are not used.
 
@@ -31,7 +34,10 @@ The recovery UI has these user-visible stages:
    recovery screen and never uses a Settings popup.
 
 On process restart, a valid `recovery_pending_state` resumes this screen instead
-of the initial registration form. It never creates a second candidate silently.
+of the initial registration form and refreshes its status immediately. Scanning
+the same recovery QR resumes its candidate; scanning a different recovery QR
+explicitly replaces the pending candidate after best-effort cancellation of the
+old candidate.
 
 ## QR contract and transport policy
 
@@ -136,6 +142,13 @@ This produces the same usable local account shape as a normal registration:
 the user has an active `RegistrationState`, the candidate's Keystore key, the
 encrypted DEK, account email and phone, a gateway namespace, and all returned
 namespace connections.
+
+For authenticated current-namespace recovery, the QR identifies the Recovery
+Server and may use a different URL from the current gateway. Completion
+verifies that the recovered account matches the stored account, leaves
+`RegistrationState` unchanged, and upserts only the recovered namespace into
+the mobile namespace list with `root = false`.
+It never follows or imports additional returned namespace servers.
 
 ## Errors, retry, and cancellation
 

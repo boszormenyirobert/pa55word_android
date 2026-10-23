@@ -2,7 +2,7 @@ package com.zerointrusion.data.repository.connecteddevices
 
 import android.util.Log
 import com.google.gson.Gson
-import com.zerointrusion.data.network.RegistrationApi
+import com.zerointrusion.data.network.AccountApi
 import com.zerointrusion.data.repository.common.ACCOUNT_LOG_TAG
 import com.zerointrusion.data.repository.common.buildConnectedDevicesUrl
 import com.zerointrusion.data.repository.common.buildSignedAccountMobileDeviceNonceJson
@@ -30,7 +30,7 @@ import java.util.ArrayDeque
 
 @Singleton
 class AccountDetailsSnapshotFetcher @Inject constructor(
-    private val registrationApi: RegistrationApi,
+    private val accountApi: AccountApi,
     private val stateStore: RegistrationStateStore,
     private val accountDetailsStateHolder: AccountDetailsStateHolder,
     private val connectedDevicesLocalStore: ConnectedDevicesLocalStore,
@@ -253,7 +253,7 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
         )
         Log.d(ACCOUNT_LOG_TAG, "HTTP GET $requestUrl payload=$signaturePayloadJson")
         val response = try {
-            registrationApi.getAccountDetails(
+            accountApi.getAccountDetails(
                 url = requestUrl,
                 signature = signature,
             )

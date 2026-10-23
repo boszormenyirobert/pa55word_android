@@ -29,6 +29,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.UUID
 import javax.inject.Inject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -51,11 +52,29 @@ class RecoveryRepositoryImpl @Inject constructor(
         validateOrigin(qrPayload.apiBaseUrl)
         val existing = current()
         if (existing != null) {
-            return retryCandidate(existing)
+            if (
+                existing.recoveryId == qrPayload.recoveryId &&
+                sameOrigin(existing.apiBaseUrl, qrPayload.apiBaseUrl)
+            ) {
+                return retryCandidate(existing)
+            }
+            discardPendingCandidate(existing)
         }
 
-        keyStoreService.createFreshKeyPair()
-        val device = deviceService.createDevice(keyStoreService.getPublicKey())
+        val existingRegistration = registrationStateStore.observeState().first()
+        val isAdditionalNamespaceRecovery = existingRegistration != null
+        val device = if (existingRegistration == null) {
+            keyStoreService.createFreshKeyPair()
+            deviceService.createDevice(keyStoreService.getPublicKey())
+        } else {
+            if (!keyStoreService.hasKeyPair()) {
+                throw RegistrationFailure.Security("The existing device keypair is unavailable. Use first-launch recovery on a new device.")
+            }
+            deviceService.createDevice(keyStoreService.getPublicKey()).copy(
+                mobileDeviceId = existingRegistration.mobileDeviceId,
+                deviceName = existingRegistration.deviceName,
+            )
+        }
         val candidateId = UUID.randomUUID().toString()
         val pairingCode = buildPairingCode()
         val hash = pairingHash(qrPayload.recoveryId, candidateId, device.mobileDeviceId, device.publicKey, pairingCode)
@@ -70,6 +89,7 @@ class RecoveryRepositoryImpl @Inject constructor(
             pairingCodeHash = hash,
             candidateRequestId = UUID.randomUUID().toString(),
             stage = RecoveryStage.CANDIDATE_SUBMITTING,
+            isAdditionalNamespaceRecovery = isAdditionalNamespaceRecovery,
         )
         pendingStore.save(pending)
         return retryCandidate(pending)
@@ -97,8 +117,7 @@ class RecoveryRepositoryImpl @Inject constructor(
 
     override suspend fun cancel() {
         val pending = current() ?: return
-        val body = candidateBody("candidate_cancellation", pending, UUID.randomUUID().toString())
-        responseJson(post(pending.apiBaseUrl + "/api/v1/recovery/candidate/cancellation", body))
+        cancelPendingCandidate(pending)
         pendingStore.clear()
     }
 
@@ -134,6 +153,20 @@ class RecoveryRepositoryImpl @Inject constructor(
         return RecoveryProgress(waiting.stage, waiting.pairingCode, waiting.expiresAt)
     }
 
+    private suspend fun discardPendingCandidate(pending: RecoveryPendingState) {
+        try {
+            cancelPendingCandidate(pending)
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (_: Exception) { }
+        pendingStore.clear()
+    }
+
+    private suspend fun cancelPendingCandidate(pending: RecoveryPendingState) {
+        val body = candidateBody("candidate_cancellation", pending, UUID.randomUUID().toString())
+        responseJson(post(pending.apiBaseUrl + "/api/v1/recovery/candidate/cancellation", body))
+    }
+
     private suspend fun retrieveDek(pending: RecoveryPendingState): RecoveryProgress {
         val body = candidateBody("candidate_dek", pending, null)
         val json = responseJson(post(pending.apiBaseUrl + "/api/v1/recovery/candidate/dek", body))
@@ -158,6 +191,11 @@ class RecoveryRepositoryImpl @Inject constructor(
         if (namespaces.count { it.root } != 1) {
             throw RegistrationFailure.Server("The recovery response must contain exactly one namespace for the approved recovery server URL.")
         }
+        val recoveredNamespaces = if (pending.isAdditionalNamespaceRecovery) {
+            listOf(namespaces.single { it.root })
+        } else {
+            namespaces
+        }
         val ready = pending.copy(
             stage = RecoveryStage.DEK_RECEIVED,
             completionRequestId = pending.completionRequestId ?: UUID.randomUUID().toString(),
@@ -165,7 +203,7 @@ class RecoveryRepositoryImpl @Inject constructor(
             encDek = encryptedDek,
             email = json.requiredString("email"),
             phone = json.requiredString("phone"),
-            namespaces = namespaces,
+            namespaces = recoveredNamespaces,
         )
         pendingStore.save(ready)
         return complete(ready)
@@ -188,6 +226,9 @@ class RecoveryRepositoryImpl @Inject constructor(
     }
 
     private suspend fun activate(pending: RecoveryPendingState): String? {
+        if (pending.isAdditionalNamespaceRecovery) {
+            return activateAdditionalNamespace(pending)
+        }
         val root = pending.namespaces.single { it.root }
         val registration = RegistrationState(
             accountId = requireNotNull(pending.accountId),
@@ -219,15 +260,52 @@ class RecoveryRepositoryImpl @Inject constructor(
         return syncFcm(registration, pending.namespaces)
     }
 
+    private suspend fun activateAdditionalNamespace(pending: RecoveryPendingState): String? {
+        val registration = registrationStateStore.observeState().first()
+            ?: throw RegistrationFailure.Validation("The existing phone registration is no longer available.")
+        val recoveredNamespace = pending.namespaces.single()
+        val recoveredAccountId = requireNotNull(pending.accountId)
+
+        connectedDevicesStore.updateMobileRegistrations { existing ->
+            val updated = existing.filterNot { stored ->
+                stored.accountId == recoveredAccountId &&
+                    stored.mobileDeviceId == registration.mobileDeviceId &&
+                    sameOrigin(stored.namespaceUrl, recoveredNamespace.url)
+            } + MobileNamespaceRegistration(
+                accountId = recoveredAccountId,
+                mobileDeviceId = registration.mobileDeviceId,
+                namespaceId = recoveredNamespace.namespaceId,
+                namespaceName = recoveredNamespace.name,
+                namespaceUrl = recoveredNamespace.url,
+                encDek = requireNotNull(pending.encDek),
+                root = false,
+            )
+            updated.distinctBy { stored ->
+                listOf(
+                    stored.accountId.trim().lowercase(),
+                    stored.mobileDeviceId.trim().lowercase(),
+                    stored.namespaceId.trim().lowercase(),
+                    stored.namespaceUrl.trim().trimEnd('/').lowercase(),
+                ).joinToString(separator = "|")
+            }
+        }
+        return syncFcm(
+            registration = registration,
+            namespaces = listOf(recoveredNamespace),
+            accountId = recoveredAccountId,
+        )
+    }
+
     private suspend fun syncFcm(
         registration: RegistrationState,
         namespaces: List<RecoveryNamespace>,
+        accountId: String = registration.accountId,
     ): String? {
         val token = runCatching { firebaseService.getFcmToken() }
             .getOrElse { return it.message ?: "Push token retrieval failed." }
         namespaces.forEach { namespace ->
             val failure = runCatching {
-                firebaseService.registerFcmToken(namespace.url, registration.accountId, registration.mobileDeviceId, token)
+                firebaseService.registerFcmToken(namespace.url, accountId, registration.mobileDeviceId, token)
             }.exceptionOrNull()
             if (failure != null) {
                 return failure.message ?: "Push registration failed."
@@ -290,6 +368,9 @@ class RecoveryRepositoryImpl @Inject constructor(
             throw RegistrationFailure.Validation("Recovery requires HTTPS outside development builds.")
         }
     }
+
+    private fun sameOrigin(first: String, second: String): Boolean =
+        first.trim().trimEnd('/').equals(second.trim().trimEnd('/'), ignoreCase = true)
 
     private fun JsonObject.requiredString(name: String): String = get(name)?.asString?.takeIf { it.isNotBlank() }
         ?: throw RegistrationFailure.Server("The recovery response is missing $name.")

@@ -1,8 +1,8 @@
 package com.zerointrusion.data.repository.authentication
 
 import com.google.gson.Gson
+import com.zerointrusion.data.network.AuthenticationApi
 import com.zerointrusion.data.network.AuthenticationSessionDto
-import com.zerointrusion.data.network.RegistrationApi
 import com.zerointrusion.data.repository.connecteddevices.InMemoryAccountDetailsStateHolder
 import com.zerointrusion.data.security.SignatureService
 import com.zerointrusion.data.storage.RegistrationStateStore
@@ -80,7 +80,7 @@ class AuthenticationSessionHandlerTest {
                 )
                 emptyList<Any>()
             }
-            val api = proxy(RegistrationApi::class.java) { method, args ->
+            val api = proxy(AuthenticationApi::class.java) { method, args ->
                 check(method == "fetchAuthenticationSessions")
                 synchronized(requests) { requests += args[0].toString() }
                 if (cancelSessions) throw CancellationException("Cancelled")
