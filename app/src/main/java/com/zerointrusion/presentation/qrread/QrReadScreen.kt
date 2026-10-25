@@ -1,17 +1,9 @@
 package com.zerointrusion.presentation.qrread
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.content.pm.PackageManager
-import android.util.Log
-import android.util.Size
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.CameraSelector
-import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.Preview
-import androidx.camera.lifecycle.ProcessCameraProvider
-import androidx.camera.view.PreviewView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,15 +35,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
-import com.google.mlkit.vision.common.InputImage
 import com.zerointrusion.presentation.app.QrNamespaceRegistrationUiState
 import com.zerointrusion.presentation.common.QrCodeImage
+import com.zerointrusion.presentation.qrscanner.QrCameraPreview
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ErrorTextLight
 import com.zerointrusion.ui.theme.Green
@@ -59,8 +50,6 @@ import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
-
-private const val QR_ROUTE_LOG_TAG = "ZeroIntrusionQr"
 
 @Composable
 fun QrReadScreen(
@@ -162,24 +151,13 @@ fun QrReadScreen(
                             .fillMaxWidth()
                             .height(420.dp),
                     ) {
-                        AndroidView(
-                            factory = { viewContext ->
-                                PreviewView(viewContext).apply {
-                                    implementationMode = PreviewView.ImplementationMode.COMPATIBLE
-                                    scaleType = PreviewView.ScaleType.FILL_CENTER
-                                }
-                            },
-                            modifier = Modifier.fillMaxSize(),
-                            update = { previewView ->
-                                previewView.bindQrCamera(
-                                    lifecycleOwner = lifecycleOwner,
-                                    cameraExecutor = cameraExecutor,
-                                    barcodeScanner = barcodeScanner,
-                                    scanHandled = scanHandled,
-                                    onPayloadScanned = onPayloadScanned,
-                                    onScannerError = { scannerError = it },
-                                )
-                            },
+                        QrCameraPreview(
+                            lifecycleOwner = lifecycleOwner,
+                            cameraExecutor = cameraExecutor,
+                            barcodeScanner = barcodeScanner,
+                            scanHandled = scanHandled,
+                            onPayloadScanned = onPayloadScanned,
+                            onScannerError = { scannerError = it },
                         )
                     }
                 } else {
@@ -236,80 +214,4 @@ fun QrReadScreen(
             Text("Back")
         }
     }
-}
-
-@SuppressLint("UnsafeOptInUsageError")
-private fun PreviewView.bindQrCamera(
-    lifecycleOwner: androidx.lifecycle.LifecycleOwner,
-    cameraExecutor: java.util.concurrent.ExecutorService,
-    barcodeScanner: com.google.mlkit.vision.barcode.BarcodeScanner,
-    scanHandled: AtomicBoolean,
-    onPayloadScanned: (String) -> Unit,
-    onScannerError: (String) -> Unit,
-) {
-    val cameraProviderFuture = ProcessCameraProvider.getInstance(context)
-    cameraProviderFuture.addListener(
-        {
-            val cameraProvider = runCatching { cameraProviderFuture.get() }
-                .getOrElse {
-                    onScannerError("Unable to start the camera for QR scanning.")
-                    return@addListener
-                }
-
-            val preview = Preview.Builder().build().also {
-                it.surfaceProvider = surfaceProvider
-            }
-            val analysis = ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setTargetResolution(Size(1280, 720))
-                .build()
-
-            analysis.setAnalyzer(cameraExecutor) { imageProxy ->
-                if (scanHandled.get()) {
-                    imageProxy.close()
-                    return@setAnalyzer
-                }
-
-                val mediaImage = imageProxy.image
-                if (mediaImage == null) {
-                    imageProxy.close()
-                    return@setAnalyzer
-                }
-
-                val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-                barcodeScanner.process(image)
-                    .addOnSuccessListener { barcodes ->
-                        val payload = barcodes.firstNotNullOfOrNull { barcode ->
-                            barcode.rawValue?.trim()?.takeIf(String::isNotEmpty)
-                        }
-                        if (payload != null && scanHandled.compareAndSet(false, true)) {
-                            Log.d(QR_ROUTE_LOG_TAG, "QR code scanned successfully. payloadLength=${payload.length}")
-                            onPayloadScanned(payload)
-                        }
-                    }
-                    .addOnFailureListener {
-                        if (!scanHandled.get()) {
-                            Log.e(QR_ROUTE_LOG_TAG, "QR scanning failed while processing the camera frame.")
-                            onScannerError("QR scanning failed while processing the camera frame.")
-                        }
-                    }
-                    .addOnCompleteListener {
-                        imageProxy.close()
-                    }
-            }
-
-            runCatching {
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(
-                    lifecycleOwner,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
-                    preview,
-                    analysis,
-                )
-            }.onFailure {
-                onScannerError("Unable to bind the camera preview for QR scanning.")
-            }
-        },
-        ContextCompat.getMainExecutor(context),
-    )
 }

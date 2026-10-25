@@ -13,7 +13,12 @@ import com.zerointrusion.domain.connecteddevices.MobileNamespaceRegistration
 import com.zerointrusion.domain.connecteddevices.RemovableAccountDevice
 import com.zerointrusion.domain.registration.RegistrationState
 import java.lang.reflect.Proxy
+import kotlin.coroutines.Continuation
+import kotlin.coroutines.intrinsics.startCoroutineUninterceptedOrReturn
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
@@ -73,15 +78,12 @@ class AccountDetailsSnapshotFetcherTest {
     }
 
     @Test
-    fun `signature failure is not treated as deregistration`() = runBlocking {
+    fun `rejected secondary signature preserves registrations and reachable data`() = runBlocking {
         val fixture = Fixture(home = "active", errorCode = "e_40101_1")
-        try {
-            fixture.fetcher().fetchSnapshot()
-            error("Expected signature error")
-        } catch (_: RegistrationFailure.Server) {
-            assertEquals(2, fixture.store.registrations.size)
-            assertEquals("active", fixture.state.value?.accountId)
-        }
+        val snapshot = fixture.fetcher().fetchSnapshot()
+        assertEquals(listOf("active"), snapshot.mobileRegistrations.map { it.accountId })
+        assertEquals(2, fixture.store.registrations.size)
+        assertEquals("active", fixture.state.value?.accountId)
     }
 
     @Test
@@ -95,11 +97,38 @@ class AccountDetailsSnapshotFetcherTest {
         assertEquals(listOf("active", "removed"), fixture.requests)
     }
 
+    @Test
+    fun `timed out first server does not stop checking the next server`() = runBlocking {
+        val fixture = Fixture(home = "active", timeoutAccount = "active", removedAvailable = true)
+
+        val snapshot = fixture.fetcher().fetchSnapshot()
+
+        assertEquals(listOf("active", "removed"), fixture.requests)
+        assertEquals(listOf("removed"), snapshot.mobileRegistrations.map { it.accountId })
+        val availability = fixture.holder.observeDatabaseAvailability().first().associate { it.accountId to it.isAvailable }
+        assertEquals(false, availability["active"])
+        assertEquals(true, availability["removed"])
+    }
+
+    @Test
+    fun `account request cancellation stops the refresh`() = runBlocking {
+        val fixture = Fixture(home = "active", cancelAccount = "active")
+        try {
+            fixture.fetcher().fetchSnapshot()
+            error("Expected cancellation")
+        } catch (_: CancellationException) {
+            assertEquals(listOf("active"), fixture.requests)
+        }
+    }
+
     private class Fixture(
         home: String,
         includeActive: Boolean = true,
         private val errorCode: String = "e_40101_2",
         private val unavailableAccount: String? = null,
+        private val timeoutAccount: String? = null,
+        private val cancelAccount: String? = null,
+        private val removedAvailable: Boolean = false,
     ) {
         val state = MutableStateFlow<RegistrationState?>(
             RegistrationState(
@@ -115,7 +144,7 @@ class AccountDetailsSnapshotFetcherTest {
             },
         )
         val requests = mutableListOf<String>()
-        private val holder = InMemoryAccountDetailsStateHolder()
+        val holder = InMemoryAccountDetailsStateHolder()
 
         private val api = proxy(AccountApi::class.java) { method, args ->
                 if (method == "deleteAccountDevice") {
@@ -124,17 +153,23 @@ class AccountDetailsSnapshotFetcherTest {
                 check(method == "getAccountDetails")
                 val account = if (args[0].toString().contains("active.example")) "active" else "removed"
                 requests += account
+                if (account == timeoutAccount) {
+                    return@proxy suspendUntilCancelled(args.last())
+                }
+                if (account == cancelAccount) {
+                    throw CancellationException("Cancelled")
+                }
                 if (account == unavailableAccount) {
                     throw IllegalStateException("$account server is unavailable")
                 }
-                if (account == "removed") {
+                if (account == "removed" && !removedAvailable) {
                     Response.error<okhttp3.ResponseBody>(401, """{"internalCode":"$errorCode"}""".toResponseBody())
                 } else {
                     Response.success(
-                        """{"success":true,"accounts":[{"accountId":"active",
+                        """{"success":true,"accounts":[{"accountId":"$account",
                         "devices":[{"mobileDeviceId":"phone","namespaces":[{"namespaceId":"1234567890",
-                        "namespace":"dev","url":"https://active.example"}]}],
-                        "dek":[{"mobileDeviceId":"phone","encDek":"active-dek"}]}]}""".toResponseBody(),
+                        "namespace":"dev","url":"https://$account.example"}]}],
+                        "dek":[{"mobileDeviceId":"phone","encDek":"$account-dek"}]}]}""".toResponseBody(),
                     )
                 }
             }
@@ -191,6 +226,13 @@ class AccountDetailsSnapshotFetcherTest {
     }
 
     companion object {
+        @Suppress("UNCHECKED_CAST")
+        private fun suspendUntilCancelled(continuation: Any?): Any {
+            val operation: suspend () -> Any = { awaitCancellation() }
+            return operation.startCoroutineUninterceptedOrReturn(continuation as Continuation<Any>)
+                ?: error("Expected suspended operation")
+        }
+
         private fun <T : Any> proxy(type: Class<T>, handler: (String, Array<out Any?>) -> Any): T =
             requireNotNull(type.cast(Proxy.newProxyInstance(type.classLoader, arrayOf(type)) { _, method, args ->
                 handler(method.name, args ?: emptyArray())

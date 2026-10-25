@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import android.text.format.DateFormat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
@@ -22,7 +23,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
@@ -31,12 +31,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,10 +60,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.zerointrusion.R
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
 import com.zerointrusion.domain.connecteddevices.DatabaseAvailability
 import com.zerointrusion.domain.namespaces.NamespaceEntry
@@ -75,6 +81,7 @@ import com.zerointrusion.ui.theme.Green
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
 import com.zerointrusion.ui.theme.Yellow
+import java.util.Date
 
 @Composable
 fun PostLoginHomeScreen(
@@ -83,6 +90,9 @@ fun PostLoginHomeScreen(
     email: String,
     namespaces: List<NamespaceEntry>,
     databaseAvailability: List<DatabaseAvailability>,
+    isInternetConnected: Boolean,
+    isHomeRefreshing: Boolean,
+    homeRefreshErrorCode: String?,
     liveDesktopSessions: List<ActiveDesktopSession>,
     liveDesktopSessionRevokingAttestationId: String?,
     liveDesktopSessionRevokeErrorMessage: String?,
@@ -93,7 +103,7 @@ fun PostLoginHomeScreen(
     onOpenQrRead: () -> Unit,
     onClearQrNamespaceRegistrationState: () -> Unit,
     onRevokeDesktopSession: (ActiveDesktopSession) -> Unit,
-    onRefreshDatabaseAvailability: (DatabaseAvailability) -> Unit,
+    onRefreshHome: () -> Unit,
     onDismissLiveDesktopSessionRevokeError: () -> Unit,
     onAllowNotification: () -> Unit,
     onDeclineNotification: () -> Unit,
@@ -173,160 +183,190 @@ fun PostLoginHomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .padding(WindowInsets.safeDrawing.asPaddingValues())
-                .padding(horizontal = 20.dp, vertical = 20.dp)
-                .padding(bottom = 98.dp),
+                .padding(horizontal = 20.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Text(
-                    text = "Home",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = White,
-                )
-                IconButton(onClick = onOpenSettings) {
-                    Icon(
-                        imageVector = Icons.Outlined.Settings,
-                        contentDescription = "Open settings",
-                        tint = White,
-                    )
-                }
-            }
-
-            DatabaseAvailabilityCard(
-                availability = databaseAvailability,
-                onRefreshDatabaseAvailability = onRefreshDatabaseAvailability,
-            )
-
-            LiveDesktopSessionsCard(
-                sessions = liveDesktopSessions,
-                fallbackServerName = namespaceName,
-                revokingAttestationId = liveDesktopSessionRevokingAttestationId,
-                onRevokeDesktopSession = onRevokeDesktopSession,
-            )
-
-            liveDesktopSessionRevokeErrorMessage?.let { message ->
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = message,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = ErrorTextLight,
-                        modifier = Modifier.weight(1f),
+                        text = "Home",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = White,
                     )
-                    IconButton(onClick = onDismissLiveDesktopSessionRevokeError) {
-                        Icon(
-                            imageVector = Icons.Outlined.Close,
-                            contentDescription = "Dismiss desktop session revoke error",
-                            tint = ErrorTextLight,
-                        )
-                    }
-                }
-            }
-
-            if (!notificationsEnabled || !notificationsPermissionGranted) {
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        Text(
-                            text = "Notifications disabled",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onError,
-                        )
-                        Text(
-                            text = "Background push alerts may not appear. Enable app notifications.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onError,
-                        )
-                        Button(
-                            onClick = {
-                                notificationsEnabled = notificationManager.areNotificationsEnabled()
-                                if (!notificationsPermissionGranted) {
-                                    hasRequestedNotificationPermission = true
-                                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                                } else {
-                                    val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                    }
-                                    context.startActivity(intent)
-                                }
-                            },
-                        ) {
-                            Text("Enable notifications")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = ::openQrRead) {
+                            Icon(
+                                imageVector = Icons.Outlined.QrCodeScanner,
+                                contentDescription = "QR-scan",
+                                tint = White,
+                            )
+                        }
+                        IconButton(onClick = onRefreshHome, enabled = !isHomeRefreshing) {
+                            if (isHomeRefreshing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = White,
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Outlined.Refresh,
+                                    contentDescription = stringResource(R.string.home_refresh),
+                                    tint = White,
+                                )
+                            }
+                        }
+                        IconButton(onClick = onOpenSettings) {
+                            Icon(
+                                imageVector = Icons.Outlined.Settings,
+                                contentDescription = "Open settings",
+                                tint = White,
+                            )
                         }
                     }
                 }
-            }
 
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = LightDark),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Button(
-                        onClick = ::openQrRead,
+                DatabaseAvailabilityCard(
+                    availability = databaseAvailability,
+                )
+
+                homeRefreshErrorCode?.let { code ->
+                    Text(
+                        text = stringResource(R.string.home_refresh_failed, code),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ErrorTextLight,
+                    )
+                }
+
+                LiveDesktopSessionsCard(
+                    sessions = liveDesktopSessions,
+                    fallbackServerName = namespaceName,
+                    revokingAttestationId = liveDesktopSessionRevokingAttestationId,
+                    onRevokeDesktopSession = onRevokeDesktopSession,
+                )
+
+                liveDesktopSessionRevokeErrorMessage?.let { message ->
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text("Qr-Read")
+                        Text(
+                            text = message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = ErrorTextLight,
+                            modifier = Modifier.weight(1f),
+                        )
+                        IconButton(onClick = onDismissLiveDesktopSessionRevokeError) {
+                            Icon(
+                                imageVector = Icons.Outlined.Close,
+                                contentDescription = "Dismiss desktop session revoke error",
+                                tint = ErrorTextLight,
+                            )
+                        }
                     }
+                }
+
+                if (!notificationsEnabled || !notificationsPermissionGranted) {
+                    Card(
+                        shape = RoundedCornerShape(20.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.error),
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Text(
+                                text = "Notifications disabled",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onError,
+                            )
+                            Text(
+                                text = "Background push alerts may not appear. Enable app notifications.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onError,
+                            )
+                            Button(
+                                onClick = {
+                                    notificationsEnabled = notificationManager.areNotificationsEnabled()
+                                    if (!notificationsPermissionGranted) {
+                                        hasRequestedNotificationPermission = true
+                                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                    } else {
+                                        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                                        }
+                                        context.startActivity(intent)
+                                    }
+                                },
+                            ) {
+                                Text("Enable notifications")
+                            }
+                        }
+                    }
+                }
+
+                cameraPermissionError?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ErrorTextLight,
+                    )
+                }
+
+                when (qrNamespaceRegistrationState) {
+                    QrNamespaceRegistrationUiState.Idle -> Unit
+                    is QrNamespaceRegistrationUiState.AwaitingDeviceSelection -> Unit
+                    QrNamespaceRegistrationUiState.InProgress -> Text(
+                        text = "Connecting scanned namespace...",
+                        color = White,
+                    )
+                    is QrNamespaceRegistrationUiState.Success -> Text(
+                        text = qrNamespaceRegistrationState.message,
+                        color = com.zerointrusion.ui.theme.Green,
+                    )
+                    is QrNamespaceRegistrationUiState.Error -> Text(
+                        text = qrNamespaceRegistrationState.message,
+                        color = ErrorTextLight,
+                    )
                 }
             }
 
-            cameraPermissionError?.let { message ->
-                Text(
-                    text = message,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = ErrorTextLight,
-                )
-            }
-
-            when (qrNamespaceRegistrationState) {
-                QrNamespaceRegistrationUiState.Idle -> Unit
-                is QrNamespaceRegistrationUiState.AwaitingDeviceSelection -> Unit
-                QrNamespaceRegistrationUiState.InProgress -> Text(
-                    text = "Connecting scanned namespace...",
-                    color = White,
-                )
-                is QrNamespaceRegistrationUiState.Success -> Text(
-                    text = qrNamespaceRegistrationState.message,
-                    color = com.zerointrusion.ui.theme.Green,
-                )
-                is QrNamespaceRegistrationUiState.Error -> Text(
-                    text = qrNamespaceRegistrationState.message,
-                    color = ErrorTextLight,
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
             NotificationStateBox(
                 notification = notification,
-                notificationError = notificationError,
-                onDismissNotificationError = onDismissNotificationError,
                 deviceId = deviceId,
-                namespaceName = namespaceName,
-                email = email,
+                isInternetConnected = isInternetConnected,
             )
+            if (!notificationError.isNullOrBlank()) {
+                Text(
+                    text = notificationError,
+                    color = ErrorTextLight,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Button(
+                    onClick = onDismissNotificationError,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = LightDark,
+                        contentColor = White,
+                    ),
+                ) {
+                    Text("Dismiss")
+                }
+            }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .navigationBarsPadding()
                     .padding(vertical = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
@@ -360,7 +400,6 @@ fun PostLoginHomeScreen(
 @Composable
 private fun DatabaseAvailabilityCard(
     availability: List<DatabaseAvailability>,
-    onRefreshDatabaseAvailability: (DatabaseAvailability) -> Unit,
 ) {
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -411,13 +450,6 @@ private fun DatabaseAvailabilityCard(
                                 )
                             }
                         }
-                        IconButton(onClick = { onRefreshDatabaseAvailability(database) }) {
-                            Icon(
-                                imageVector = Icons.Outlined.Refresh,
-                                contentDescription = "Refresh ${database.namespaceName} availability",
-                                tint = White,
-                            )
-                        }
                     }
                 }
             }
@@ -433,43 +465,7 @@ private fun LiveDesktopSessionsCard(
     onRevokeDesktopSession: (ActiveDesktopSession) -> Unit,
 ) {
     val visibleGroups = remember(sessions) {
-        sessions
-            .groupBy { session -> if (session.deviceIdAmbiguous) "ambiguous|${session.attestationId}" else session.deviceId }
-            .toList()
-            .sortedBy { (deviceId, deviceSessions) ->
-                (deviceSessions.firstOrNull()?.deviceName?.takeIf { it.isNotBlank() } ?: deviceId).lowercase()
-            }
-            .map { (deviceId, deviceSessions) ->
-                val groupRepresentative = deviceSessions.firstOrNull()
-                val deviceName = groupRepresentative?.deviceName?.takeIf { it.isNotBlank() } ?: deviceId
-                val displayDeviceName = if (groupRepresentative?.deviceIdAmbiguous == true) {
-                    "$deviceName (unconfirmed device)"
-                } else {
-                    deviceName
-                }
-                val liveNamespaces = deviceSessions
-                    .groupBy { session ->
-                        session.namespaceUrl.trim().trimEnd('/').lowercase() + "|" +
-                            session.namespaceName.trim().lowercase()
-                    }
-                    .values
-                    .mapNotNull { namespaceSessions ->
-                        val representative = namespaceSessions.firstOrNull() ?: return@mapNotNull null
-                        val resolvedServerName = representative.namespaceName
-                            .takeIf { it.isNotBlank() }
-                            ?: fallbackServerName.ifBlank { representative.namespaceUrl }
-
-                        if (namespaceSessions.isEmpty()) {
-                            null
-                        } else {
-                            resolvedServerName to namespaceSessions
-                        }
-                    }
-                    .sortedBy { it.first.lowercase() }
-
-                displayDeviceName to liveNamespaces
-            }
-            .filter { (_, liveNamespaces) -> liveNamespaces.isNotEmpty() }
+        buildHomeSessionGroups(sessions, fallbackServerName)
     }
 
     Card(
@@ -494,7 +490,7 @@ private fun LiveDesktopSessionsCard(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
-                visibleGroups.forEach { (deviceName, liveNamespaces) ->
+                visibleGroups.forEach { device ->
                     Card(
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.cardColors(containerColor = Dark.copy(alpha = 0.36f)),
@@ -505,22 +501,22 @@ private fun LiveDesktopSessionsCard(
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Text(
-                                text = deviceName,
+                                text = device.deviceName,
                                 color = White,
                                 style = MaterialTheme.typography.titleMedium,
                             )
 
-                            liveNamespaces.forEachIndexed { index, (resolvedServerName, matchingSessions) ->
+                            device.namespaces.forEachIndexed { index, namespace ->
                                 Column(
                                     verticalArrangement = Arrangement.spacedBy(10.dp),
                                 ) {
                                     Text(
-                                        text = resolvedServerName,
+                                        text = namespace.serverName,
                                         color = White,
                                         style = MaterialTheme.typography.bodyLarge,
                                     )
 
-                                    matchingSessions.forEachIndexed { sessionIndex, session ->
+                                    namespace.sessions.forEachIndexed { sessionIndex, session ->
                                         if (sessionIndex != 0) {
                                             HorizontalDivider(
                                                 color = White.copy(alpha = 0.12f),
@@ -568,7 +564,7 @@ private fun LiveDesktopSessionsCard(
                                     }
                                 }
 
-                                if (index != liveNamespaces.lastIndex) {
+                                if (index != device.namespaces.lastIndex) {
                                     HorizontalDivider(
                                         color = White.copy(alpha = 0.12f),
                                         thickness = 1.dp,
@@ -584,79 +580,68 @@ private fun LiveDesktopSessionsCard(
 }
 
 @Composable
-private fun NotificationStateBox(
+internal fun NotificationStateBox(
     notification: BackendPushNotification?,
-    notificationError: String?,
-    onDismissNotificationError: () -> Unit,
     deviceId: String,
-    namespaceName: String,
-    email: String,
+    isInternetConnected: Boolean,
 ) {
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = Dark),
         modifier = Modifier
             .fillMaxWidth()
-            .height(220.dp)
-            .border(BorderStroke(1.dp, Blue), RoundedCornerShape(18.dp)),
+            .border(BorderStroke(1.dp, if (notification != null) Green else Blue), RoundedCornerShape(18.dp)),
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
+                .fillMaxWidth()
                 .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            if (notification == null) {
-                Text("No active notification", color = White, style = MaterialTheme.typography.titleMedium)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (notification == null) {
+                    val connectionDescription = stringResource(
+                        if (isInternetConnected) R.string.home_internet_available else R.string.home_internet_unavailable,
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(12.dp)
+                            .background(
+                                color = if (isInternetConnected) Green else ActionDeclineRed,
+                                shape = CircleShape,
+                            )
+                            .semantics { contentDescription = connectionDescription },
+                    )
+                }
                 Text(
-                    text = "Device: ${deviceId.ifBlank { "(empty)" }}",
-                    color = White,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    text = "Namespace: ${namespaceName.ifBlank { "(empty)" }}",
-                    color = White,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Text(
-                    text = "Email: ${email.ifBlank { "(empty)" }}",
-                    color = White,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            } else {
-                val payloadType = notification.data["type"].orEmpty()
-                Text("Incoming notification", color = White, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    text = payloadType.ifBlank { notification.type.ifBlank { notification.title.ifBlank { "(empty)" } } },
+                    text = stringResource(
+                        if (notification == null) R.string.home_notification_ready else R.string.home_notification_incoming,
+                    ),
                     color = White,
                     style = MaterialTheme.typography.titleMedium,
                 )
-
-                val deviceName = notification.data["deviceName"].orEmpty()
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    NotificationDetailLine(label = "Device", value = deviceName)
-                    NotificationDetailLine(label = "Mobile device id", value = notification.mobileDeviceId)
-                    NotificationDetailLine(label = "Desktop device id", value = notification.desktopDeviceId)
-                    NotificationDetailLine(label = "Account id", value = notification.accountId)
-                }
             }
-
-            if (!notificationError.isNullOrBlank()) {
-                Text(
-                    text = notificationError,
-                    color = ErrorTextLight,
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                Button(
-                    onClick = onDismissNotificationError,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = LightDark,
-                        contentColor = White,
+            val displayedDevice = notification?.data?.get("deviceName")?.takeIf { it.isNotBlank() }
+                ?: notification?.desktopDeviceId?.takeIf { it.isNotBlank() }
+                ?: deviceId
+            NotificationDetailLine(
+                label = stringResource(R.string.home_notification_device),
+                value = displayedDevice.ifBlank { stringResource(R.string.home_notification_empty_device) },
+            )
+            if (notification != null) {
+                val context = LocalContext.current
+                val receivedAt = Date(notification.receivedAtEpochMillis)
+                NotificationDetailLine(
+                    label = stringResource(R.string.home_notification_date_time),
+                    value = stringResource(
+                        R.string.home_notification_date_time_value,
+                        DateFormat.getMediumDateFormat(context).format(receivedAt),
+                        DateFormat.getTimeFormat(context).format(receivedAt),
                     ),
-                ) {
-                    Text("Dismiss")
-                }
+                )
             }
         }
     }

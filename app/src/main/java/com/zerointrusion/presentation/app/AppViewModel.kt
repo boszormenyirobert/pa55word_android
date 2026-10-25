@@ -3,10 +3,9 @@ package com.zerointrusion.presentation.app
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.gson.Gson
+import com.zerointrusion.data.network.InternetConnectivityMonitor
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
 import com.zerointrusion.domain.authentication.AuthenticationSessionAlreadyCompleted
-import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.connecteddevices.RemovableAccountDevice
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.namespaces.NamespaceEntry
@@ -27,14 +26,15 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @HiltViewModel
 class AppViewModel @Inject constructor(
-    private val gson: Gson,
     private val registrationRepository: RegistrationRepository,
     private val namespacesRepository: NamespacesRepository,
     private val connectedDevicesRepository: ConnectedDevicesRepository,
@@ -42,12 +42,11 @@ class AppViewModel @Inject constructor(
     private val authenticationRepository: AuthenticationRepository,
     private val notificationRepository: NotificationRepository,
     private val registrationValidator: RegistrationValidator,
+    internetConnectivityMonitor: InternetConnectivityMonitor,
 ) : ViewModel() {
     private companion object {
         const val AUTHENTICATION_LOG_TAG = "ZeroIntrusionAuthentication"
         const val QR_LOG_TAG = "ZeroIntrusionQr"
-        const val NAMESPACE_QR_TYPE = "namespace"
-        const val NAMESPACE_SYNC_QR_TYPE = "namespace_sync"
         const val MOBILE_AUTHENTICATION_STATUS_POLL_MILLIS = 1_000L
         private val NAMESPACE_ID_KEYS = listOf("namespaceId", "namespace_id", "namespaceID")
         private val NAMESPACE_URL_KEYS = listOf("namespaceUrl", "namespace_url", "namespaceURL", "url")
@@ -55,24 +54,19 @@ class AppViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(AppUiState())
     val uiState: StateFlow<AppUiState> = _uiState.asStateFlow()
+    val isInternetConnected: StateFlow<Boolean> = internetConnectivityMonitor.observe().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(replayExpirationMillis = 0),
+        initialValue = false,
+    )
     private var lastFcmSyncKey: String? = null
     private var fcmSyncInFlight: Boolean = false
-    private var storedConnectedDeviceGroups: List<ConnectedDeviceGroup> = emptyList()
     private var storedNamespaces: List<NamespaceEntry> = emptyList()
     private var pendingNamespaceQrPayload: String? = null
     private var liveDesktopSessionsRefreshInFlight: Boolean = false
     private var postApprovalSessionRefreshJob: Job? = null
     private var mobileAuthenticationStatusPollingJob: Job? = null
     private var mobileAuthenticationStatusNotificationId: String? = null
-
-    private data class ScannedQrPayloadPreview(
-        val type: String? = null,
-        val namespaceName: String? = null,
-        val namespaceId: String? = null,
-        val namespaceUrl: String? = null,
-        val desktopDeviceId: String? = null,
-        val deviceName: String? = null,
-    )
 
     init {
         viewModelScope.launch {
@@ -110,7 +104,6 @@ class AppViewModel @Inject constructor(
 
         viewModelScope.launch {
             connectedDevicesRepository.observeConnectedDevices().collect { groups ->
-                storedConnectedDeviceGroups = groups
                 _uiState.update { state ->
                     state.copy(
                         connectedDevicesState = ConnectedDevicesUiState.Success(groups),
@@ -450,12 +443,6 @@ class AppViewModel @Inject constructor(
         refreshLiveDesktopSessions(namespaceId = null, namespaceUrl = null)
     }
 
-    fun refreshDatabaseAvailability(database: com.zerointrusion.domain.connecteddevices.DatabaseAvailability) {
-        viewModelScope.launch {
-            connectedDevicesRepository.refreshDatabaseAvailability(database)
-        }
-    }
-
     private fun refreshLiveDesktopSessions(
         namespaceId: String?,
         namespaceUrl: String?,
@@ -465,6 +452,7 @@ class AppViewModel @Inject constructor(
         }
 
         liveDesktopSessionsRefreshInFlight = true
+        _uiState.update { it.copy(isHomeRefreshing = true, homeRefreshErrorCode = null) }
         viewModelScope.launch {
             try {
                 val sessions = authenticationRepository.fetchActiveDesktopSessions(
@@ -483,9 +471,11 @@ class AppViewModel @Inject constructor(
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                Log.w(AUTHENTICATION_LOG_TAG, "Background desktop-session refresh failed.", exception)
+                Log.w(AUTHENTICATION_LOG_TAG, "HOME_REFRESH_FAILED: Availability/session refresh failed (${exception.javaClass.simpleName}).")
+                _uiState.update { it.copy(homeRefreshErrorCode = "HOME_REFRESH_FAILED") }
             } finally {
                 liveDesktopSessionsRefreshInFlight = false
+                _uiState.update { it.copy(isHomeRefreshing = false) }
             }
         }
     }
@@ -562,16 +552,6 @@ class AppViewModel @Inject constructor(
             return
         }
 
-        val namespacePayload = parseNamespaceQrPreview(qrPayload)
-        if (namespacePayload != null) {
-            Log.d(
-                QR_LOG_TAG,
-                "Namespace sync QR payload recognized. type=${namespacePayload.type?.trim().orEmpty()} namespaceId=${namespacePayload.namespaceId?.trim().orEmpty()} namespaceUrl=${namespacePayload.namespaceUrl?.trim().orEmpty()} desktopDeviceId=${namespacePayload.desktopDeviceId?.trim().orEmpty()} deviceName=${namespacePayload.deviceName?.trim().orEmpty()} payloadLength=${qrPayload.length}",
-            )
-            submitQrNamespaceRegistration(qrPayload = qrPayload)
-            return
-        }
-
         submitQrNamespaceRegistration(qrPayload = qrPayload)
     }
 
@@ -644,37 +624,6 @@ class AppViewModel @Inject constructor(
                 }
         }
     }
-
-    private fun parseNamespaceQrPreview(qrPayload: String): ScannedQrPayloadPreview? {
-        val preview = runCatching {
-            gson.fromJson(qrPayload.trim(), ScannedQrPayloadPreview::class.java)
-        }.getOrNull() ?: return null
-
-        return preview.takeIf { previewPayload ->
-            val normalizedType = previewPayload.type?.trim()
-            normalizedType == NAMESPACE_SYNC_QR_TYPE
-        }
-    }
-
-    private fun resolveNamespaceQrPreviewName(preview: ScannedQrPayloadPreview): String {
-        val explicitName = preview.namespaceName?.trim().orEmpty()
-        if (explicitName.isNotEmpty()) {
-            return explicitName
-        }
-
-        val namespaceUrl = preview.namespaceUrl?.trim().orEmpty().trimEnd('/')
-        val storedNamespaceName = storedNamespaces.firstOrNull { namespaceEntry ->
-                namespaceEntry.namespaceUrl.trim().trimEnd('/').equals(namespaceUrl, ignoreCase = true)
-        }?.namespaceName?.trim().orEmpty()
-
-            return storedNamespaceName.ifEmpty { preview.namespaceId?.trim().orEmpty() }
-    }
-
-    private fun buildQrNamespaceDeviceOptions(): List<QrNamespaceDeviceOption> = buildQrNamespaceDeviceOptions(
-        connectedDeviceGroups = storedConnectedDeviceGroups,
-        storedNamespaces = storedNamespaces,
-        mobileDeviceId = _uiState.value.registrationState?.deviceId.orEmpty(),
-    )
 
     fun onNotificationDecision(decision: NotificationDecision) {
         val notification = _uiState.value.notificationOverlay.notification ?: return
@@ -959,26 +908,3 @@ class AppViewModel @Inject constructor(
 private fun Map<String, String>.firstNonBlankValue(keys: List<String>): String {
     return keys.firstNotNullOfOrNull { key -> get(key)?.takeIf { it.isNotBlank() } }.orEmpty()
 }
-
-internal fun buildQrNamespaceDeviceOptions(
-    connectedDeviceGroups: List<ConnectedDeviceGroup>,
-    storedNamespaces: List<NamespaceEntry>,
-    mobileDeviceId: String,
-): List<QrNamespaceDeviceOption> = connectedDeviceGroups
-    .filter { group ->
-        group.deviceId.isNotBlank() &&
-            !group.deviceId.trim().equals(mobileDeviceId.trim(), ignoreCase = true)
-    }
-    .map { group ->
-        val representative = storedNamespaces.firstOrNull { namespace ->
-            namespace.desktopDeviceId.trim().equals(group.deviceId.trim(), ignoreCase = true)
-        }
-        QrNamespaceDeviceOption(
-            accountId = group.accountId,
-            deviceId = group.deviceId,
-            deviceName = representative?.deviceName?.trim().takeUnless { it.isNullOrEmpty() }
-                ?: group.deviceName?.trim().takeUnless { it.isNullOrEmpty() }
-                ?: group.deviceId,
-        )
-    }
-    .sortedBy { option -> option.deviceName.lowercase() }

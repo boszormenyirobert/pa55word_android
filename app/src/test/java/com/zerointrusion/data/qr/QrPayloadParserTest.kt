@@ -22,7 +22,7 @@ class QrPayloadParserTest {
         assertEquals("cHVibGlj", result.publicKey)
         assertEquals("New phone", result.deviceName)
         assertEquals("AbCdEf1234", result.mobileDeviceId)
-        assertEquals("https://example.com", result.namespaceUrl)
+        assertEquals(listOf("https://example.com"), result.namespaceUrls)
     }
 
     @Test

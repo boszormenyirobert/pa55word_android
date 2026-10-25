@@ -93,9 +93,9 @@ internal class AccountRegistrationHandler(
 
                 Log.d(
                     REG_LOG_TAG,
-                    "REG payload ready. mobileDeviceId=${payload.device.mobileDeviceId}, namespaceUrl=${payload.namespace.url}, publicKeyLength=${payload.device.publicKey.length}, encDekLength=${payload.dek.encDek.length}, namespaceRoot=${request.namespace.root}",
+                    "REG payload ready.",
                 )
-                Log.d(REG_LOG_TAG, "HTTP POST $registrationUrl payload=${gson.toJson(request)}")
+                Log.d(REG_LOG_TAG, "REG account request submitted.")
 
                 val response = registrationApi.registerAccount(
                     url = registrationUrl,
@@ -121,7 +121,7 @@ internal class AccountRegistrationHandler(
                 if (rawResponseBody.isEmpty()) {
                     throw RegistrationFailure.Server("The backend returned an empty response from $registrationUrl.")
                 }
-                Log.d(REG_LOG_TAG, "HTTP POST $registrationUrl response=$rawResponseBody")
+                Log.d(REG_LOG_TAG, "REG account response received.")
                 val body = runCatching {
                     gson.fromJson(rawResponseBody, AccountRegistrationResponseDto::class.java)
                 }.getOrNull() ?: throw RegistrationFailure.Server(
@@ -131,7 +131,7 @@ internal class AccountRegistrationHandler(
                     throw RegistrationFailure.Server("The backend did not return a valid account ID from $registrationUrl.")
                 }
 
-                Log.d(REG_LOG_TAG, "REG success. accountId=${body.accountId} mobileDeviceId=${payload.device.mobileDeviceId}")
+                Log.d(REG_LOG_TAG, "REG account registration succeeded.")
 
                 val state = RegistrationState(
                     accountId = body.accountId,

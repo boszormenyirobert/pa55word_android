@@ -25,7 +25,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.ArrayDeque
 
 @Singleton
@@ -122,12 +122,16 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
             }
 
             val snapshot = try {
-                withTimeout(2_000L) {
-                    fetchSnapshotForTarget(
-                        registrationState = registrationState,
-                        target = target,
+                val outcome = withTimeoutOrNull(2_000L) {
+                    Result.success(
+                        fetchSnapshotForTarget(
+                            registrationState = registrationState,
+                            target = target,
+                        ),
                     )
                 }
+                    ?: throw RegistrationFailure.Network("ACCOUNT_REFRESH_TIMEOUT: Account server did not respond within two seconds.")
+                outcome.getOrThrow()
             } catch (exception: kotlinx.coroutines.CancellationException) {
                 throw exception
             } catch (exception: Exception) {
@@ -249,15 +253,17 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
 
         Log.d(
             ACCOUNT_LOG_TAG,
-            "ACCOUNT details fetch start. namespaceUrl=${target.namespaceUrl} accountId=${target.accountId} url=$requestUrl",
+            "ACCOUNT details query submitted.",
         )
-        Log.d(ACCOUNT_LOG_TAG, "HTTP GET $requestUrl payload=$signaturePayloadJson")
         val response = try {
             accountApi.getAccountDetails(
                 url = requestUrl,
                 signature = signature,
             )
         } catch (exception: Exception) {
+            if (exception is kotlinx.coroutines.CancellationException) {
+                throw exception
+            }
             Log.e(
                 ACCOUNT_LOG_TAG,
                 "ACCOUNT details fetch failed before HTTP response. namespaceUrl=${target.namespaceUrl} accountId=${target.accountId} url=$requestUrl",
@@ -287,12 +293,12 @@ class AccountDetailsSnapshotFetcher @Inject constructor(
 
         Log.d(
             ACCOUNT_LOG_TAG,
-            "ACCOUNT details raw response body. namespaceUrl=${target.namespaceUrl} accountId=${target.accountId} url=$requestUrl body=$body",
+            "ACCOUNT details response received.",
         )
         val parsedResponse = connectedDevicesResponseParser.parse(body, registrationState.deviceId)
         Log.d(
             ACCOUNT_LOG_TAG,
-            "ACCOUNT details raw response. namespaceUrl=${target.namespaceUrl} accountId=${target.accountId} url=$requestUrl namespaces=${gson.toJson(parsedResponse.namespaces)} body=$body",
+            "ACCOUNT details parsed. namespaceCount=${parsedResponse.namespaces.size}",
         )
         return AccountDetailsSnapshot(
             groups = parsedResponse.groups,

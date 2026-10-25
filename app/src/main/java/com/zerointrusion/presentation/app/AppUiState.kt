@@ -97,6 +97,8 @@ data class AppUiState(
     val deviceRemovalState: DeviceRemovalUiState = DeviceRemovalUiState.Idle,
     val desktopSessionsState: DesktopSessionsUiState = DesktopSessionsUiState.Idle,
     val liveDesktopSessions: List<ActiveDesktopSession> = emptyList(),
+    val isHomeRefreshing: Boolean = false,
+    val homeRefreshErrorCode: String? = null,
     val liveDesktopSessionRevokingAttestationId: String? = null,
     val liveDesktopSessionRevokeErrorMessage: String? = null,
     val databaseAvailability: List<DatabaseAvailability> = emptyList(),

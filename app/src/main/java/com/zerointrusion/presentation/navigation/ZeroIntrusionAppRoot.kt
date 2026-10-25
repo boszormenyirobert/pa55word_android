@@ -51,6 +51,7 @@ fun ZeroIntrusionAppRoot(
     registrationViewModel: RegistrationViewModel = hiltViewModel(),
 ) {
     val appState by appViewModel.uiState.collectAsStateWithLifecycle()
+    val isInternetConnected by appViewModel.isInternetConnected.collectAsStateWithLifecycle()
     val registrationState by registrationViewModel.uiState.collectAsStateWithLifecycle()
     val navController = rememberNavController()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -161,6 +162,9 @@ fun ZeroIntrusionAppRoot(
                     email = appState.registrationState?.email.orEmpty(),
                     namespaces = appState.namespaces,
                     databaseAvailability = appState.databaseAvailability,
+                    isInternetConnected = isInternetConnected,
+                    isHomeRefreshing = appState.isHomeRefreshing,
+                    homeRefreshErrorCode = appState.homeRefreshErrorCode,
                     liveDesktopSessions = appState.liveDesktopSessions,
                     liveDesktopSessionRevokingAttestationId = appState.liveDesktopSessionRevokingAttestationId,
                     liveDesktopSessionRevokeErrorMessage = appState.liveDesktopSessionRevokeErrorMessage,
@@ -175,7 +179,7 @@ fun ZeroIntrusionAppRoot(
                     },
                     onClearQrNamespaceRegistrationState = appViewModel::clearQrNamespaceRegistrationState,
                     onRevokeDesktopSession = appViewModel::revokeDesktopSession,
-                    onRefreshDatabaseAvailability = appViewModel::refreshDatabaseAvailability,
+                    onRefreshHome = appViewModel::refreshLiveDesktopSessions,
                     onDismissLiveDesktopSessionRevokeError = appViewModel::dismissLiveDesktopSessionRevokeError,
                     onAllowNotification = {
                         appViewModel.onNotificationDecision(NotificationDecision.Accept)

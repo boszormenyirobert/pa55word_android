@@ -73,7 +73,7 @@ class DefaultFirebaseService @Inject constructor(
                 )
                 val requestBodyJson = gson.toJson(requestPayload)
                 val signature = signatureService.signJsonString(requestBodyJson)
-                android.util.Log.d("ZeroIntrusionRegistration", "HTTP POST $fcmUrl payload=$requestBodyJson")
+                android.util.Log.d("ZeroIntrusionRegistration", "FCM token registration submitted.")
 
                 val response = fcmApi.registerFcmToken(
                     url = fcmUrl,

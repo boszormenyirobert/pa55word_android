@@ -30,6 +30,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 internal class AuthenticationSessionHandler(
     private val authenticationApi: AuthenticationApi,
@@ -51,7 +52,8 @@ internal class AuthenticationSessionHandler(
                 if (exception is CancellationException) {
                     throw exception
                 }
-                if (accountDetailsStateHolder.currentSnapshot()?.namespaces.isNullOrEmpty()) {
+                val cachedSnapshot = accountDetailsStateHolder.currentSnapshot()
+                if (cachedSnapshot?.namespaces.isNullOrEmpty() && cachedSnapshot?.mobileRegistrations.isNullOrEmpty()) {
                     throw exception
                 }
                 Log.w(
@@ -63,27 +65,47 @@ internal class AuthenticationSessionHandler(
 
         val snapshot = accountDetailsStateHolder.currentSnapshot()
         val availableNamespaces = snapshot?.namespaces.orEmpty()
+        val availability = accountDetailsStateHolder.observeDatabaseAvailability().first()
         val requestNamespaces = resolveSessionRequests(
             availableNamespaces = availableNamespaces,
             mobileRegistrations = snapshot?.mobileRegistrations.orEmpty(),
             registrationState = registrationState,
             requestedNamespaceId = requestedNamespaceId,
             requestedNamespaceUrl = requestedNamespaceUrl,
-        )
-
-        Log.d(
-            AUTHENTICATION_LOG_TAG,
-            "AUTH available namespaces before session fetch. requestedNamespaceId=$requestedNamespaceId requestedNamespaceUrl=$requestedNamespaceUrl availableNamespaces=${gson.toJson(availableNamespaces)} selectedNamespaces=${gson.toJson(requestNamespaces)}",
-        )
+        ).filter { request ->
+            availability.none { database ->
+                !database.isAvailable &&
+                    database.accountId.trim().equals(request.accountId.trim(), ignoreCase = true) &&
+                    database.namespaceUrl.trim().trimEnd('/').equals(
+                        request.namespaceUrl.trim().trimEnd('/'),
+                        ignoreCase = true,
+                    )
+            }
+        }
+        if (requestNamespaces.isEmpty()) {
+            return@withContext emptyList()
+        }
 
         val outcomes = coroutineScope {
             requestNamespaces.map { requestNamespace ->
                 async {
-                    fetchNamespaceSessions(
-                        requestNamespace = requestNamespace,
-                        mobileDeviceId = registrationState.deviceId,
-                        availableNamespaces = availableNamespaces,
-                    )
+                    try {
+                        withTimeoutOrNull(2_000L) {
+                            fetchNamespaceSessions(
+                                requestNamespace = requestNamespace,
+                                mobileDeviceId = registrationState.deviceId,
+                                availableNamespaces = availableNamespaces,
+                            )
+                        } ?: NamespaceSessionFetchOutcome(
+                            failureMessage = "HOME_SESSION_TIMEOUT: Session server did not respond within two seconds.",
+                        )
+                    } catch (exception: CancellationException) {
+                        throw exception
+                    } catch (exception: Exception) {
+                        NamespaceSessionFetchOutcome(
+                            failureMessage = "HOME_SESSION_FAILED: Session request could not be completed.",
+                        )
+                    }
                 }
             }.awaitAll()
         }
@@ -172,8 +194,7 @@ internal class AuthenticationSessionHandler(
         )
         val requestBodyJson = buildRevocationRequestBodyJson(requestPayload)
         val signature = signatureService.signJsonString(requestBodyJson)
-        Log.d(AUTHENTICATION_LOG_TAG, "AUTH session revoke start. url=$requestUrl")
-        Log.d(AUTHENTICATION_LOG_TAG, "HTTP DELETE $requestUrl payload=$requestBodyJson")
+        Log.d(AUTHENTICATION_LOG_TAG, "AUTH session revocation submitted.")
         val response = try {
             authenticationApi.revokeAuthenticationSession(
                 url = requestUrl,
@@ -181,7 +202,7 @@ internal class AuthenticationSessionHandler(
                 request = requestPayload,
             )
         } catch (exception: Exception) {
-            Log.e(AUTHENTICATION_LOG_TAG, "AUTH session revoke failed before HTTP response. url=$requestUrl", exception)
+            Log.e(AUTHENTICATION_LOG_TAG, "AUTH session revocation failed before HTTP response (${exception.javaClass.simpleName}).")
             return NamespaceRevocationOutcome(
                 failureMessage = mapNetworkException(requestUrl, exception).message
                     ?: "Desktop session revoke failed at $requestUrl.",
@@ -189,7 +210,7 @@ internal class AuthenticationSessionHandler(
         }
 
         if (!response.isSuccessful) {
-            Log.e(AUTHENTICATION_LOG_TAG, "AUTH session revoke failed. http=${response.code()} url=$requestUrl")
+            Log.e(AUTHENTICATION_LOG_TAG, "AUTH session revoke failed. http=${response.code()}")
             return NamespaceRevocationOutcome(
                 failureMessage = serverFailure(gson, response.errorBody()?.charStream(), response.code(), requestUrl).message
                     ?: "Desktop session revoke failed at $requestUrl.",
@@ -227,8 +248,7 @@ internal class AuthenticationSessionHandler(
         )
         val signature = signatureService.signJsonString(requestBodyJson)
 
-        Log.d(AUTHENTICATION_LOG_TAG, "AUTH sessions fetch start. url=$requestUrl namespaceId=${requestNamespace.namespaceId}")
-        Log.d(AUTHENTICATION_LOG_TAG, "HTTP GET $requestUrl payload=$requestBodyJson")
+        Log.d(AUTHENTICATION_LOG_TAG, "AUTH session query submitted.")
         val response = try {
             authenticationApi.fetchAuthenticationSessions(
                 url = requestUrl,
@@ -238,7 +258,7 @@ internal class AuthenticationSessionHandler(
             if (exception is CancellationException) {
                 throw exception
             }
-            Log.e(AUTHENTICATION_LOG_TAG, "AUTH sessions fetch failed before HTTP response. url=$requestUrl namespaceId=${requestNamespace.namespaceId}", exception)
+            Log.e(AUTHENTICATION_LOG_TAG, "AUTH session query failed before HTTP response (${exception.javaClass.simpleName}).")
             return NamespaceSessionFetchOutcome(
                 failureMessage = mapNetworkException(requestUrl, exception).message
                     ?: "Desktop sessions fetch failed at $requestUrl.",
@@ -246,7 +266,7 @@ internal class AuthenticationSessionHandler(
         }
 
         if (!response.isSuccessful) {
-            Log.e(AUTHENTICATION_LOG_TAG, "AUTH sessions fetch failed. http=${response.code()} url=$requestUrl namespaceId=${requestNamespace.namespaceId}")
+            Log.e(AUTHENTICATION_LOG_TAG, "AUTH sessions fetch failed. http=${response.code()}")
             return NamespaceSessionFetchOutcome(
                 failureMessage = serverFailure(gson, response.errorBody()?.charStream(), response.code(), requestUrl).message
                     ?: "Desktop sessions fetch failed at $requestUrl.",
@@ -256,7 +276,7 @@ internal class AuthenticationSessionHandler(
         val responseBody = response.body().orEmpty()
         Log.d(
             AUTHENTICATION_LOG_TAG,
-            "AUTH sessions raw response. url=$requestUrl namespaceId=${requestNamespace.namespaceId} namespaceName=${requestNamespace.namespaceName} body=${gson.toJson(responseBody)}",
+            "AUTH session response received. count=${responseBody.size}",
         )
 
         return NamespaceSessionFetchOutcome(
@@ -325,7 +345,7 @@ internal class AuthenticationSessionHandler(
 
         Log.d(
             AUTHENTICATION_LOG_TAG,
-            "AUTH session device resolution. namespaceId=${requestNamespace.namespaceId} namespaceName=${requestNamespace.namespaceName} sessionDeviceId=$resolvedSessionDeviceId resolvedDeviceName=$resolvedDeviceName deviceIdAmbiguous=$deviceIdAmbiguous attestationMatched=${attestationMatch != null}",
+            "AUTH session device resolved. ambiguous=$deviceIdAmbiguous",
         )
 
         return ActiveDesktopSession(

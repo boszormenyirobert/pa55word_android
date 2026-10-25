@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">ZeroIntrusion</string>
+    <string name="home_refresh">Refresh servers and live sessions</string>
+    <string name="home_refresh_failed">Refresh failed. Error code: %1$s</string>
+    <string name="home_notification_incoming">Incoming notification</string>
+    <string name="home_notification_ready">Internet connection</string>
+    <string name="home_internet_available">Internet available</string>
+    <string name="home_internet_unavailable">Internet unavailable</string>
+    <string name="home_notification_device">Device</string>
+    <string name="home_notification_empty_device">(empty)</string>
+    <string name="home_notification_date_time">Date time</string>
+    <string name="home_notification_date_time_value">%1$s %2$s</string>
 </resources>

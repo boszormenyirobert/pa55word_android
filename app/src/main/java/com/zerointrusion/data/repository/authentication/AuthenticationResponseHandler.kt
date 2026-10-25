@@ -98,14 +98,7 @@ internal class AuthenticationResponseHandler(
         if (matchingNamespaceTargets.isEmpty()) {
             Log.d(
                 REG_LOG_TAG,
-                "Authentication response namespace resolution failed. notificationAccountId=$accountId notificationMobileDeviceId=$normalizedMobileDeviceId notificationDesktopDeviceId=$normalizedRequestingDeviceId notificationNamespaceId=$requiredNamespaceId notificationNamespaceUrl=${namespaceUrl.orEmpty()} availableNamespaces=${gson.toJson(availableNamespaces.map { namespaceEntry ->
-                    mapOf(
-                        "accountId" to namespaceEntry.accountId,
-                        "desktopDeviceId" to namespaceEntry.desktopDeviceId,
-                        "namespaceId" to namespaceEntry.namespaceId,
-                        "namespaceUrl" to namespaceEntry.namespaceUrl,
-                    )
-                })}",
+                "Authentication response namespace resolution failed.",
             )
         }
 
@@ -124,7 +117,7 @@ internal class AuthenticationResponseHandler(
                 "No locally stored namespace matches mobileDeviceId=$normalizedMobileDeviceId, accountId=$accountId, namespaceId=$requiredNamespaceId, namespaceUrl=${namespaceUrl.orEmpty()} and desktopDeviceId=$normalizedRequestingDeviceId for authentication response.",
             )
         val responseAccountId = resolvedTargetNamespace.accountId.trim()
-        Log.d(REG_LOG_TAG, "Authentication response start. namespaceDesktopDeviceId=${resolvedTargetNamespace.desktopDeviceId} mobileDeviceId=$normalizedMobileDeviceId desktopDeviceId=$normalizedRequestingDeviceId signingDeviceId=${registrationState.deviceId} accountId=$responseAccountId approved=$approved")
+        Log.d(REG_LOG_TAG, "Authentication response started.")
 
         val issuedAtEpochSeconds = Instant.now().epochSecond
         val expiryEpochSeconds = issuedAtEpochSeconds + MAX_ATTESTATION_LIFETIME_SECONDS
@@ -156,10 +149,9 @@ internal class AuthenticationResponseHandler(
         val signature = signatureService.signJsonString(requestBodyJson)
         Log.d(
             REG_LOG_TAG,
-            "Authentication response namespace mapping. namespaceId=${resolvedTargetNamespace.namespaceId} namespaceUrl=${resolvedTargetNamespace.namespaceUrl} namespaceAccountId=${resolvedTargetNamespace.accountId} responseAccountId=$responseAccountId",
+            "Authentication response namespace resolved.",
         )
-        Log.d(REG_LOG_TAG, "HTTP POST $responseUrl payload=$requestBodyJson")
-        Log.d(REG_LOG_TAG, "Authentication response signature: $signature")
+        Log.d(REG_LOG_TAG, "Authentication response request submitted.")
         val namespaceOutcome = try {
             val response = authenticationApi.sendAuthenticationResponse(
                 url = responseUrl,

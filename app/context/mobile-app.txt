@@ -1,0 +1,161 @@
+ZERO INTRUSION - MOBILE CODE REQUIREMENTS
+
+1. Scope and precedence
+- Apply these requirements to every new or refactored Android code path.
+- Read this file together with app/context/default.txt. These mobile-specific rules
+	supplement its requirements and must never weaken them.
+- Existing code is a compatibility reference, not proof of security compliance.
+	Never copy an insecure pattern merely because it already exists.
+- Before editing, identify the owning feature, affected contracts, security risks,
+	and the smallest check that verifies the intended behavior.
+
+2. Mandatory security review
+- Review each change against all OWASP Top 10:2025 categories in default.txt:
+	access control, configuration, supply chain, cryptography, injection, design,
+	authentication, integrity, logging/alerting, and exceptional conditions.
+- Identify applicable risks and explain when a category is unaffected.
+- Do not introduce or knowingly preserve a vulnerability in changed behavior.
+	If a safe solution requires broader or server-side changes, report the blocker
+	and agree on scope. Never bypass security to make the operation succeed.
+- Treat API responses, QR data, push payloads, intents, and restored state as
+	untrusted input. Validate them before side effects, persistence, or navigation.
+- Fail closed on invalid identity, failed verification, missing permissions, or
+	unavailable security prerequisites.
+
+3. Signed requests and replay protection
+- Sign every API request except the health endpoint, including GET and DELETE.
+- Every API operation must have nonce-based replay protection. The health exception
+	in default.txt concerns signing; do not assume a nonce exemption without an
+	explicit contract decision.
+- Generate a fresh nonce for every outgoing request, including retries and requests
+	to different namespace servers. Never reuse a previously signed request nonce.
+- Include the nonce in the signed payload and transport it according to the endpoint
+	contract. Reuse existing signing/nonce helpers where suitable.
+- Preserve the exact server-verified JSON representation: field names, required
+	ordering, encoding, and null handling. For bodyless requests, use the established
+	signed-payload builder rather than assuming arbitrary serialization is equivalent.
+- Resolve namespace URL, account ID, and device ID consistently. Do not send a
+	foreign server's account identity without verified target resolution.
+- Validate URLs against the allowed destination and protocol policy. Never add
+	cleartext transport, trust-all certificates, or hostname-verification bypasses.
+- Client signing/nonces do not replace server authorization or replay checks.
+	Verify related repository contracts when changing protocol behavior.
+
+4. Authentication and Android permissions
+- Preserve authentication gates and account/device/namespace ownership checks.
+	Hiding a control or restricting navigation is not sufficient authorization.
+- Request only required Android permissions, at the point of use.
+- Check CAMERA permission before QR capture. Handle denial, permanent denial,
+	cancellation, and return from system settings without crashes or prompt loops.
+- Handle notification permission according to the Android API level.
+- Validate QR and notification identities before approval, registration, linking,
+	deletion, or revocation. Invalid input must never authorize an operation.
+- Never bypass authentication or report success after a security failure.
+
+5. Keys, sensitive data, and storage
+- Keep private-key operations behind the security-service abstraction and Android
+	Keystore. Do not export private keys or store them in ordinary preferences.
+- Use established encrypted stores for sensitive state. Do not create unencrypted
+	copies or competing sources of truth for convenience.
+- Do not expose keys, decrypted DEKs, tokens, sensitive payloads, or personal data
+	in logs, diagnostics, screenshots, documentation, or test fixtures.
+- Use reviewed cryptography and secure platform primitives for new code. Existing
+	SHA-1 usage is not an approved template. Any protocol migration requires explicit
+	compatibility/security review, not a silent algorithm substitution.
+- Preserve persistence compatibility or supply an explicit, tested migration.
+- Handle missing, restored, and corrupt secure state explicitly. Never interpret
+	corruption as valid registration or permission for a destructive API operation.
+- Clear only state required by the requested logout, recovery, or deletion flow.
+
+6. Architecture, types, and code quality
+- Follow existing feature boundaries under presentation/, domain/, and data/.
+- Composables render state and emit actions; ViewModels coordinate UI operations;
+	repositories and focused handlers own business operations and external effects.
+- Keep API DTOs at the network boundary and map them to typed domain models.
+	Use explicit types and sealed states instead of Any, unstructured maps, raw JSON
+	passed through the UI, or stringly typed operation states.
+- Use existing parsers and typed DTOs. Isolate necessary dynamic JSON handling in
+	a validated boundary parser rather than spreading it across application layers.
+- Supply dependencies through Hilt and existing interfaces. Do not construct
+	networking or storage clients inside composables.
+- Reuse existing account snapshot and feature state owners; do not add independent
+	caches or pollers that can disagree with shared state.
+- Apply DRY, KISS, YAGNI, SRP, Separation of Concerns, Clean Code, Boy Scout Rule,
+	Fail Fast, Composition over Inheritance, SOLID, Dependency Injection, Convention
+	over Configuration, Readability over Cleverness, Testability, and Security by Design.
+- Keep cleanup local and relevant. Do not expand a focused refactor into an
+	unrelated redesign or repository-wide formatting change.
+
+7. Compose, lifecycle, and concurrency
+- Collect UI state with lifecycle-aware APIs. Scope polling, camera ownership,
+	and other resources to their lifecycle; release them on disposal/cancellation.
+- Use structured coroutines and appropriate dispatchers. Never block the main
+	thread with network, disk, cryptographic, or other expensive operations.
+- Do not trigger API calls, permission prompts, or registration directly from a
+	composable body. Use callbacks or correctly keyed effects for side effects.
+- Preserve coroutine cancellation. Do not map CancellationException to generic
+	failure or success, or continue an operation after its owner is cancelled.
+- Prevent duplicate submissions, repeated QR processing, and overlapping destructive
+	actions. Represent in-progress operations explicitly in typed state.
+- Preserve established refresh timing and lifecycle behavior unless the task changes it.
+
+8. UI, resources, and compatibility
+- Preserve public contracts, navigation, permission handling, and business behavior
+	during refactoring unless the task explicitly requires a behavior change.
+- Reuse the existing Material 3 components, icons, theme, and Android resource layout.
+- Put new user-visible strings and other resources in the appropriate resource
+	folders, following existing naming and localization conventions.
+- Give actionable icons meaningful accessibility descriptions and adequate touch
+	targets. Support font scaling, narrow screens, and readable contrast.
+- Provide loading, empty, success, failure, and retry states where applicable.
+- Keep error and permission feedback accessible when moving or replacing controls.
+- Follow the existing feature/file/folder pattern for every new file and resource.
+
+9. Exceptions, error codes, and diagnostics
+- Use the established exception/error-code pattern for every new failure path.
+- Show a stable generic error code to the user. Keep its detailed description and
+	diagnostic mapping available in code without disclosing sensitive information.
+- Integrate with RegistrationFailure categories and the owning feature's error
+	mapping. An arbitrary message alone does not satisfy the error-code requirement.
+- If the touched path lacks a complete mapping, make the gap explicit and resolve
+	it within agreed scope instead of inventing a parallel error scheme.
+- Never swallow unexpected errors, leave empty catch blocks, or fabricate success.
+	Distinguish validation, permission, network, server, and security failures.
+- Provide useful, sanitized diagnostics without logging secrets.
+
+10. Dependencies and formatting
+- Reuse existing libraries/helpers before adding a dependency or abstraction.
+- Review new dependencies for provenance, maintenance, vulnerabilities, licensing,
+	and Android compatibility. Use the existing Gradle version catalog.
+- Do not add dynamic dependency versions or disable security/build checks.
+- Format new and modified code with the project's configured formatter. Keep
+	existing code compliant without unrelated formatting churn.
+- Report missing formatter configuration or validation tools. Do not claim a check
+	ran or silently introduce a different formatter.
+
+11. Tests and completion criteria
+- Add/update focused tests for changed behavior and meaningful regression risks.
+	Reuse existing test files and helpers where suitable.
+- For affected security paths, test invalid input, rejected identities, permission
+	denial, network/server failure, and absence of unauthorized side effects.
+- For changed signing paths, test payload representation, fresh nonces, retries,
+	and namespace-specific destination/identity selection as applicable.
+- For changed storage/concurrency paths, test migration, corrupt state, cancellation,
+	duplicate actions, and lifecycle behavior as applicable.
+- Run the cheapest focused check first, followed by required build/test gates:
+	Bash compile: ./gradlew :app:compileDebugKotlin
+	PowerShell compile: .\gradlew.bat :app:compileDebugKotlin
+	Bash unit tests: ./gradlew :app:testDebugUnitTest
+	PowerShell unit tests: .\gradlew.bat :app:testDebugUnitTest
+- Run applicable lint/format checks and device/emulator checks for changed Android
+	UI/platform integration. Compilation alone does not verify runtime correctness.
+- Inspect the final diff for unrelated edits, secrets, resource/DTO violations,
+	weakened security, and missing tests. Update affected specifications when needed.
+- Report changes, passed checks, and anything unverified or blocked. Never claim
+	successful tests or security compliance without supporting evidence.
+
+12. Related repositories
+- Use the locations in default.txt when protocol compatibility requires checking
+	TrayApp or hub-extension. Do not routinely explore unrelated repositories.
+- Do not analyze hub-fe, as explicitly directed by default.txt.
+

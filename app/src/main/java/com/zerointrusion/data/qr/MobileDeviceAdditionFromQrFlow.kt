@@ -70,7 +70,7 @@ internal class MobileDeviceAdditionFromQrFlow(
             val requestJson = buildMobileDeviceAdditionJson(gson, request)
             val signature = signatureService.signJsonString(requestJson)
             val url = buildMobileDeviceRegistrationUrl(normalizedUrl)
-            Log.d("ZeroIntrusionQr", "HTTP POST $url payload=$requestJson")
+            Log.d("ZeroIntrusionQr", "Mobile device addition submitted.")
             val response = try {
                 registrationApi.registerMobileDevice(
                     url,
