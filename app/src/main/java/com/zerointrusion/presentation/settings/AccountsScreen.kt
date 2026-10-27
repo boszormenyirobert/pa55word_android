@@ -1,6 +1,5 @@
 package com.zerointrusion.presentation.settings
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -9,22 +8,21 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,17 +34,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.zerointrusion.domain.namespaces.NamespaceEntry
+import com.zerointrusion.presentation.common.AppBottomActions
+import com.zerointrusion.presentation.common.AppButton
+import com.zerointrusion.presentation.common.AppIconButton
 import com.zerointrusion.ui.theme.ActionDeclineRed
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ErrorTextLight
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
-import com.zerointrusion.ui.theme.Yellow
 
-private data class AccountListItem(
-    val namespaceUrl: String,
-    val accountId: String,
-)
+private data class AccountListItem(val namespaceUrl: String, val accountId: String)
 
 @Composable
 fun AccountsScreen(
@@ -57,16 +54,26 @@ fun AccountsScreen(
     onAddDatabase: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val accounts = remember(namespaces) {
-        namespaces.map { namespace ->
-            AccountListItem(
-                namespaceUrl = namespace.namespaceUrl.trim().trimEnd('/'),
-                accountId = namespace.accountId.trim(),
-            )
-        }.filter { item -> item.namespaceUrl.isNotEmpty() && item.accountId.isNotEmpty() }
-            .distinctBy { item -> item.namespaceUrl.lowercase() + "|" + item.accountId.lowercase() }
-            .sortedWith(compareBy({ item -> item.namespaceUrl.lowercase() }, { item -> item.accountId.lowercase() }))
-    }
+    val accounts =
+        remember(namespaces) {
+            namespaces
+                .map { namespace ->
+                    AccountListItem(
+                        namespaceUrl = namespace.namespaceUrl.trim().trimEnd('/'),
+                        accountId = namespace.accountId.trim(),
+                    )
+                }
+                .filter { item -> item.namespaceUrl.isNotEmpty() && item.accountId.isNotEmpty() }
+                .distinctBy { item ->
+                    item.namespaceUrl.lowercase() + "|" + item.accountId.lowercase()
+                }
+                .sortedWith(
+                    compareBy(
+                        { item -> item.namespaceUrl.lowercase() },
+                        { item -> item.accountId.lowercase() },
+                    )
+                )
+        }
     var pendingDeletion by remember { mutableStateOf<AccountListItem?>(null) }
 
     pendingDeletion?.let { account ->
@@ -83,86 +90,94 @@ fun AccountsScreen(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(colors = listOf(Dark, LightDark, Dark)))
-            .verticalScroll(rememberScrollState())
-            .padding(WindowInsets.safeDrawing.asPaddingValues())
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+        modifier =
+            Modifier.fillMaxSize()
+                .background(Brush.verticalGradient(colors = listOf(Dark, LightDark, Dark)))
+                .padding(WindowInsets.safeDrawing.asPaddingValues())
+                .padding(horizontal = 20.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(
-            text = "Accounts",
-            style = MaterialTheme.typography.headlineMedium,
-            color = White,
-        )
-
-        OutlinedButton(
-            onClick = onAddDatabase,
-            enabled = !deleting,
-            border = BorderStroke(2.dp, Yellow),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier.fillMaxWidth(),
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("Add new database", color = White)
-        }
+            Text(text = "Accounts", style = MaterialTheme.typography.headlineMedium, color = White)
 
-        errorMessage?.takeIf { it.isNotBlank() }?.let { message ->
-            Text(text = message, color = ErrorTextLight, style = MaterialTheme.typography.bodyMedium)
-        }
+            errorMessage
+                ?.takeIf { it.isNotBlank() }
+                ?.let { message ->
+                    Text(
+                        text = message,
+                        color = ErrorTextLight,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
 
-        if (accounts.isEmpty()) {
-            Text(
-                text = "No accounts stored on this device.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = White,
-            )
-        } else {
-            accounts.forEach { account ->
-                Card(
-                    shape = RoundedCornerShape(8.dp),
-                    colors = CardDefaults.cardColors(containerColor = LightDark),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
+            if (accounts.isEmpty()) {
+                Text(
+                    text = "No accounts stored on this device.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = White,
+                )
+            } else {
+                accounts.forEach { account ->
+                    Card(
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(containerColor = LightDark),
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(text = account.namespaceUrl, color = White, style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                text = account.accountId,
-                                color = White.copy(alpha = 0.72f),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        IconButton(
-                            onClick = { pendingDeletion = account },
-                            enabled = !deleting,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Delete,
-                                contentDescription = "Delete account",
-                                tint = ActionDeclineRed,
-                            )
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Text(
+                                    text = account.namespaceUrl,
+                                    color = White,
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                                Text(
+                                    text = account.accountId,
+                                    color = White.copy(alpha = 0.72f),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            AppIconButton(
+                                onClick = { pendingDeletion = account },
+                                enabled = !deleting,
+                                color = ActionDeclineRed,
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Delete,
+                                    contentDescription = "Delete account",
+                                    tint = ActionDeclineRed,
+                                )
+                            }
                         }
                     }
                 }
             }
         }
 
-        OutlinedButton(
-            onClick = onBack,
-            border = BorderStroke(2.dp, Yellow),
-            shape = RoundedCornerShape(8.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding(),
-        ) {
-            Text("Back", color = White)
+        AppBottomActions {
+            AppButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                onClick = onBack,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Back")
+            }
+            AppButton(
+                icon = Icons.Default.Add,
+                onClick = onAddDatabase,
+                enabled = !deleting,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Add")
+            }
         }
     }
 }
@@ -180,19 +195,32 @@ private fun AccountDeleteConfirmation(
         title = { Text("Delete account?") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text("Deleting this account deregisters this device from ${account.namespaceUrl}. All credentials stored on that server will be removed. This action is irreversible.")
+                Text(
+                    "Deleting this account deregisters this device from ${account.namespaceUrl}. All credentials stored on that server will be removed. This action is irreversible."
+                )
                 if (isLastAccount) {
-                    Text("This is the last account on this device. After deletion, the application can be removed from this device. To use the service again, reinstall the mobile application and register it again.")
+                    Text(
+                        "This is the last account on this device. After deletion, the application can be removed from this device. To use the service again, reinstall the mobile application and register it again."
+                    )
                 }
             }
         },
         dismissButton = {
-            OutlinedButton(onClick = onBack, enabled = !deleting) {
+            AppButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                onClick = onBack,
+                enabled = !deleting,
+            ) {
                 Text("Back")
             }
         },
         confirmButton = {
-            Button(onClick = onConfirm, enabled = !deleting) {
+            AppButton(
+                icon = Icons.Default.Delete,
+                onClick = onConfirm,
+                enabled = !deleting,
+                color = ActionDeclineRed,
+            ) {
                 Text(if (deleting) "Deleting..." else "Confirm")
             }
         },

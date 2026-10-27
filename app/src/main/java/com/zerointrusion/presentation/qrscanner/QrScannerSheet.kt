@@ -7,13 +7,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -21,9 +23,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -34,6 +36,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
+import com.zerointrusion.presentation.common.AppButton
 import com.zerointrusion.presentation.common.HeroPanel
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -91,6 +94,7 @@ fun QrScannerSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
                 .navigationBarsPadding()
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -120,20 +124,19 @@ fun QrScannerSheet(
                     text = "Camera access is required to scan the QR code.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Button(
+                AppButton(
+                    icon = Icons.Default.CameraAlt,
                     onClick = {
                         permissionRequested = true
                         permissionLauncher.launch(Manifest.permission.CAMERA)
                     },
-                    shape = RoundedCornerShape(18.dp),
                 ) {
                     Text("Allow camera access")
                 }
             }
-            Button(
+            AppButton(
+                icon = Icons.Default.Close,
                 onClick = onDismiss,
-                shape = RoundedCornerShape(18.dp),
-                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
             ) {
                 Text("Cancel")
             }

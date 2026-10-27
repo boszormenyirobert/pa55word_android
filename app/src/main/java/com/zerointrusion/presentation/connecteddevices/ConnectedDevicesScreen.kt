@@ -1,6 +1,5 @@
 package com.zerointrusion.presentation.connecteddevices
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,20 +13,21 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.zerointrusion.presentation.app.ConnectedDevicesUiState
+import com.zerointrusion.presentation.common.AppButton
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
-import com.zerointrusion.ui.theme.Yellow
 
 @Composable
 fun ConnectedDevicesScreen(
@@ -80,15 +80,14 @@ fun ConnectedDevicesScreen(
             }
         }
 
-        OutlinedButton(
+        AppButton(
+            icon = Icons.AutoMirrored.Filled.ArrowBack,
             onClick = onBack,
-            border = BorderStroke(2.dp, Yellow),
-            shape = RoundedCornerShape(14.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding(),
         ) {
-            Text("Back", color = White)
+            Text("Back")
         }
     }
 }

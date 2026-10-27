@@ -8,7 +8,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
@@ -18,7 +17,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +42,7 @@ import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.zerointrusion.presentation.app.QrNamespaceRegistrationUiState
+import com.zerointrusion.presentation.common.AppButton
 import com.zerointrusion.presentation.common.QrCodeImage
 import com.zerointrusion.presentation.qrscanner.QrCameraPreview
 import com.zerointrusion.ui.theme.Dark
@@ -166,7 +168,8 @@ fun QrReadScreen(
                         color = White,
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    Button(
+                    AppButton(
+                        icon = Icons.Default.CameraAlt,
                         onClick = {
                             cameraPermissionRequested = true
                             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
@@ -206,10 +209,9 @@ fun QrReadScreen(
             }
         }
 
-        Button(
+        AppButton(
+            icon = Icons.AutoMirrored.Filled.ArrowBack,
             onClick = onBack,
-            shape = RoundedCornerShape(16.dp),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
         ) {
             Text("Back")
         }

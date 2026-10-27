@@ -36,6 +36,7 @@ import com.zerointrusion.presentation.settings.AddDatabaseScreen
 import com.zerointrusion.presentation.settings.SettingsScreen
 import com.zerointrusion.presentation.settings.SettingsConnectedDevicesScreen
 import com.zerointrusion.presentation.registration.RegistrationScreen
+import com.zerointrusion.presentation.registration.RegistrationOptionsScreen
 import com.zerointrusion.presentation.registration.RegistrationViewModel
 import com.zerointrusion.presentation.recovery.RecoveryScreen
 import kotlinx.coroutines.delay
@@ -125,23 +126,34 @@ fun ZeroIntrusionAppRoot(
                 )
             }
             composable(AppRoute.Registration.route) {
-                if (registrationState.isSubmitting) {
-                    LoadingScreen(message = "Registering device…")
-                } else {
-                    RegistrationScreen(
-                        state = registrationState,
-                        onEmailChanged = registrationViewModel::onEmailChanged,
-                        onPhoneChanged = registrationViewModel::onPhoneChanged,
-                        onNamespaceNameChanged = registrationViewModel::onNamespaceNameChanged,
-                        onApiUrlChanged = registrationViewModel::onApiUrlChanged,
-                        onAdditionalApiUrlChanged = registrationViewModel::onAdditionalApiUrlChanged,
-                        onThirdApiUrlChanged = registrationViewModel::onThirdApiUrlChanged,
-                        onRegister = registrationViewModel::register,
-                        onRegisterNewMobile = registrationViewModel::registerNewMobileToExistingAccount,
-                        onStartRecovery = {
-                            navController.navigate(AppRoute.Recovery.route)
-                        },
-                    )
+                RegistrationOptionsScreen(
+                    onNewAccount = { navController.navigate(AppRoute.NewAccountRegistration.route) },
+                    onAddMobile = { navController.navigate(AppRoute.AddMobile.route) },
+                    onRecovery = { navController.navigate(AppRoute.Recovery.route) },
+                )
+            }
+            listOf(AppRoute.NewAccountRegistration, AppRoute.AddMobile).forEach { route ->
+                composable(route.route) {
+                    if (registrationState.isSubmitting) {
+                        LoadingScreen(message = "Registering device…")
+                    } else {
+                        RegistrationScreen(
+                            state = registrationState,
+                            onEmailChanged = registrationViewModel::onEmailChanged,
+                            onPhoneChanged = registrationViewModel::onPhoneChanged,
+                            onNamespaceNameChanged = registrationViewModel::onNamespaceNameChanged,
+                            onApiUrlChanged = registrationViewModel::onApiUrlChanged,
+                            onAdditionalApiUrlChanged = registrationViewModel::onAdditionalApiUrlChanged,
+                            onThirdApiUrlChanged = registrationViewModel::onThirdApiUrlChanged,
+                            isExistingAccount = route == AppRoute.AddMobile,
+                            onConfirm = if (route == AppRoute.AddMobile) {
+                                registrationViewModel::registerNewMobileToExistingAccount
+                            } else {
+                                registrationViewModel::register
+                            },
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
                 }
             }
             composable(AppRoute.Recovery.route) {

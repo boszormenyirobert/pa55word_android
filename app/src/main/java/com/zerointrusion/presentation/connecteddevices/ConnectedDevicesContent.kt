@@ -5,7 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceNamespace
 import com.zerointrusion.presentation.app.ConnectedDevicesUiState
+import com.zerointrusion.presentation.common.AppButton
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ErrorTextLight
 import com.zerointrusion.ui.theme.LightDark
@@ -62,7 +64,7 @@ internal fun ConnectedDevicesContent(
                 color = ErrorTextLight,
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Button(onClick = onRetry) {
+            AppButton(icon = Icons.Default.Refresh, onClick = onRetry) {
                 Text("Retry")
             }
         }

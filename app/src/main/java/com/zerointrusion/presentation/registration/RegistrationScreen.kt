@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -25,10 +27,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.zerointrusion.presentation.common.AppBackground
+import com.zerointrusion.presentation.common.AppButton
 import com.zerointrusion.presentation.common.BannerTone
-import com.zerointrusion.presentation.common.ChecklistLine
-import com.zerointrusion.presentation.common.HeroPanel
-import com.zerointrusion.presentation.common.PillLabel
 import com.zerointrusion.presentation.common.PrimaryActionButton
 import com.zerointrusion.presentation.common.QrCodeImage
 import com.zerointrusion.presentation.common.RegistrationTextField
@@ -43,9 +43,9 @@ fun RegistrationScreen(
     onApiUrlChanged: (String) -> Unit,
     onAdditionalApiUrlChanged: (String) -> Unit,
     onThirdApiUrlChanged: (String) -> Unit,
-    onRegister: () -> Unit,
-    onRegisterNewMobile: () -> Unit,
-    onStartRecovery: () -> Unit,
+    isExistingAccount: Boolean,
+    onConfirm: () -> Unit,
+    onBack: () -> Unit,
 ) {
     AppBackground {
         Column(
@@ -56,13 +56,12 @@ fun RegistrationScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            HeroPanel(
-                eyebrow = "Milestone 7",
-                title = "Secure device registration, with the dangerous parts kept out of sight.",
-                body = "This flow generates the keystore keypair, builds the backend payload and stores the returned account state without exposing sensitive material in the UI.",
+            Text(
+                text = if (isExistingAccount) "Add new mobile to existing account" else "New account registration",
+                style = MaterialTheme.typography.headlineSmall,
             )
             Card(
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(8.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
             ) {
@@ -70,18 +69,9 @@ fun RegistrationScreen(
                     modifier = Modifier.padding(22.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PillLabel(text = "Plain POST /api/v1/account")
-                        PillLabel(text = "Local signature only")
-                    }
                     Text(
                         text = "Registration details",
                         style = MaterialTheme.typography.titleLarge,
-                    )
-                    Text(
-                        text = "Provide the namespace endpoint and identity fields. The app derives device identifiers and encrypted key material locally.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     RegistrationTextField(
                         value = state.email,
@@ -150,27 +140,21 @@ fun RegistrationScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         PrimaryActionButton(
-                            text = "Register Device",
-                            onClick = onRegister,
+                            icon = Icons.Default.Check,
+                            text = "Confirm",
+                            onClick = onConfirm,
+                            enabled = !state.isAwaitingMobileRegistration,
                             modifier = Modifier.weight(1f),
                         )
                     }
-                    OutlinedButton(
-                        onClick = onRegisterNewMobile,
-                        enabled = !state.isAwaitingMobileRegistration,
+                    AppButton(
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        onClick = onBack,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
                     ) {
-                        Text("New mobile to existing account")
+                        Text("Back")
                     }
-                    OutlinedButton(
-                        onClick = onStartRecovery,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                    ) {
-                        Text("Recovery")
-                    }
-                    state.mobileRegistrationQrPayload?.let { payload ->
+                    state.mobileRegistrationQrPayload?.takeIf { isExistingAccount }?.let { payload ->
                         Text(
                             text = "Scan this code with a mobile device already connected to the account.",
                             style = MaterialTheme.typography.bodyMedium,
@@ -188,25 +172,6 @@ fun RegistrationScreen(
                             style = MaterialTheme.typography.bodyMedium,
                         )
                     }
-                }
-            }
-
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Text(
-                        text = "What happens next",
-                        style = MaterialTheme.typography.titleLarge,
-                    )
-                    ChecklistLine("An RSA keypair is kept inside Android Keystore.")
-                    ChecklistLine("A Base64 X.509 public key and RSA-OAEP encrypted DEK are generated locally.")
-                    ChecklistLine("The returned account ID is stored securely after success.")
-                    ChecklistLine("Sensitive crypto values are never rendered or logged in the UI.")
                 }
             }
         }

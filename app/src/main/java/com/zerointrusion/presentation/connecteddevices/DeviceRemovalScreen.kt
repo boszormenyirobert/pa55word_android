@@ -1,6 +1,5 @@
 package com.zerointrusion.presentation.connecteddevices
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,7 +14,12 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -24,10 +28,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MenuAnchorType
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,10 +42,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Delete
 import com.zerointrusion.domain.connecteddevices.RemovableAccountDevice
 import com.zerointrusion.presentation.app.DeviceRemovalUiState
+import com.zerointrusion.presentation.common.AppButton
+import com.zerointrusion.presentation.common.AppIconButton
 import com.zerointrusion.ui.theme.ActionDeclineRed
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ErrorTextLight
@@ -84,7 +86,7 @@ fun DeviceRemovalScreen(
             DeviceRemovalUiState.InProgress -> Text("Loading devices...", color = White)
             is DeviceRemovalUiState.Error -> {
                 Text(state.message, color = ErrorTextLight)
-                Button(onClick = onLoad, modifier = Modifier.fillMaxWidth()) { Text("Retry") }
+                AppButton(icon = Icons.Default.Refresh, onClick = onLoad, modifier = Modifier.fillMaxWidth()) { Text("Retry") }
             }
             is DeviceRemovalUiState.Success -> {
                 state.errorMessage?.let { Text(it, color = ErrorTextLight) }
@@ -137,15 +139,14 @@ fun DeviceRemovalScreen(
             }
         }
 
-        OutlinedButton(
+        AppButton(
+            icon = Icons.AutoMirrored.Filled.ArrowBack,
             onClick = onBack,
-            border = BorderStroke(2.dp, Yellow),
-            shape = RoundedCornerShape(14.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding(),
         ) {
-            Text("Back", color = White)
+            Text("Back")
         }
     }
 }
@@ -243,9 +244,10 @@ private fun DeviceRemovalCard(
                         color = White.copy(alpha = 0.72f),
                     )
                 }
-                IconButton(
+                AppIconButton(
                     onClick = onRequestDelete,
                     enabled = !deleting && !showConfirmation,
+                    color = ActionDeclineRed,
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Delete,
@@ -268,15 +270,16 @@ private fun DeviceRemovalCard(
             }
             if (showConfirmation) {
                 Text("Remove this device from the account?", color = White)
-                Button(
+                AppButton(
+                    icon = Icons.Default.Delete,
                     onClick = onConfirmDelete,
                     enabled = !deleting,
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = ActionDeclineRed),
+                    color = ActionDeclineRed,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
                     Text(if (deleting) "Removing..." else "Confirm removal")
                 }
-                OutlinedButton(onClick = onCancelDelete, modifier = Modifier.fillMaxWidth()) {
+                AppButton(icon = Icons.Default.Close, onClick = onCancelDelete, modifier = Modifier.fillMaxWidth()) {
                     Text("Cancel")
                 }
             }

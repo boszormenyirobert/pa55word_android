@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -16,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zerointrusion.domain.authentication.ActiveDesktopSession
 import com.zerointrusion.presentation.app.DesktopSessionsUiState
+import com.zerointrusion.presentation.common.AppButton
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ErrorTextLight
 import com.zerointrusion.ui.theme.White
@@ -71,7 +74,7 @@ internal fun DesktopSessionsContent(
                 color = ErrorTextLight,
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Button(onClick = onRetry) {
+            AppButton(icon = Icons.Default.Refresh, onClick = onRetry) {
                 Text("Retry")
             }
         }
@@ -100,7 +103,8 @@ private fun DesktopSessionCard(
             SessionField(label = "Attestation ID", value = session.attestationId)
             SessionField(label = "Issued at", value = session.issuedAt.toDisplayTimestamp())
             SessionField(label = "Expires at", value = session.expiresAt.toDisplayTimestamp())
-            Button(
+            AppButton(
+                icon = Icons.Default.LinkOff,
                 onClick = { onRevokeSession(session) },
                 enabled = !isRevoking,
                 modifier = Modifier.fillMaxWidth(),

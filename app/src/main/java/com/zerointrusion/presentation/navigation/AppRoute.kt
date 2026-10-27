@@ -4,6 +4,8 @@ sealed class AppRoute(val route: String) {
     data object Loading : AppRoute("loading")
     data object Security : AppRoute("security")
     data object Registration : AppRoute("registration")
+    data object NewAccountRegistration : AppRoute("new-account-registration")
+    data object AddMobile : AppRoute("add-mobile")
     data object Recovery : AppRoute("recovery")
     data object Home : AppRoute("home")
     data object Settings : AppRoute("settings")

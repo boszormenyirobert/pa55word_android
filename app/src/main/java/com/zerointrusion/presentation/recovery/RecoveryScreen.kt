@@ -2,13 +2,21 @@ package com.zerointrusion.presentation.recovery
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -22,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.zerointrusion.presentation.common.AppBackground
+import com.zerointrusion.presentation.common.AppButton
 import com.zerointrusion.presentation.common.BannerTone
 import com.zerointrusion.presentation.common.HeroPanel
 import com.zerointrusion.presentation.common.PrimaryActionButton
@@ -48,6 +57,7 @@ fun RecoveryScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(WindowInsets.safeDrawing.asPaddingValues())
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -55,7 +65,7 @@ fun RecoveryScreen(
             HeroPanel(
                 eyebrow = "Account recovery",
                 title = "Restore an existing account",
-                body = "Scan the recovery code displayed by your active desktop device.",
+                body = "Use the recovery QR code from your active desktop device to restore access to your existing account. Confirm the recovery server, then match the pairing code on your desktop to approve this mobile device.",
             )
             state.scannedQr?.let { qr ->
                 StatusBanner(
@@ -80,20 +90,23 @@ fun RecoveryScreen(
             }
             if (state.scannedQr == null) {
                 PrimaryActionButton(
-                    text = "Scan recovery code",
+                    icon = Icons.Default.QrCodeScanner,
+                    text = "Read QR code",
                     onClick = { scannerVisible = true },
                     modifier = Modifier.fillMaxWidth(),
                 )
             } else if (state.stage == null) {
                 PrimaryActionButton(
-                    text = "Approve server and continue",
+                    icon = Icons.Default.Check,
+                    text = "Confirm",
                     onClick = viewModel::confirmServer,
                     enabled = !state.isWorking,
                     modifier = Modifier.fillMaxWidth(),
                 )
             } else if (state.isCompleted) {
                 if (state.errorMessage != null) {
-                    OutlinedButton(
+                    AppButton(
+                        icon = Icons.Default.Refresh,
                         onClick = viewModel::retryFcm,
                         enabled = !state.isWorking,
                         modifier = Modifier.fillMaxWidth(),
@@ -102,12 +115,14 @@ fun RecoveryScreen(
                     }
                 }
                 PrimaryActionButton(
+                    icon = Icons.Default.AccountCircle,
                     text = "Open account",
                     onClick = onCompleted,
                     modifier = Modifier.fillMaxWidth(),
                 )
             } else {
-                OutlinedButton(
+                AppButton(
+                    icon = Icons.Default.QrCodeScanner,
                     onClick = { scannerVisible = true },
                     enabled = !state.isWorking,
                     modifier = Modifier.fillMaxWidth(),
@@ -115,16 +130,17 @@ fun RecoveryScreen(
                     Text("Scan another recovery code")
                 }
                 PrimaryActionButton(
+                    icon = Icons.Default.Refresh,
                     text = "Refresh recovery status",
                     onClick = viewModel::retry,
                     enabled = !state.isWorking,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedButton(onClick = viewModel::cancel, modifier = Modifier.fillMaxWidth()) {
+                AppButton(icon = Icons.Default.Close, onClick = viewModel::cancel, modifier = Modifier.fillMaxWidth()) {
                     Text("Cancel recovery")
                 }
             }
-            OutlinedButton(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
+            AppButton(icon = Icons.AutoMirrored.Filled.ArrowBack, onClick = onBack, modifier = Modifier.fillMaxWidth()) {
                 Text("Back")
             }
         }

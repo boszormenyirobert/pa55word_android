@@ -4,15 +4,15 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -20,16 +20,15 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.rounded.Delete
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,6 +43,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.namespaces.NamespaceEntry
+import com.zerointrusion.presentation.common.AppBottomActions
+import com.zerointrusion.presentation.common.AppButton
+import com.zerointrusion.presentation.common.AppIconButton
 import com.zerointrusion.presentation.deviceinformation.DeviceInformationUiModel
 import com.zerointrusion.ui.theme.ActionDeclineRed
 import com.zerointrusion.ui.theme.Dark
@@ -65,50 +67,51 @@ fun SettingsConnectedDevicesScreen(
     var showHeadExplanation by remember { mutableStateOf(false) }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Dark, LightDark, Dark),
-                ),
-            )
-            .verticalScroll(rememberScrollState())
-            .padding(WindowInsets.safeDrawing.asPaddingValues())
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+        modifier =
+            Modifier.fillMaxSize()
+                .background(brush = Brush.verticalGradient(colors = listOf(Dark, LightDark, Dark)))
+                .padding(WindowInsets.safeDrawing.asPaddingValues())
+                .padding(horizontal = 20.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(
-            text = "Connected devices",
-            style = MaterialTheme.typography.headlineMedium,
-            color = White,
-        )
-
-        ConnectedDevicesSettingsContent(
-            deviceInformation = deviceInformation,
-            namespaces = namespaces,
-            connectedDeviceGroups = connectedDeviceGroups,
-            namespaceManagementErrorMessage = namespaceManagementErrorMessage,
-            namespacePendingDelete = namespacePendingDelete,
-            onDeleteClick = { namespace ->
-                namespacePendingDelete = if (namespacePendingDelete == namespace) null else namespace
-            },
-            onConfirmDelete = { namespace ->
-                namespacePendingDelete = null
-                onDeleteNamespace(namespace)
-            },
-            showHeadExplanation = showHeadExplanation,
-            onHeadClick = { showHeadExplanation = !showHeadExplanation },
-        )
-
-        OutlinedButton(
-            onClick = onBack,
-            border = BorderStroke(2.dp, Yellow),
-            shape = RoundedCornerShape(14.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding(),
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("Back", color = White)
+            Text(
+                text = "Connected devices",
+                style = MaterialTheme.typography.headlineMedium,
+                color = White,
+            )
+
+            ConnectedDevicesSettingsContent(
+                deviceInformation = deviceInformation,
+                namespaces = namespaces,
+                connectedDeviceGroups = connectedDeviceGroups,
+                namespaceManagementErrorMessage = namespaceManagementErrorMessage,
+                namespacePendingDelete = namespacePendingDelete,
+                onDeleteClick = { namespace ->
+                    namespacePendingDelete =
+                        if (namespacePendingDelete == namespace) null else namespace
+                },
+                onConfirmDelete = { namespace ->
+                    namespacePendingDelete = null
+                    onDeleteNamespace(namespace)
+                },
+                showHeadExplanation = showHeadExplanation,
+                onHeadClick = { showHeadExplanation = !showHeadExplanation },
+            )
+        }
+
+        AppBottomActions {
+            AppButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                onClick = onBack,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Back")
+            }
+            Spacer(modifier = Modifier.weight(1f))
         }
     }
 }
@@ -133,23 +136,31 @@ internal fun buildSettingsConnectedDeviceGroups(
         }
     }
 
-    namespacesByDeviceId.keys.filter { it.isNotEmpty() }.sorted().forEach { deviceId ->
-        deviceIdsInDisplayOrder += deviceId
-    }
+    namespacesByDeviceId.keys
+        .filter { it.isNotEmpty() }
+        .sorted()
+        .forEach { deviceId -> deviceIdsInDisplayOrder += deviceId }
 
-    return deviceIdsInDisplayOrder.map { deviceId ->
-        val deviceNamespaces = namespacesByDeviceId[deviceId].orEmpty()
-            .sortedWith(compareBy({ it.namespaceName.lowercase() }, { it.namespaceUrl.lowercase() }))
-        val deviceLabel = deviceNamespaces.firstNotNullOfOrNull { namespace ->
-            namespace.deviceName?.trim()?.takeIf { it.isNotEmpty() }
-        } ?: deviceId
+    return deviceIdsInDisplayOrder
+        .map { deviceId ->
+            val deviceNamespaces =
+                namespacesByDeviceId[deviceId]
+                    .orEmpty()
+                    .sortedWith(
+                        compareBy({ it.namespaceName.lowercase() }, { it.namespaceUrl.lowercase() })
+                    )
+            val deviceLabel =
+                deviceNamespaces.firstNotNullOfOrNull { namespace ->
+                    namespace.deviceName?.trim()?.takeIf { it.isNotEmpty() }
+                } ?: deviceId
 
-        SettingsConnectedDeviceGroupUiModel(
-            deviceId = deviceId,
-            deviceLabel = deviceLabel,
-            namespaces = deviceNamespaces,
-        )
-    }.sortedWith(compareBy({ it.deviceLabel.lowercase() }, { it.deviceId.lowercase() }))
+            SettingsConnectedDeviceGroupUiModel(
+                deviceId = deviceId,
+                deviceLabel = deviceLabel,
+                namespaces = deviceNamespaces,
+            )
+        }
+        .sortedWith(compareBy({ it.deviceLabel.lowercase() }, { it.deviceId.lowercase() }))
 }
 
 @Composable
@@ -165,20 +176,23 @@ private fun ConnectedDevicesSettingsContent(
     onHeadClick: () -> Unit,
 ) {
     val visibleNamespaces = namespaces
-    val groupedDevices = remember(visibleNamespaces, connectedDeviceGroups) {
-        buildSettingsConnectedDeviceGroups(
-            namespaces = visibleNamespaces,
-            connectedDeviceGroups = connectedDeviceGroups,
-        )
-    }
+    val groupedDevices =
+        remember(visibleNamespaces, connectedDeviceGroups) {
+            buildSettingsConnectedDeviceGroups(
+                namespaces = visibleNamespaces,
+                connectedDeviceGroups = connectedDeviceGroups,
+            )
+        }
 
-    namespaceManagementErrorMessage?.takeIf { it.isNotBlank() }?.let { message ->
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = ErrorTextLight,
-        )
-    }
+    namespaceManagementErrorMessage
+        ?.takeIf { it.isNotBlank() }
+        ?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyMedium,
+                color = ErrorTextLight,
+            )
+        }
 
     if (groupedDevices.isEmpty()) {
         Text(
@@ -200,10 +214,7 @@ private fun ConnectedDevicesSettingsContent(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = LightDark,
-                    ) {
+                    Surface(shape = RoundedCornerShape(14.dp), color = LightDark) {
                         Row(
                             modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -229,34 +240,33 @@ private fun ConnectedDevicesSettingsContent(
                                     color = White.copy(alpha = 0.72f),
                                 )
                             }
-
                         }
                     }
 
                     Column(
                         modifier = Modifier.padding(start = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(0.dp),
-                    )
-                    {
+                    ) {
                         if (group.namespaces.isEmpty()) {
                             Text(
                                 text = "No stored namespace connections for this device.",
                                 color = White.copy(alpha = 0.82f),
                                 style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 2.dp),
+                                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
                             )
                         } else {
                             group.namespaces.forEachIndexed { index, namespace ->
                                 NamespaceConnectionCard(
                                     namespace = namespace,
-                                    isGateway = namespace.root || (
-                                        namespace.accountId == deviceInformation.accountId &&
-                                            namespace.namespaceId == deviceInformation.namespaceId &&
-                                            namespace.namespaceName == deviceInformation.namespaceName &&
-                                            namespace.namespaceUrl == deviceInformation.namespaceUrl
-                                        ),
+                                    isGateway =
+                                        namespace.root ||
+                                            (namespace.accountId == deviceInformation.accountId &&
+                                                namespace.namespaceId ==
+                                                    deviceInformation.namespaceId &&
+                                                namespace.namespaceName ==
+                                                    deviceInformation.namespaceName &&
+                                                namespace.namespaceUrl ==
+                                                    deviceInformation.namespaceUrl),
                                     showDeleteConfirmation = namespacePendingDelete == namespace,
                                     onDeleteClick = { onDeleteClick(namespace) },
                                     onConfirmDelete = { onConfirmDelete(namespace) },
@@ -265,9 +275,13 @@ private fun ConnectedDevicesSettingsContent(
                                 )
                                 if (index != group.namespaces.lastIndex) {
                                     HorizontalDivider(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(start = 26.dp, top = 10.dp, bottom = 10.dp),
+                                        modifier =
+                                            Modifier.fillMaxWidth()
+                                                .padding(
+                                                    start = 26.dp,
+                                                    top = 10.dp,
+                                                    bottom = 10.dp,
+                                                ),
                                         thickness = 1.dp,
                                         color = White.copy(alpha = 0.18f),
                                     )
@@ -298,14 +312,9 @@ private fun NamespaceConnectionCard(
     ) {
         NamespaceConnector()
 
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Top,
             ) {
@@ -317,28 +326,11 @@ private fun NamespaceConnectionCard(
                 )
 
                 if (isGateway) {
-                    Surface(
-                        shape = RoundedCornerShape(999.dp),
-                        color = Yellow.copy(alpha = 0.18f),
-                        border = BorderStroke(1.dp, Yellow),
-                        modifier = Modifier.height(24.dp),
-                        onClick = onHeadClick,
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .height(24.dp)
-                                .padding(horizontal = 10.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = "Head",
-                                color = Yellow,
-                                style = MaterialTheme.typography.labelLarge,
-                            )
-                        }
+                    AppButton(icon = Icons.Default.Info, onClick = onHeadClick, color = Yellow) {
+                        Text("Head")
                     }
                 } else {
-                    IconButton(onClick = onDeleteClick, modifier = Modifier.size(24.dp)) {
+                    AppIconButton(onClick = onDeleteClick, color = ActionDeclineRed) {
                         Icon(
                             imageVector = Icons.Rounded.Delete,
                             contentDescription = "Delete namespace",
@@ -356,7 +348,8 @@ private fun NamespaceConnectionCard(
                     border = BorderStroke(1.dp, Yellow.copy(alpha = 0.55f)),
                 ) {
                     Text(
-                        text = "The server is configured as the root server, which is a prerequisite for multiple-server support. Before removing the \"Head\" server, if there is an additional server, the Head must first be changed. Multiple-server support enables independent credential databases for each server. Removing a server, including the \"Head\" server, permanently removes only the credentials stored in the database assigned to that server.",
+                        text =
+                            "The server is configured as the root server, which is a prerequisite for multiple-server support. Before removing the \"Head\" server, if there is an additional server, the Head must first be changed. Multiple-server support enables independent credential databases for each server. Removing a server, including the \"Head\" server, permanently removes only the credentials stored in the database assigned to that server.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = White,
                         modifier = Modifier.padding(12.dp),
@@ -394,26 +387,27 @@ private fun NamespaceConnectionCard(
 
             if (showDeleteConfirmation) {
                 Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(BorderStroke(1.dp, ActionDeclineRed), RoundedCornerShape(14.dp)),
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .border(
+                                BorderStroke(1.dp, ActionDeclineRed),
+                                RoundedCornerShape(14.dp),
+                            ),
                     shape = RoundedCornerShape(14.dp),
                     color = ActionDeclineRed.copy(alpha = 0.16f),
                 ) {
                     Text(
-                        text = "Deleting this namespace removes the stored registration for this desktop connection. This action cannot be undone.",
+                        text =
+                            "Deleting this namespace removes the stored registration for this desktop connection. This action cannot be undone.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = White,
                         modifier = Modifier.padding(12.dp),
                     )
                 }
-                Button(
+                AppButton(
+                    icon = Icons.Default.Delete,
                     onClick = onConfirmDelete,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ActionDeclineRed,
-                        contentColor = White,
-                    ),
+                    color = ActionDeclineRed,
                 ) {
                     Text("Confirm delete")
                 }
@@ -430,17 +424,16 @@ private fun NamespaceConnector() {
         verticalArrangement = Arrangement.Top,
     ) {
         Box(
-            modifier = Modifier
-                .size(width = 2.dp, height = 14.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(White.copy(alpha = 0.32f)),
+            modifier =
+                Modifier.size(width = 2.dp, height = 14.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(White.copy(alpha = 0.32f))
         )
         Box(
-            modifier = Modifier
-                .size(12.dp, 2.dp)
-                .clip(RoundedCornerShape(999.dp))
-                .background(White.copy(alpha = 0.32f)),
+            modifier =
+                Modifier.size(12.dp, 2.dp)
+                    .clip(RoundedCornerShape(999.dp))
+                    .background(White.copy(alpha = 0.32f))
         )
     }
 }
-

@@ -4,12 +4,10 @@ import android.app.KeyguardManager
 import android.os.Build
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -20,17 +18,23 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Fingerprint
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import com.zerointrusion.presentation.common.AppBackground
+import com.zerointrusion.presentation.common.AppButton
 import com.zerointrusion.presentation.common.BannerTone
 import com.zerointrusion.presentation.common.StatusBanner
 
@@ -119,14 +124,16 @@ fun SecurityScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Button(
+                        AppButton(
+                            icon = Icons.Default.Info,
                             onClick = {},
                             enabled = false,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
                             Text("Device information")
                         }
-                        Button(
+                        AppButton(
+                            icon = Icons.Default.QrCodeScanner,
                             onClick = {},
                             enabled = false,
                             modifier = Modifier.fillMaxWidth(),
@@ -166,10 +173,9 @@ fun SecurityScreen(
                         message = errorMessage,
                         tone = BannerTone.Error,
                     )
-                    Button(
+                    AppButton(
+                        icon = Icons.Default.Fingerprint,
                         onClick = { promptNonce++ },
-                        shape = RoundedCornerShape(16.dp),
-                        contentPadding = PaddingValues(horizontal = 18.dp, vertical = 14.dp),
                     ) {
                         Text("Retry Authentication")
                     }
@@ -183,31 +189,28 @@ fun SecurityScreen(
                     .navigationBarsPadding(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Button(
+                AppButton(
+                    icon = Icons.Default.Check,
                     onClick = {},
                     enabled = false,
-                    modifier = Modifier
-                        .weight(1f)
-                        .border(2.dp, MaterialTheme.colorScheme.tertiary, RoundedCornerShape(12.dp)),
+                    modifier = Modifier.weight(1f),
                 ) {
                     Text("Allow")
                 }
-                Button(
+                AppButton(
+                    icon = Icons.Default.Close,
                     onClick = {},
                     enabled = false,
-                    modifier = Modifier
-                        .weight(1f)
-                        .border(2.dp, MaterialTheme.colorScheme.tertiary, RoundedCornerShape(12.dp)),
+                    modifier = Modifier.weight(1f),
                 ) {
                     Text("Decline")
                 }
             }
 
             if (errorMessage.isNullOrBlank()) {
-                Button(
+                AppButton(
+                    icon = Icons.Default.Refresh,
                     onClick = { promptNonce++ },
-                    shape = RoundedCornerShape(16.dp),
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 12.dp),
                     modifier = Modifier.align(Alignment.TopEnd),
                 ) {
                     Text("Retry")

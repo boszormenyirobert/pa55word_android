@@ -1,29 +1,25 @@
 package com.zerointrusion.presentation.common
 
+import android.graphics.Picture
+import android.graphics.RectF
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -31,14 +27,51 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import com.caverock.androidsvg.SVG
+import com.zerointrusion.R
+
+@Composable
+fun Pa55wordLogo(modifier: Modifier = Modifier, alignment: Alignment = Alignment.Center) {
+    val context = LocalContext.current
+    val painter =
+        remember(context) {
+            SvgLogoPainter(SVG.getFromResource(context, R.raw.pa55word_logo).renderToPicture())
+        }
+    Image(
+        painter = painter,
+        contentDescription = "pa55word logo",
+        contentScale = ContentScale.Fit,
+        alignment = alignment,
+        modifier = modifier,
+    )
+}
+
+private class SvgLogoPainter(private val picture: Picture) : Painter() {
+    override val intrinsicSize = Size(picture.width.toFloat(), picture.height.toFloat())
+
+    override fun DrawScope.onDraw() {
+        drawIntoCanvas { canvas ->
+            canvas.nativeCanvas.drawPicture(picture, RectF(0f, 0f, size.width, size.height))
+        }
+    }
+}
 
 @Composable
 fun LoadingScreen(message: String) {
@@ -193,19 +226,15 @@ fun RegistrationTextField(
 fun PrimaryActionButton(
     text: String,
     onClick: () -> Unit,
+    icon: ImageVector,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    Button(
+    AppButton(
         onClick = onClick,
+        icon = icon,
         modifier = modifier,
         enabled = enabled,
-        shape = RoundedCornerShape(18.dp),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-        ),
-        contentPadding = PaddingValues(vertical = 15.dp),
     ) {
         Text(text)
     }

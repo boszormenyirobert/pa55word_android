@@ -19,15 +19,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,6 +37,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.zerointrusion.domain.namespaces.NamespaceEntry
+import com.zerointrusion.presentation.common.AppButton
+import com.zerointrusion.presentation.common.AppIconButton
 import com.zerointrusion.ui.theme.ActionDeclineRed
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ErrorTextLight
@@ -125,15 +124,14 @@ fun NamespacesScreen(
             }
         }
 
-        OutlinedButton(
+        AppButton(
+            icon = Icons.AutoMirrored.Filled.ArrowBack,
             onClick = onBack,
-            border = BorderStroke(2.dp, Yellow),
-            shape = RoundedCornerShape(14.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .navigationBarsPadding(),
         ) {
-            Text("Back to main view", color = White)
+            Text("Back to main view")
         }
     }
 }
@@ -184,7 +182,7 @@ private fun NamespaceCard(
                         )
                     }
                 } else {
-                    IconButton(onClick = onDeleteClick, modifier = Modifier.size(24.dp)) {
+                    AppIconButton(onClick = onDeleteClick, color = ActionDeclineRed) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
                             contentDescription = "Delete namespace",
@@ -223,13 +221,10 @@ private fun NamespaceCard(
                         modifier = Modifier.padding(12.dp),
                     )
                 }
-                Button(
+                AppButton(
+                    icon = Icons.Default.Delete,
                     onClick = onConfirmDelete,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ActionDeclineRed,
-                        contentColor = White,
-                    ),
+                    color = ActionDeclineRed,
                 ) {
                     Text("Confirm delete")
                 }

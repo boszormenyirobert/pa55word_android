@@ -18,6 +18,7 @@ okhttp = "5.1.0"
 gson = "2.13.1"
 datastore = "1.1.7"
 securityCrypto = "1.1.0"
+androidSvg = "1.4"
 biometric = "1.1.0"
 ksp = "2.2.10-2.0.2"
 hiltExt = "1.2.0"
@@ -29,6 +30,7 @@ mlkitBarcode = "17.3.0"
 zxing = "3.5.3"
 
 [libraries]
+android-svg = { group = "com.caverock", name = "androidsvg-aar", version.ref = "androidSvg" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }

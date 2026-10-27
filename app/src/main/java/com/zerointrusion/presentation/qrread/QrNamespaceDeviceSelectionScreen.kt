@@ -1,12 +1,9 @@
 package com.zerointrusion.presentation.qrread
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -15,14 +12,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Devices
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -33,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.zerointrusion.presentation.app.QrNamespaceRegistrationUiState
+import com.zerointrusion.presentation.common.AppButton
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ErrorTextLight
 import com.zerointrusion.ui.theme.Green
@@ -93,10 +95,10 @@ fun QrNamespaceDeviceSelectionScreen(
                         )
 
                         Box(modifier = Modifier.fillMaxWidth()) {
-                            OutlinedButton(
+                            AppButton(
+                                icon = Icons.Default.Devices,
                                 onClick = { expanded = true },
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(14.dp),
                             ) {
                                 Text(
                                     text = selectedOption?.let { option ->
@@ -129,11 +131,11 @@ fun QrNamespaceDeviceSelectionScreen(
                             }
                         }
 
-                        Button(
+                        AppButton(
+                            icon = Icons.Default.Link,
                             onClick = { selectedDeviceId?.let(onConnectedDeviceSelected) },
                             enabled = selectedDeviceId != null,
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(14.dp),
                         ) {
                             Text("Connect")
                         }
@@ -168,10 +170,9 @@ fun QrNamespaceDeviceSelectionScreen(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        Button(
+        AppButton(
+            icon = Icons.AutoMirrored.Filled.ArrowBack,
             onClick = onBack,
-            shape = RoundedCornerShape(16.dp),
-            contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text("Back")
