@@ -188,9 +188,8 @@ object AppModule {
     @Provides
     @Singleton
     fun provideSignatureService(
-        gson: Gson,
         keyStoreService: KeyStoreService,
-    ): SignatureService = DefaultSignatureService(gson, keyStoreService)
+    ): SignatureService = DefaultSignatureService(keyStoreService)
 
     @Provides
     @Singleton

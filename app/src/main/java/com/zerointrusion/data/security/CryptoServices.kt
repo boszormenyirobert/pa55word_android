@@ -3,21 +3,15 @@ package com.zerointrusion.data.security
 import android.content.Context
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
+import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import android.util.Log
-import com.google.gson.Gson
-import com.google.gson.JsonArray
-import com.google.gson.JsonElement
-import com.google.gson.JsonNull
-import com.google.gson.JsonObject
-import com.google.gson.JsonPrimitive
 import com.zerointrusion.core.AppConstants
 import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.registration.DekPayload
 import com.zerointrusion.domain.registration.Device
 import com.zerointrusion.domain.registration.Namespace
-import com.zerointrusion.domain.registration.RegistrationPayload
 import java.nio.charset.StandardCharsets
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
@@ -29,6 +23,7 @@ import java.security.PublicKey
 import java.security.SecureRandom
 import java.security.Signature
 import java.security.spec.MGF1ParameterSpec
+import java.security.spec.PSSParameterSpec
 import java.security.spec.X509EncodedKeySpec
 import javax.crypto.Cipher
 import javax.crypto.spec.OAEPParameterSpec
@@ -66,7 +61,6 @@ interface DekService {
 }
 
 interface SignatureService {
-    fun signPayload(payload: RegistrationPayload): String
     fun signJsonString(json: String): String
 }
 
@@ -79,44 +73,38 @@ class AndroidKeyStoreService @Inject constructor(
     override fun ensureKeyPair() {
         val keyStore = loadKeyStore()
         if (keyStore.containsAlias(AppConstants.KEYSTORE_ALIAS)) {
+            requireHardwareKey()
             return
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && hasStrongBox()) {
             runCatching { generateKeyPair(useStrongBox = true) }
-                .onSuccess { return }
+                .onSuccess { requireHardwareKey(); return }
         }
 
         generateKeyPair(useStrongBox = false)
+        requireHardwareKey()
     }
 
     override fun createFreshKeyPair() {
-        val keyStore = loadKeyStore()
-        if (keyStore.containsAlias(AppConstants.KEYSTORE_ALIAS)) {
-            keyStore.deleteEntry(AppConstants.KEYSTORE_ALIAS)
+        loadKeyStore().deleteEntry(AppConstants.KEYSTORE_ALIAS)
+        ensureKeyPair()
+    }
+
+    override fun sign(data: ByteArray): ByteArray {
+        ensureKeyPair()
+        return Signature.getInstance("SHA256withRSA/PSS").run {
+            setParameter(PSSParameterSpec("SHA-256", "MGF1", MGF1ParameterSpec.SHA256, 32, 1))
+            initSign(getPrivateKey())
+            update(data)
+            sign()
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && hasStrongBox()) {
-            runCatching { generateKeyPair(useStrongBox = true) }
-                .onSuccess { return }
-        }
-        generateKeyPair(useStrongBox = false)
     }
 
     override fun getPublicKey(): PublicKey {
         ensureKeyPair()
         return loadKeyStore().getCertificate(AppConstants.KEYSTORE_ALIAS)?.publicKey
             ?: throw RegistrationFailure.Security("Unable to read the generated device key.")
-    }
-
-    override fun sign(data: ByteArray): ByteArray {
-        ensureKeyPair()
-        val privateKey = getPrivateKey()
-
-        return Signature.getInstance("SHA1withRSA").run {
-            initSign(privateKey)
-            update(data)
-            sign()
-        }
     }
 
     override fun decrypt(
@@ -144,14 +132,11 @@ class AndroidKeyStoreService @Inject constructor(
             val generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_RSA, ANDROID_KEY_STORE)
             val builder = KeyGenParameterSpec.Builder(
                 AppConstants.KEYSTORE_ALIAS,
-                KeyProperties.PURPOSE_SIGN or
-                    KeyProperties.PURPOSE_VERIFY or
-                    KeyProperties.PURPOSE_ENCRYPT or
-                    KeyProperties.PURPOSE_DECRYPT,
+                KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_DECRYPT,
             )
                 .setKeySize(2048)
-                .setDigests(KeyProperties.DIGEST_SHA1, KeyProperties.DIGEST_SHA512)
-                .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
+                .setDigests(KeyProperties.DIGEST_SHA1, KeyProperties.DIGEST_SHA256)
+                .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PSS)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_RSA_OAEP)
                 .setUserAuthenticationRequired(false)
 
@@ -171,6 +156,26 @@ class AndroidKeyStoreService @Inject constructor(
                 throw RegistrationFailure.Security("StrongBox generation failed; falling back to Keystore.")
             }
             throw RegistrationFailure.Security("Unable to generate the device keypair.")
+        }
+    }
+
+    private fun requireHardwareKey() {
+        val privateKey = getPrivateKey()
+        val info = KeyFactory.getInstance(KeyProperties.KEY_ALGORITHM_RSA, ANDROID_KEY_STORE)
+            .getKeySpec(privateKey, KeyInfo::class.java)
+        val hardware = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            info.securityLevel == KeyProperties.SECURITY_LEVEL_TRUSTED_ENVIRONMENT ||
+                info.securityLevel == KeyProperties.SECURITY_LEVEL_STRONGBOX
+        } else {
+            info.isInsideSecureHardware
+        }
+        val purposes = KeyProperties.PURPOSE_SIGN or KeyProperties.PURPOSE_DECRYPT
+        if (!hardware || privateKey.encoded != null || info.origin != KeyProperties.ORIGIN_GENERATED ||
+            info.keySize != 2048 || info.purposes and purposes != purposes ||
+            KeyProperties.DIGEST_SHA256 !in info.digests ||
+            KeyProperties.SIGNATURE_PADDING_RSA_PSS !in info.signaturePaddings ||
+            KeyProperties.ENCRYPTION_PADDING_RSA_OAEP !in info.encryptionPaddings) {
+            throw RegistrationFailure.Security("The device requires a hardware-backed RSA signing and decryption key.")
         }
     }
 
@@ -408,55 +413,10 @@ class DefaultDekService @Inject constructor(
 
 @Singleton
 class DefaultSignatureService @Inject constructor(
-    private val gson: Gson,
     private val keyStoreService: KeyStoreService,
 ) : SignatureService {
-
-    override fun signPayload(payload: RegistrationPayload): String {
-        val canonicalJson = canonicalize(payload)
-        return signJsonString(canonicalJson)
-    }
-
     override fun signJsonString(json: String): String {
         val signature = keyStoreService.sign(json.toByteArray(StandardCharsets.UTF_8))
         return Base64.encodeToString(signature, Base64.NO_WRAP)
     }
-
-    private fun canonicalize(payload: RegistrationPayload): String {
-        val root = JsonObject().apply {
-            add("dek", JsonObject().apply {
-                addProperty("deviceId", payload.dek.deviceId)
-                addProperty("encDek", payload.dek.encDek)
-            })
-            add("device", JsonObject().apply {
-                addProperty("deviceId", payload.device.deviceId)
-                addProperty("publicKey", payload.device.publicKey)
-            })
-            addProperty("email", payload.email)
-            add("namespace", JsonObject().apply {
-                addProperty("name", payload.namespace.name)
-                addProperty("namespaceId", payload.namespace.namespaceId)
-                addProperty("url", payload.namespace.url)
-            })
-            addProperty("phone", payload.phone)
-        }
-
-        return gson.toJson(sortElement(root))
-    }
-
-    private fun sortElement(element: JsonElement): JsonElement = when {
-        element is JsonObject -> JsonObject().also { sorted ->
-            element.entrySet()
-                .filterNot { (_, value) -> value.isJsonNull || isEmptyOptional(value) }
-                .sortedBy { it.key }
-                .forEach { (key, value) -> sorted.add(key, sortElement(value)) }
-        }
-        element is JsonArray -> JsonArray().also { sorted ->
-            element.forEach { sorted.add(sortElement(it)) }
-        }
-        else -> element
-    }
-
-    private fun isEmptyOptional(value: JsonElement): Boolean =
-        value is JsonPrimitive && value.isString && value.asString.isEmpty() || value is JsonNull
 }
