@@ -91,6 +91,7 @@ data class AppUiState(
     val isRegistered: Boolean = false,
     val registrationState: RegistrationState? = null,
     val authenticationError: String? = null,
+    val settingsErrorCode: String? = null,
     val fcmSyncState: FcmSyncUiState = FcmSyncUiState.Idle,
     val qrNamespaceRegistrationState: QrNamespaceRegistrationUiState = QrNamespaceRegistrationUiState.Idle,
     val connectedDevicesState: ConnectedDevicesUiState = ConnectedDevicesUiState.Idle,

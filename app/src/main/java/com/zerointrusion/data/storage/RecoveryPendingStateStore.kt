@@ -47,6 +47,6 @@ class EncryptedRecoveryPendingStateStore @Inject constructor(
     }
 
     private fun read(): RecoveryPendingState? = preferences
-        .getString(AppConstants.ENCRYPTED_PREFS_RECOVERY_PENDING_KEY, null)
+        .readStateWithoutPhone(AppConstants.ENCRYPTED_PREFS_RECOVERY_PENDING_KEY, gson)
         ?.let { gson.fromJson(it, RecoveryPendingState::class.java) }
 }

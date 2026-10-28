@@ -116,8 +116,11 @@ result.
 ## Completion and full registration activation
 
 `POST /recovery/candidate/dek` is the authority for the restored identity. It
-returns `accountId`, `mobileDeviceId`, `email`, `phone`, `encDek`, and the full
+returns `accountId`, `mobileDeviceId`, `email`, `encDek`, and the full
 namespace list. The status endpoint never returns this data.
+
+The mobile app does not require, read, or persist a `phone` field, even when
+an older server includes it in a recovery response.
 
 Before completion, validate that the response IDs match the local candidate,
 decrypt its `encDek` using RSA-OAEP SHA-1 / MGF1 SHA-1, and require a 32-byte
@@ -128,7 +131,7 @@ After `status=completed`:
 1. Require exactly one returned namespace whose normalized `url` matches the
   QR-approved `apiBaseUrl`; this is the recovery root namespace.
 2. Write `RegistrationState` from the account fields and root namespace,
-   including `encDek`, email, phone, mobile device ID, and device name.
+  including `encDek`, email, mobile device ID, and device name.
 3. Import all returned namespaces into `ConnectedDevicesLocalStore` in the form
    consumed by `NamespacesRepository`. The root remains the current gateway;
    the additional namespaces become selectable account targets.
@@ -140,7 +143,7 @@ After `status=completed`:
 
 This produces the same usable local account shape as a normal registration:
 the user has an active `RegistrationState`, the candidate's Keystore key, the
-encrypted DEK, account email and phone, a gateway namespace, and all returned
+encrypted DEK, account email, a gateway namespace, and all returned
 namespace connections.
 
 For authenticated current-namespace recovery, the QR identifies the Recovery

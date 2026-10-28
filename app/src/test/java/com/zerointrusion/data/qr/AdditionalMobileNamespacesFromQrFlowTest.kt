@@ -24,7 +24,6 @@ class AdditionalMobileNamespacesFromQrFlowTest {
         namespaceUrl = "https://example.com",
         namespaceId = "64917a01df",
         email = "user@example.com",
-        phone = "+36123456789",
         encDek = "encrypted-dek",
     )
 }

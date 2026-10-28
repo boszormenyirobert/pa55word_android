@@ -35,7 +35,6 @@ data class RecoveryPendingState(
     val accountId: String? = null,
     val encDek: String? = null,
     val email: String? = null,
-    val phone: String? = null,
     val namespaces: List<RecoveryNamespace> = emptyList(),
 )
 

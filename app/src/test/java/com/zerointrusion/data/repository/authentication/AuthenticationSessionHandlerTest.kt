@@ -109,7 +109,7 @@ class AuthenticationSessionHandlerTest {
         val signedPayloads = mutableListOf<String>()
         private val state = RegistrationState(
             "home", "phone", "Phone", "dev", "http://server:3000", "namespace",
-            "test@example.com", "+36123456789", null,
+            "test@example.com", null,
         )
         private val holder = InMemoryAccountDetailsStateHolder()
 

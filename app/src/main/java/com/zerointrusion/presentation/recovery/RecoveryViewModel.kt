@@ -1,15 +1,13 @@
 package com.zerointrusion.presentation.recovery
 
-import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.gson.JsonParser
-import com.zerointrusion.BuildConfig
+import com.zerointrusion.data.qr.RecoveryQrPayloadParser
 import com.zerointrusion.domain.recovery.RecoveryProgress
-import com.zerointrusion.domain.recovery.RecoveryQrPayload
 import com.zerointrusion.domain.recovery.RecoveryRepository
+import com.zerointrusion.domain.recovery.RecoveryStage
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.util.UUID
 import javax.inject.Inject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -22,82 +20,100 @@ import kotlinx.coroutines.launch
 @HiltViewModel
 class RecoveryViewModel @Inject constructor(
     private val repository: RecoveryRepository,
+    private val qrParser: RecoveryQrPayloadParser,
 ) : ViewModel() {
-    private val _uiState = MutableStateFlow(RecoveryUiState())
+    private val _uiState = MutableStateFlow(RecoveryUiState(isWorking = true))
     val uiState = _uiState.asStateFlow()
     private var pollingJob: Job? = null
+    private var initializationJob: Job? = null
+    private var actionJob: Job? = null
 
     fun refreshOnScreenOpened() {
-        viewModelScope.launch {
-            val pending = repository.current()
-            if (pending == null) {
-                _uiState.value = RecoveryUiState()
-                return@launch
+        initializationJob?.cancel()
+        _uiState.update { it.copy(isWorking = true) }
+        initializationJob = viewModelScope.launch {
+            try {
+                val pending = repository.current()
+                if (pending == null) {
+                    _uiState.value = RecoveryUiState()
+                    return@launch
+                }
+                _uiState.update {
+                    it.copy(
+                        stage = pending.stage,
+                        pairingCode = pending.pairingCode.takeIf { pending.stage == RecoveryStage.WAITING_FOR_SELECTION },
+                        expiresAt = pending.expiresAt,
+                        isWorking = false,
+                        isCompleted = false,
+                        errorCode = null,
+                    )
+                }
+                poll()
+            } catch (exception: Exception) {
+                showFailure(RecoveryErrorCode.RECOVERY_STATUS_FAILED, exception)
             }
-            _uiState.update {
-                it.copy(
-                    stage = pending.stage,
-                    pairingCode = pending.pairingCode.takeIf { pending.stage.name == "WAITING_FOR_SELECTION" },
-                    expiresAt = pending.expiresAt,
-                    isCompleted = false,
-                    errorMessage = null,
-                )
-            }
-            poll()
         }
     }
 
     fun onScreenExited() {
+        initializationJob?.cancel()
+        actionJob?.cancel()
         pollingJob?.cancel()
-        _uiState.value = RecoveryUiState()
+        _uiState.value = RecoveryUiState(isWorking = true)
     }
 
     fun onQrScanned(rawPayload: String) {
-        val result = runCatching { parseRecoveryQr(rawPayload) }
+        if (_uiState.value.isWorking) return
+        val qr = try {
+            qrParser.parse(rawPayload)
+        } catch (exception: Exception) {
+            showFailure(RecoveryErrorCode.RECOVERY_QR_INVALID, exception)
+            return
+        }
         pollingJob?.cancel()
-        _uiState.value = RecoveryUiState(
-            scannedQr = result.getOrNull(),
-            errorMessage = result.exceptionOrNull()?.message,
-        )
+        _uiState.value = RecoveryUiState(scannedQr = qr)
     }
 
     fun onScannerError(message: String) {
-        _uiState.update { it.copy(errorMessage = message) }
+        Log.w(RECOVERY_LOG_TAG, "RECOVERY_CAMERA_FAILED: Camera reported a scanner error (${message.length} characters).")
+        _uiState.update { it.copy(errorCode = RecoveryErrorCode.RECOVERY_CAMERA_FAILED) }
     }
 
     fun confirmServer() {
+        if (_uiState.value.step != RecoveryStep.CONFIRM_SERVER) return
         val qr = _uiState.value.scannedQr ?: return
-        viewModelScope.launch {
-            _uiState.update { it.copy(isWorking = true, errorMessage = null) }
-            runCatching { repository.start(qr) }
-                .onSuccess { progress ->
-                    applyProgress(progress)
-                    if (!progress.isCompleted) poll()
-                }
-                .onFailure { failure -> _uiState.update { it.copy(isWorking = false, errorMessage = failure.message ?: "Recovery could not start.") } }
+        launchAction(RecoveryErrorCode.RECOVERY_START_FAILED) {
+            val progress = repository.start(qr)
+            applyProgress(progress)
+            if (!progress.isCompleted) poll()
         }
     }
 
     fun cancel() {
+        if (_uiState.value.isWorking) return
         pollingJob?.cancel()
-        viewModelScope.launch {
-            _uiState.update { it.copy(isWorking = true, errorMessage = null) }
-            runCatching { repository.cancel() }
-                .onSuccess { _uiState.value = RecoveryUiState() }
-                .onFailure { failure -> _uiState.update { it.copy(isWorking = false, errorMessage = failure.message ?: "Recovery could not be cancelled.") } }
+        launchAction(RecoveryErrorCode.RECOVERY_CANCEL_FAILED) {
+            repository.cancel()
+            _uiState.value = RecoveryUiState()
         }
     }
 
     fun retry() {
-        _uiState.update { it.copy(isWorking = true, errorMessage = null) }
+        if (_uiState.value.isWorking || _uiState.value.step != RecoveryStep.WAITING) return
+        _uiState.update { it.copy(isWorking = true, errorCode = null) }
         poll()
     }
 
     fun retryFcm() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isWorking = true) }
+        if (!_uiState.value.isCompleted) return
+        launchAction(RecoveryErrorCode.RECOVERY_PUSH_FAILED) {
             val errorMessage = repository.retryFcm()
-            _uiState.update { it.copy(isWorking = false, errorMessage = errorMessage) }
+            _uiState.update {
+                it.copy(
+                    isWorking = false,
+                    errorCode = errorMessage?.let { RecoveryErrorCode.RECOVERY_PUSH_FAILED },
+                )
+            }
         }
     }
 
@@ -110,7 +126,7 @@ class RecoveryViewModel @Inject constructor(
                 } catch (exception: CancellationException) {
                     throw exception
                 } catch (failure: Exception) {
-                    _uiState.update { it.copy(isWorking = false, errorMessage = failure.message ?: "Recovery status could not be refreshed.") }
+                    showFailure(RecoveryErrorCode.RECOVERY_STATUS_FAILED, failure)
                     return@launch
                 }
                 applyProgress(progress)
@@ -128,38 +144,31 @@ class RecoveryViewModel @Inject constructor(
                 expiresAt = progress.expiresAt,
                 isWorking = false,
                 isCompleted = progress.isCompleted,
-                errorMessage = progress.fcmErrorMessage,
+                errorCode = progress.fcmErrorMessage?.let { RecoveryErrorCode.RECOVERY_PUSH_FAILED },
             )
         }
     }
 
-    private fun parseRecoveryQr(payload: String): RecoveryQrPayload {
-        val objectValue = JsonParser.parseString(payload).asJsonObject
-        require(objectValue.keySet() == setOf("type", "version", "recoveryId", "apiBaseUrl")) {
-            "The recovery QR code contains unsupported fields."
+    private fun launchAction(errorCode: RecoveryErrorCode, action: suspend () -> Unit) {
+        if (_uiState.value.isWorking) return
+        _uiState.update { it.copy(isWorking = true, errorCode = null) }
+        actionJob = viewModelScope.launch {
+            try {
+                action()
+            } catch (exception: Exception) {
+                showFailure(errorCode, exception)
+            }
         }
-        require(objectValue.get("type")?.asString == "recovery") { "This is not a recovery QR code." }
-        require(objectValue.get("version")?.asInt == 1) { "This recovery QR code uses an unsupported version." }
-        val recoveryId = objectValue.get("recoveryId")?.asString ?: error("Missing recovery ID.")
-        UUID.fromString(recoveryId)
-        val apiBaseUrl = objectValue.get("apiBaseUrl")?.asString ?: error("Missing recovery server URL.")
-        val uri = Uri.parse(apiBaseUrl)
-        require(uri.scheme == "https" || (uri.scheme == "http" && BuildConfig.DEBUG)) {
-            "Recovery requires HTTPS outside development builds."
-        }
-        require(
-            !uri.host.isNullOrBlank() &&
-                uri.userInfo.isNullOrBlank() &&
-                uri.query.isNullOrBlank() &&
-                uri.fragment.isNullOrBlank() &&
-                (uri.path.isNullOrBlank() || uri.path == "/"),
-        ) {
-            "The recovery server URL is invalid."
-        }
-        return RecoveryQrPayload(recoveryId, apiBaseUrl.trimEnd('/'))
+    }
+
+    private fun showFailure(errorCode: RecoveryErrorCode, failure: Exception) {
+        if (failure is CancellationException) throw failure
+        Log.e(RECOVERY_LOG_TAG, "${errorCode.name}: ${failure::class.java.simpleName}")
+        _uiState.update { it.copy(isWorking = false, errorCode = errorCode) }
     }
 
     private companion object {
+        const val RECOVERY_LOG_TAG = "ZeroIntrusionRecovery"
         const val POLL_INTERVAL_MILLIS = 3_000L
     }
 }

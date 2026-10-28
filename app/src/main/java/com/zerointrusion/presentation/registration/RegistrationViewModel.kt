@@ -36,10 +36,6 @@ class RegistrationViewModel @Inject constructor(
         _uiState.update { it.copy(email = value, emailError = null, errorMessage = null) }
     }
 
-    fun onPhoneChanged(value: String) {
-        _uiState.update { it.copy(phone = value, phoneError = null, errorMessage = null) }
-    }
-
     fun onNamespaceNameChanged(value: String) {
         _uiState.update { it.copy(namespaceName = value, namespaceNameError = null, errorMessage = null) }
     }
@@ -48,40 +44,24 @@ class RegistrationViewModel @Inject constructor(
         _uiState.update { it.copy(apiUrl = value, apiUrlError = null, errorMessage = null) }
     }
 
-    fun onAdditionalApiUrlChanged(value: String) {
-        _uiState.update { it.copy(additionalApiUrl = value, additionalApiUrlError = null, errorMessage = null) }
-    }
-
-    fun onThirdApiUrlChanged(value: String) {
-        _uiState.update { it.copy(thirdApiUrl = value, thirdApiUrlError = null, errorMessage = null) }
-    }
-
     fun register() {
         val input = RegistrationFormInput(
             email = _uiState.value.email,
-            phone = _uiState.value.phone,
             namespaceName = _uiState.value.namespaceName,
             apiUrl = _uiState.value.apiUrl,
-            additionalApiUrls = listOf(_uiState.value.additionalApiUrl, _uiState.value.thirdApiUrl),
         )
         Log.d(REG_LOG_TAG, "REG submit tapped. apiUrl=${input.apiUrl.trim()} namespace=${input.namespaceName.trim()}")
         val validation = validator.validateForm(input)
-        val additionalUrlErrors = input.additionalApiUrls.map { url ->
-            url.trim().takeIf { it.isNotEmpty() }?.let(validator::validateNamespaceUrl)
-        }
-        if (!validation.isValid || additionalUrlErrors.any { it != null }) {
+        if (!validation.isValid) {
             Log.e(
                 REG_LOG_TAG,
-                "REG validation failed. email=${validation.emailError} phone=${validation.phoneError} namespace=${validation.namespaceNameError} apiUrl=${validation.apiUrlError}",
+                "REG validation failed. email=${validation.emailError} namespace=${validation.namespaceNameError} apiUrl=${validation.apiUrlError}",
             )
             _uiState.update {
                 it.copy(
                     emailError = validation.emailError,
-                    phoneError = validation.phoneError,
                     namespaceNameError = validation.namespaceNameError,
                     apiUrlError = validation.apiUrlError,
-                    additionalApiUrlError = additionalUrlErrors.getOrNull(0),
-                    thirdApiUrlError = additionalUrlErrors.getOrNull(1),
                     errorMessage = null,
                 )
             }
@@ -114,24 +94,16 @@ class RegistrationViewModel @Inject constructor(
     fun registerNewMobileToExistingAccount() {
         val input = RegistrationFormInput(
             email = _uiState.value.email,
-            phone = _uiState.value.phone,
             namespaceName = _uiState.value.namespaceName,
             apiUrl = _uiState.value.apiUrl,
-            additionalApiUrls = listOf(_uiState.value.additionalApiUrl, _uiState.value.thirdApiUrl),
         )
         val validation = validator.validateForm(input)
-        val additionalUrlErrors = input.additionalApiUrls.map { url ->
-            url.trim().takeIf { it.isNotEmpty() }?.let(validator::validateNamespaceUrl)
-        }
-        if (!validation.isValid || additionalUrlErrors.any { it != null }) {
+        if (!validation.isValid) {
             _uiState.update {
                 it.copy(
                     emailError = validation.emailError,
-                    phoneError = validation.phoneError,
                     namespaceNameError = validation.namespaceNameError,
                     apiUrlError = validation.apiUrlError,
-                    additionalApiUrlError = additionalUrlErrors.getOrNull(0),
-                    thirdApiUrlError = additionalUrlErrors.getOrNull(1),
                     errorMessage = null,
                 )
             }

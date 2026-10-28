@@ -120,7 +120,6 @@ Successful response (`200`):
   "mobileDeviceId": "device-id",
   "encDek": "base64",
   "email": "user@example.com",
-  "phone": "+36123456789",
   "namespaces": [
     {
       "namespaceId": "namespace-id",
@@ -237,7 +236,6 @@ Request payload shape for initial phone registration:
     "encDek": "string"
   },
   "email": "string",
-  "phone": "string",
   "root": true,
   "nonce": "string"
 }

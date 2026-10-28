@@ -48,45 +48,6 @@ fun QrScannerSheet(
     onPayloadScanned: (String) -> Unit,
     onScannerError: (String) -> Unit,
 ) {
-    val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
-    val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
-    val scanHandled = remember { AtomicBoolean(false) }
-    var hasCameraPermission by rememberSaveable {
-        mutableStateOf(
-            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
-        )
-    }
-    var permissionRequested by rememberSaveable { mutableStateOf(false) }
-    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        hasCameraPermission = granted
-        permissionRequested = true
-        if (!granted) {
-            onScannerError("Camera permission is required to scan the recovery QR code.")
-        }
-    }
-    val barcodeScanner = remember {
-        BarcodeScanning.getClient(
-            BarcodeScannerOptions.Builder()
-                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-                .build(),
-        )
-    }
-
-    DisposableEffect(barcodeScanner, cameraExecutor) {
-        onDispose {
-            barcodeScanner.close()
-            cameraExecutor.shutdown()
-        }
-    }
-
-    LaunchedEffect(hasCameraPermission, permissionRequested) {
-        if (!hasCameraPermission && !permissionRequested) {
-            permissionRequested = true
-            permissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-    }
-
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
@@ -104,42 +65,91 @@ fun QrScannerSheet(
                 title = "Read target device QR",
                 body = "Point the camera at the desktop QR code. The app will extract deviceId, publicKey, namespaceName and namespaceUrl, then connect the phone and desktop to the target server.",
             )
-            if (hasCameraPermission) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(360.dp),
-                ) {
-                    QrCameraPreview(
-                        lifecycleOwner = lifecycleOwner,
-                        cameraExecutor = cameraExecutor,
-                        barcodeScanner = barcodeScanner,
-                        scanHandled = scanHandled,
-                        onPayloadScanned = onPayloadScanned,
-                        onScannerError = onScannerError,
-                    )
-                }
-            } else {
-                Text(
-                    text = "Camera access is required to scan the QR code.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-                AppButton(
-                    icon = Icons.Default.CameraAlt,
-                    onClick = {
-                        permissionRequested = true
-                        permissionLauncher.launch(Manifest.permission.CAMERA)
-                    },
-                ) {
-                    Text("Allow camera access")
-                }
-            }
-            AppButton(
-                icon = Icons.Default.Close,
-                onClick = onDismiss,
-            ) {
+            QrScannerContent(onPayloadScanned, onScannerError)
+            AppButton(icon = Icons.Default.Close, onClick = onDismiss) {
                 Text("Cancel")
             }
         }
+    }
+}
+
+@Composable
+fun QrScannerContent(
+    onPayloadScanned: (String) -> Unit,
+    onScannerError: (String) -> Unit,
+) {
+    val context = LocalContext.current
+    var hasCameraPermission by rememberSaveable {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    var permissionRequested by rememberSaveable { mutableStateOf(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        hasCameraPermission = granted
+        permissionRequested = true
+        if (!granted) {
+            onScannerError("Camera permission is required to scan the recovery QR code.")
+        }
+    }
+    LaunchedEffect(hasCameraPermission, permissionRequested) {
+        if (!hasCameraPermission && !permissionRequested) {
+            permissionRequested = true
+            permissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    if (hasCameraPermission) {
+        GrantedQrScanner(onPayloadScanned, onScannerError)
+    } else {
+        Text(
+            text = "Camera access is required to scan the QR code.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        AppButton(
+            icon = Icons.Default.CameraAlt,
+            onClick = {
+                permissionRequested = true
+                permissionLauncher.launch(Manifest.permission.CAMERA)
+            },
+        ) {
+            Text("Allow camera access")
+        }
+    }
+}
+
+@Composable
+private fun GrantedQrScanner(
+    onPayloadScanned: (String) -> Unit,
+    onScannerError: (String) -> Unit,
+) {
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+    val scanHandled = remember { AtomicBoolean(false) }
+    val barcodeScanner = remember {
+        BarcodeScanning.getClient(
+            BarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                .build(),
+        )
+    }
+
+    DisposableEffect(barcodeScanner, cameraExecutor) {
+        onDispose {
+            barcodeScanner.close()
+            cameraExecutor.shutdown()
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxWidth().height(360.dp)) {
+        QrCameraPreview(
+            lifecycleOwner = lifecycleOwner,
+            cameraExecutor = cameraExecutor,
+            barcodeScanner = barcodeScanner,
+            scanHandled = scanHandled,
+            onPayloadScanned = onPayloadScanned,
+            onScannerError = onScannerError,
+        )
     }
 }

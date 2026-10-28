@@ -134,7 +134,7 @@ class AccountDetailsSnapshotFetcherTest {
             RegistrationState(
                 accountId = home, mobileDeviceId = "phone", deviceName = "Phone",
                 namespaceName = "dev", namespaceUrl = "https://$home.example",
-                namespaceId = "1234567890", email = "a@example.com", phone = "+36123456789",
+                namespaceId = "1234567890", email = "a@example.com",
                 encDek = "$home-dek",
             ),
         )

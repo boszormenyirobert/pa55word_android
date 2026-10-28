@@ -87,7 +87,6 @@ class ConnectedDevicesRepositoryImplTest {
         namespaceUrl = "http://server:3000",
         namespaceId = "namespace",
         email = "test@example.com",
-        phone = "+36123456789",
         encDek = null,
     )
 

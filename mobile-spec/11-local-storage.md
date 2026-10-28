@@ -60,7 +60,6 @@ Shape:
   "namespaceUrl": "string",
   "namespaceId": "string",
   "email": "string",
-  "phone": "string",
   "encDek": "string|null",
   "root": true,
   "fcmToken": "string|null"
@@ -147,12 +146,18 @@ When written:
 Contents:
 - Recovery and candidate UUIDs, mobile device ID, approved API origin, current
   stage, expiration time, and the idempotent completion request ID.
-- Account ID, email, phone, candidate public key, encrypted DEK, and returned
+- Account ID, email, candidate public key, encrypted DEK, and returned
   namespace list.
 - The pairing code and its hash are retained only inside this encrypted
   checkpoint so a candidate request can be retried with the same request ID
   after process death. They are never logged or copied to normal registration
   state. Signatures and raw plaintext DEKs are never persisted or logged.
+
+Phone-number migration:
+- Loading `registration_state` or `recovery_pending_state` removes a legacy
+  top-level `phone` key from the encrypted JSON, preserving every other field.
+- New records never contain a phone number. No account data or Keystore keys
+  are cleared by this migration.
 
 Activation:
 - After a successful completion response, the selected `root=true` namespace

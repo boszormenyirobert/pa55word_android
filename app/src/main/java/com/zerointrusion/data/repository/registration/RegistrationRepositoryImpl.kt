@@ -61,6 +61,10 @@ class RegistrationRepositoryImpl(
 
     override fun observeRegistrationState(): Flow<RegistrationState?> = stateStore.observeState()
 
+    override suspend fun setCorporateMode(corporateMode: Boolean) {
+        stateStore.setCorporateMode(corporateMode)
+    }
+
     override suspend fun register(input: RegistrationFormInput): RegistrationResult {
         serverHealthChecker.requireReachableServers(input)
         return accountRegistrationHandler.register(input)

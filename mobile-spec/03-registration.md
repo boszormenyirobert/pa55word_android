@@ -4,7 +4,6 @@ Purpose: create the phone registration against the selected namespace.
 
 Inputs:
 - Email
-- Phone
 - Namespace name
 - API URL
 
@@ -35,7 +34,6 @@ Request shape:
     "encDek": "string"
   },
   "email": "string",
-  "phone": "string",
   "root": true,
   "nonce": "string"
 }
@@ -54,6 +52,7 @@ Response shape:
 ```
 
 Notes:
+- Phone numbers are not collected, stored, validated, or sent in registration requests.
 - Validation happens before request.
 - Success stores registration state locally.
 - Initial phone registration does not populate the local namespace list by itself.

@@ -1,10 +1,12 @@
 package com.zerointrusion.data.storage
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.google.gson.Gson
+import com.google.gson.JsonObject
 import com.zerointrusion.core.AppConstants
 import com.zerointrusion.domain.registration.RegistrationState
 import java.io.IOException
@@ -13,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,6 +24,11 @@ interface RegistrationStateStore {
     fun observeState(): Flow<RegistrationState?>
 
     suspend fun save(state: RegistrationState)
+
+    suspend fun setCorporateMode(corporateMode: Boolean) {
+        val state = observeState().first() ?: return
+        save(state.copy(corporateMode = corporateMode))
+    }
 
     suspend fun clear()
 }
@@ -42,21 +50,36 @@ class EncryptedRegistrationStateStore @Inject constructor(
 
     override fun observeState(): Flow<RegistrationState?> = stateFlow.asStateFlow()
 
-    override suspend fun save(state: RegistrationState) {
-        withContext(Dispatchers.IO) {
-            encryptedPreferences.edit()
-                .putString(AppConstants.ENCRYPTED_PREFS_STATE_KEY, gson.toJson(state))
-                .apply()
-            stateFlow.value = state
+    override suspend fun save(state: RegistrationState) = updateState { current ->
+        val corporateMode = if (
+            current?.accountId == state.accountId && current.mobileDeviceId == state.mobileDeviceId
+        ) {
+            current.corporateMode
+        } else {
+            state.corporateMode
         }
+        state.copy(corporateMode = corporateMode)
     }
 
-    override suspend fun clear() {
+    override suspend fun setCorporateMode(corporateMode: Boolean) = updateState { current ->
+        current?.copy(corporateMode = corporateMode)
+    }
+
+    override suspend fun clear() = updateState { null }
+
+    private suspend fun updateState(transform: (RegistrationState?) -> RegistrationState?) {
         withContext(Dispatchers.IO) {
-            encryptedPreferences.edit()
-                .remove(AppConstants.ENCRYPTED_PREFS_STATE_KEY)
-                .apply()
-            stateFlow.value = null
+            synchronized(stateFlow) {
+                val state = transform(stateFlow.value)
+                val editor = encryptedPreferences.edit()
+                if (state == null) {
+                    editor.remove(AppConstants.ENCRYPTED_PREFS_STATE_KEY)
+                } else {
+                    editor.putString(AppConstants.ENCRYPTED_PREFS_STATE_KEY, gson.toJson(state))
+                }
+                editor.apply()
+                stateFlow.value = state
+            }
         }
     }
 
@@ -78,7 +101,7 @@ class EncryptedRegistrationStateStore @Inject constructor(
     }
 
     private fun readState(): RegistrationState? {
-        val rawState = encryptedPreferences.getString(AppConstants.ENCRYPTED_PREFS_STATE_KEY, null)
+        val rawState = encryptedPreferences.readStateWithoutPhone(AppConstants.ENCRYPTED_PREFS_STATE_KEY, gson)
             ?: return null
         return gson.fromJson(rawState, RegistrationState::class.java)
     }
@@ -125,4 +148,14 @@ class EncryptedRegistrationStateStore @Inject constructor(
         const val LEGACY_NAMESPACES_STATE_KEY = "namespaces_state"
         const val SECURE_STORAGE_LOG_TAG = "ZeroIntrusionStorage"
     }
+}
+
+internal fun SharedPreferences.readStateWithoutPhone(key: String, gson: Gson): String? {
+    val raw = getString(key, null) ?: return null
+    val json = gson.fromJson(raw, JsonObject::class.java) ?: return raw
+    if (!json.has("phone")) return raw
+    json.remove("phone")
+    val migrated = gson.toJson(json)
+    edit().putString(key, migrated).apply()
+    return migrated
 }

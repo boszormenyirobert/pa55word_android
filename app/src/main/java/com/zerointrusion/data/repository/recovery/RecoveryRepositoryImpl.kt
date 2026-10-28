@@ -202,7 +202,6 @@ class RecoveryRepositoryImpl @Inject constructor(
             accountId = json.requiredString("accountId"),
             encDek = encryptedDek,
             email = json.requiredString("email"),
-            phone = json.requiredString("phone"),
             namespaces = recoveredNamespaces,
         )
         pendingStore.save(ready)
@@ -238,7 +237,6 @@ class RecoveryRepositoryImpl @Inject constructor(
             namespaceUrl = root.url,
             namespaceId = root.namespaceId,
             email = requireNotNull(pending.email),
-            phone = requireNotNull(pending.phone),
             encDek = requireNotNull(pending.encDek),
             root = true,
         )

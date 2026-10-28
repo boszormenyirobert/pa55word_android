@@ -50,7 +50,7 @@ class AddDatabaseTest {
               "namespace":{"namespaceId":"${namespace.namespaceId}","name":"database","url":"$url"},
               "device":{"mobileDeviceId":"phone12345","publicKey":"${fixture.encodedPublicKey}","deviceName":"Phone"},
               "dek":{"mobileDeviceId":"phone12345","encDek":"phone-encrypted-dek"},
-              "email":"user@example.com","phone":"+36123456789","nonce":"${fixture.request!!.nonce}"
+              "email":"user@example.com","nonce":"${fixture.request!!.nonce}"
             }
         """.trimIndent()
         assertEquals(Gson().fromJson(expected, com.google.gson.JsonElement::class.java),
@@ -225,7 +225,7 @@ class AddDatabaseTest {
     ) {
         val originalState = RegistrationState(
             "old-account", "phone12345", "Phone", "old", "https://old.example", "abcdef0123",
-            "user@example.com", "+36123456789", "phone-encrypted-dek",
+            "user@example.com", "phone-encrypted-dek",
         )
         val state = MutableStateFlow<RegistrationState?>(originalState)
         val store = Store()

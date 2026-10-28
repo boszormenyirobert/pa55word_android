@@ -12,7 +12,6 @@ class RegistrationValidator @Inject constructor() {
 
     fun validateForm(input: RegistrationFormInput): RegistrationFormValidation {
         val normalizedEmail = input.email.trim()
-        val normalizedPhone = input.phone.trim()
         val normalizedNamespace = input.namespaceName.trim()
         val normalizedUrl = input.apiUrl.trim()
 
@@ -20,11 +19,6 @@ class RegistrationValidator @Inject constructor() {
             emailError = when {
                 normalizedEmail.isEmpty() -> "Email is required."
                 !EMAIL_REGEX.matches(normalizedEmail) -> "Enter a valid email address."
-                else -> null
-            },
-            phoneError = when {
-                normalizedPhone.isEmpty() -> "Phone is required."
-                !PHONE_REGEX.matches(normalizedPhone) -> "Enter a valid international phone number."
                 else -> null
             },
             namespaceNameError = when {
@@ -107,7 +101,6 @@ class RegistrationValidator @Inject constructor() {
 
     private companion object {
         val EMAIL_REGEX = Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
-        val PHONE_REGEX = Regex("^\\+?[0-9]{7,15}$")
         val DEVICE_ID_REGEX = Regex("^[A-Za-z0-9]{10}$")
         val NAMESPACE_ID_REGEX = Regex("^[0-9a-f]{10}$")
         val BASE64_REGEX = Regex("^[A-Za-z0-9+/=]+$")

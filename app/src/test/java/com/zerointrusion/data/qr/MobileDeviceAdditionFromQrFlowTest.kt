@@ -54,7 +54,7 @@ class MobileDeviceAdditionFromQrFlowTest {
         val registration = flow.register(
             registrationState = RegistrationState(
                 "account-1", "phone", "Phone", "start", "http://192.168.178.20:3000",
-                "64917a01df", "user@example.com", "+36123456789", "encrypted-dek",
+                "64917a01df", "user@example.com", "encrypted-dek",
             ),
             payload = AdditionMobileDeviceQrPayload(
                 "public-key", "New phone", "new-phone",

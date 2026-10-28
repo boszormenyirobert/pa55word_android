@@ -5,6 +5,8 @@ import kotlinx.coroutines.flow.Flow
 interface RegistrationRepository {
     fun observeRegistrationState(): Flow<RegistrationState?>
 
+    suspend fun setCorporateMode(corporateMode: Boolean)
+
     suspend fun register(input: RegistrationFormInput): RegistrationResult
 
     suspend fun prepareMobileDeviceRegistration(input: RegistrationFormInput): MobileDeviceRegistrationPreparation

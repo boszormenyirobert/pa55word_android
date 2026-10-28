@@ -16,7 +16,6 @@ class AppUiStateTest {
             namespaceUrl = "https://server-one.example",
             namespaceId = "64917a01df",
             email = "user@example.com",
-            phone = "+361234567",
             encDek = "encrypted",
             pendingAdditionalNamespacesScan = true,
         )

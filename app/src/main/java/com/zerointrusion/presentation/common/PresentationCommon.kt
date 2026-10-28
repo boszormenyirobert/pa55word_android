@@ -1,6 +1,5 @@
 package com.zerointrusion.presentation.common
 
-import android.graphics.Picture
 import android.graphics.RectF
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -10,16 +9,25 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -43,16 +51,78 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.caverock.androidsvg.SVG
 import com.zerointrusion.R
+import com.zerointrusion.ui.theme.Dark
+import com.zerointrusion.ui.theme.LightDark
+import com.zerointrusion.ui.theme.White
+
+@Composable
+fun AppSettingsPage(
+    title: String,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    backEnabled: Boolean = true,
+    secondaryAction: (@Composable RowScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier =
+            Modifier.fillMaxSize()
+                .background(Brush.verticalGradient(listOf(Dark, LightDark, Dark)))
+                .then(modifier)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
+                .padding(horizontal = 20.dp, vertical = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text(title, style = MaterialTheme.typography.headlineMedium, color = White)
+            content()
+        }
+        AppBottomActions {
+            AppButton(
+                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                onClick = onBack,
+                enabled = backEnabled,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Back")
+            }
+            if (secondaryAction == null) {
+                Spacer(modifier = Modifier.weight(1f))
+            } else {
+                secondaryAction()
+            }
+        }
+    }
+}
+
+@Composable
+fun AppSettingsPanel(cornerRadius: Dp = 20.dp, content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        shape = RoundedCornerShape(cornerRadius),
+        colors = CardDefaults.cardColors(containerColor = LightDark),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            content = content,
+        )
+    }
+}
 
 @Composable
 fun Pa55wordLogo(modifier: Modifier = Modifier, alignment: Alignment = Alignment.Center) {
     val context = LocalContext.current
     val painter =
         remember(context) {
-            SvgLogoPainter(SVG.getFromResource(context, R.raw.pa55word_logo).renderToPicture())
+            SvgLogoPainter(SVG.getFromResource(context, R.raw.pa55word_logo))
         }
     Image(
         painter = painter,
@@ -63,12 +133,25 @@ fun Pa55wordLogo(modifier: Modifier = Modifier, alignment: Alignment = Alignment
     )
 }
 
-private class SvgLogoPainter(private val picture: Picture) : Painter() {
-    override val intrinsicSize = Size(picture.width.toFloat(), picture.height.toFloat())
+private class SvgLogoPainter(private val svg: SVG) : Painter() {
+    override val intrinsicSize = Size(svg.documentWidth, svg.documentHeight)
 
     override fun DrawScope.onDraw() {
         drawIntoCanvas { canvas ->
-            canvas.nativeCanvas.drawPicture(picture, RectF(0f, 0f, size.width, size.height))
+            val nativeCanvas = canvas.nativeCanvas
+            val checkpoint = nativeCanvas.save()
+            try {
+                nativeCanvas.scale(
+                    size.width / intrinsicSize.width,
+                    size.height / intrinsicSize.height,
+                )
+                svg.renderToCanvas(
+                    nativeCanvas,
+                    RectF(0f, 0f, intrinsicSize.width, intrinsicSize.height),
+                )
+            } finally {
+                nativeCanvas.restoreToCount(checkpoint)
+            }
         }
     }
 }

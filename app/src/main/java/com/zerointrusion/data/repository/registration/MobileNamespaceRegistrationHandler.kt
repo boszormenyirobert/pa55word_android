@@ -56,7 +56,6 @@ internal class MobileNamespaceRegistrationHandler(
             ),
             dek = AccountRegistrationDekDto(state.mobileDeviceId, storedEncDek),
             email = state.email,
-            phone = state.phone,
             nonce = newRequestNonce(),
         )
         val response = try {

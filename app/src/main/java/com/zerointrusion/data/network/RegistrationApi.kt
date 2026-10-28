@@ -62,7 +62,6 @@ data class AccountRegistrationRequestDto(
     val device: AccountRegistrationDeviceDto,
     val dek: AccountRegistrationDekDto,
     val email: String,
-    val phone: String,
     val nonce: String,
 )
 

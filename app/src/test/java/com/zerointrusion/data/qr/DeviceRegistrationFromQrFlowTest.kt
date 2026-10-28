@@ -12,7 +12,7 @@ import org.junit.Test
 class DeviceRegistrationFromQrFlowTest {
     private val state = RegistrationState(
         "account", "AbCdEf1234", "Phone", "dev", "http://server:3000", "f65b0a7c93",
-        "test@example.com", "+36123456789", "encrypted-dek",
+        "test@example.com", "encrypted-dek",
     )
     private val payload = DeviceRegistrationQrPayload(
         "WNKXHfaKhG", "cHVibGlj", "PC", "http://server:3000",

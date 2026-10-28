@@ -30,7 +30,6 @@ import com.zerointrusion.presentation.home.PostLoginHomeScreen
 import com.zerointrusion.presentation.namespaces.NamespacesScreen
 import com.zerointrusion.presentation.qrread.QrNamespaceDeviceSelectionScreen
 import com.zerointrusion.presentation.qrread.QrReadScreen
-import com.zerointrusion.presentation.settings.RecoveryConnectionScreen
 import com.zerointrusion.presentation.settings.AccountsScreen
 import com.zerointrusion.presentation.settings.AddDatabaseScreen
 import com.zerointrusion.presentation.settings.SettingsScreen
@@ -52,6 +51,7 @@ fun ZeroIntrusionAppRoot(
     registrationViewModel: RegistrationViewModel = hiltViewModel(),
 ) {
     val appState by appViewModel.uiState.collectAsStateWithLifecycle()
+    val corporateMode = appState.registrationState?.corporateMode == true
     val isInternetConnected by appViewModel.isInternetConnected.collectAsStateWithLifecycle()
     val registrationState by registrationViewModel.uiState.collectAsStateWithLifecycle()
     val navController = rememberNavController()
@@ -140,11 +140,8 @@ fun ZeroIntrusionAppRoot(
                         RegistrationScreen(
                             state = registrationState,
                             onEmailChanged = registrationViewModel::onEmailChanged,
-                            onPhoneChanged = registrationViewModel::onPhoneChanged,
                             onNamespaceNameChanged = registrationViewModel::onNamespaceNameChanged,
                             onApiUrlChanged = registrationViewModel::onApiUrlChanged,
-                            onAdditionalApiUrlChanged = registrationViewModel::onAdditionalApiUrlChanged,
-                            onThirdApiUrlChanged = registrationViewModel::onThirdApiUrlChanged,
                             isExistingAccount = route == AppRoute.AddMobile,
                             onConfirm = if (route == AppRoute.AddMobile) {
                                 registrationViewModel::registerNewMobileToExistingAccount
@@ -204,11 +201,18 @@ fun ZeroIntrusionAppRoot(
             }
             composable(AppRoute.Settings.route) {
                 SettingsScreen(
+                    corporateMode = corporateMode,
+                    onCorporateModeChanged = appViewModel::setCorporateMode,
+                    errorCode = appState.settingsErrorCode,
                     onOpenAccounts = {
-                        navController.navigate(AppRoute.Accounts.route)
+                        if (corporateMode) {
+                            navController.navigate(AppRoute.Accounts.route)
+                        }
                     },
                     onOpenRecoveryConnection = {
-                        navController.navigate(AppRoute.RecoveryConnection.route)
+                        if (corporateMode) {
+                            navController.navigate(AppRoute.RecoveryConnection.route)
+                        }
                     },
                     onOpenDevices = {
                         navController.navigate(AppRoute.Devices.route)
@@ -217,6 +221,10 @@ fun ZeroIntrusionAppRoot(
                 )
             }
             composable(AppRoute.Accounts.route) {
+                if (!corporateMode) {
+                    LaunchedEffect(Unit) { navController.popBackStack(AppRoute.Settings.route, false) }
+                    return@composable
+                }
                 AccountsScreen(
                     namespaces = appState.accounts,
                     deleting = appState.accountDeletionInProgress,
@@ -230,6 +238,10 @@ fun ZeroIntrusionAppRoot(
                 )
             }
             composable(AppRoute.AddDatabase.route) {
+                if (!corporateMode) {
+                    LaunchedEffect(Unit) { navController.popBackStack(AppRoute.Settings.route, false) }
+                    return@composable
+                }
                 LaunchedEffect(appState.addDatabaseState.isSuccess) {
                     if (appState.addDatabaseState.isSuccess) {
                         navController.popBackStack(AppRoute.Accounts.route, inclusive = false)
@@ -248,11 +260,15 @@ fun ZeroIntrusionAppRoot(
                 )
             }
             composable(AppRoute.RecoveryConnection.route) {
-                RecoveryConnectionScreen(
-                    email = appState.registrationState?.email.orEmpty(),
-                    phone = appState.registrationState?.phone.orEmpty(),
-                    onStartRecovery = {
-                        navController.navigate(AppRoute.Recovery.route)
+                if (!corporateMode) {
+                    LaunchedEffect(Unit) { navController.popBackStack(AppRoute.Settings.route, false) }
+                    return@composable
+                }
+                RecoveryScreen(
+                    corporateRecovery = true,
+                    onCompleted = {
+                        appViewModel.refreshAccountDetailsAfterRecovery()
+                        navController.popBackStack(AppRoute.Settings.route, inclusive = false)
                     },
                     onBack = { navController.popBackStack() },
                 )

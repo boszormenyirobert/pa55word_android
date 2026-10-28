@@ -69,7 +69,7 @@ internal class MobileDeviceBootstrapHandler(
         val validation = validator.validateForm(input)
         if (!validation.isValid) {
             throw RegistrationFailure.Validation(
-                validation.emailError ?: validation.phoneError ?: validation.namespaceNameError ?: validation.apiUrlError
+                validation.emailError ?: validation.namespaceNameError ?: validation.apiUrlError
                     ?: "Registration form is invalid.",
             )
         }
@@ -106,7 +106,6 @@ internal class MobileDeviceBootstrapHandler(
             namespaceUrls = namespaceUrls,
             namespaceId = namespace.namespaceId,
             email = input.email.trim(),
-            phone = input.phone.trim(),
         )
     }
 
@@ -149,7 +148,6 @@ internal class MobileDeviceBootstrapHandler(
             namespaceUrl = preparation.namespaceUrl,
             namespaceId = preparation.namespaceId,
             email = preparation.email,
-            phone = preparation.phone,
             encDek = encryptedDek,
             root = false,
             pendingAdditionalNamespacesScan = preparation.namespaceUrls.size > 1,

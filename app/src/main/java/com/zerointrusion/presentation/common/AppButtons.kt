@@ -21,6 +21,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ProvideTextStyle
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,6 +90,19 @@ fun AppButton(
                 content()
             }
         }
+    }
+}
+
+@Composable
+fun AppMenuButton(text: String, icon: ImageVector, onClick: () -> Unit) {
+    AppButton(
+        onClick = onClick,
+        icon = icon,
+        modifier = Modifier.fillMaxWidth(),
+        contentAlignment = Alignment.Start,
+        horizontalContentPadding = 30.dp,
+    ) {
+        Text(text)
     }
 }
 

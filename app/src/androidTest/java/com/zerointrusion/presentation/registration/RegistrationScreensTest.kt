@@ -1,24 +1,39 @@
 package com.zerointrusion.presentation.registration
 
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertHeightIsEqualTo
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.espresso.Espresso.closeSoftKeyboard
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -28,7 +43,7 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class RegistrationScreensTest {
     @get:Rule
-    val composeRule = createComposeRule()
+    val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
     fun desktopLogoRendersWhiteLetteringAndGreenEmblem() {
@@ -127,23 +142,99 @@ class RegistrationScreensTest {
                     mobileRegistrationQrPayload = "test-mobile-registration",
                 ),
                 onEmailChanged = {},
-                onPhoneChanged = {},
                 onNamespaceNameChanged = {},
                 onApiUrlChanged = {},
-                onAdditionalApiUrlChanged = {},
-                onThirdApiUrlChanged = {},
                 isExistingAccount = true,
                 onConfirm = {},
                 onBack = { backCount++ },
             )
         }
 
-        composeRule.onNodeWithText("Confirm").performScrollTo().assertIsNotEnabled()
+        composeRule.onNodeWithText("Confirm").assertIsDisplayed().assertIsNotEnabled()
         composeRule.onNodeWithContentDescription("New mobile registration QR code")
             .performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Waiting for approval...").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Back").performScrollTo().performClick()
+        composeRule.onNodeWithText("Back").assertIsDisplayed().performClick()
         composeRule.runOnIdle { assertEquals(1, backCount) }
+    }
+
+    @Test
+    fun focusedRegistrationFieldsRemainVisibleAboveKeyboard() {
+        var imeBottom by mutableStateOf(0)
+        composeRule.activityRule.scenario.onActivity { activity ->
+            activity.enableEdgeToEdge()
+            activity.window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
+        composeRule.setContent {
+            val bottom = WindowInsets.ime.getBottom(LocalDensity.current)
+            SideEffect { imeBottom = bottom }
+            var state by remember { mutableStateOf(RegistrationUiState()) }
+            RegistrationScreen(
+                state = state,
+                onEmailChanged = { state = state.copy(email = it) },
+                onNamespaceNameChanged = { state = state.copy(namespaceName = it) },
+                onApiUrlChanged = { state = state.copy(apiUrl = it) },
+                isExistingAccount = false,
+                onConfirm = {},
+                onBack = {},
+            )
+        }
+
+        try {
+            composeRule.onNodeWithText("Email").performClick()
+            composeRule.waitUntil(timeoutMillis = 5_000) { imeBottom > 0 }
+            listOf("Email", "Namespace Name", "API URL").forEachIndexed { index, label ->
+                if (index > 0) {
+                    val previous = if (index == 1) "Email" else "Namespace Name"
+                    composeRule.onNodeWithText(previous).performImeAction()
+                }
+                composeRule.waitForIdle()
+                val field = composeRule.onNodeWithText(label).assertIsFocused().assertIsDisplayed()
+                val fieldBounds = field.getUnclippedBoundsInRoot()
+                val backBounds = composeRule.onNodeWithText("Back").assertIsDisplayed().getUnclippedBoundsInRoot()
+                composeRule.onNodeWithText("Confirm").assertIsDisplayed()
+                assertTrue("$label must not be above the visible area", fieldBounds.top >= 0.dp)
+                assertTrue("$label must remain above the action row", fieldBounds.bottom <= backBounds.top)
+            }
+        } finally {
+            closeSoftKeyboard()
+        }
+    }
+
+    @Test
+    fun registrationActionsStayAtBottomOnNarrowScreen() {
+        composeRule.setContent {
+            Box(modifier = Modifier.requiredSize(320.dp, 480.dp)) {
+                RegistrationScreen(
+                    state = RegistrationUiState(
+                        isAwaitingMobileRegistration = true,
+                        mobileRegistrationQrPayload = "test-mobile-registration",
+                    ),
+                    onEmailChanged = {},
+                    onNamespaceNameChanged = {},
+                    onApiUrlChanged = {},
+                    isExistingAccount = true,
+                    onConfirm = {},
+                    onBack = {},
+                )
+            }
+        }
+
+        val back = composeRule.onNodeWithText("Back").assertIsDisplayed().assertHeightIsEqualTo(48.dp)
+        val confirm = composeRule.onNodeWithText("Confirm").assertIsDisplayed().assertHeightIsEqualTo(48.dp)
+        val backBounds = back.getUnclippedBoundsInRoot()
+        val confirmBounds = confirm.getUnclippedBoundsInRoot()
+        assertEquals(backBounds.top, confirmBounds.top)
+        assertEquals(
+            (backBounds.right - backBounds.left).value,
+            (confirmBounds.right - confirmBounds.left).value,
+            1f,
+        )
+        assertTrue("Back must be left of Confirm", backBounds.right < confirmBounds.left)
+
+        composeRule.onNodeWithText("Waiting for approval...").performScrollTo().assertIsDisplayed()
+        assertEquals(backBounds, back.assertIsDisplayed().getUnclippedBoundsInRoot())
+        assertEquals(confirmBounds, confirm.assertIsDisplayed().getUnclippedBoundsInRoot())
     }
 
     private fun assertOptionSelection(option: String) {
@@ -177,11 +268,8 @@ class RegistrationScreensTest {
             RegistrationScreen(
                 state = state,
                 onEmailChanged = { state = state.copy(email = it) },
-                onPhoneChanged = { state = state.copy(phone = it) },
                 onNamespaceNameChanged = { state = state.copy(namespaceName = it) },
                 onApiUrlChanged = { state = state.copy(apiUrl = it) },
-                onAdditionalApiUrlChanged = { state = state.copy(additionalApiUrl = it) },
-                onThirdApiUrlChanged = { state = state.copy(thirdApiUrl = it) },
                 isExistingAccount = isExistingAccount,
                 onConfirm = { confirmedState = state },
                 onBack = { backCount++ },
@@ -190,33 +278,30 @@ class RegistrationScreensTest {
 
         val title = if (isExistingAccount) "Add new mobile to existing account" else "New account registration"
         composeRule.onNodeWithText(title).assertIsDisplayed()
+        composeRule.onNodeWithText("Phone").assertDoesNotExist()
+        composeRule.onNodeWithText("Additional API URL (optional)").assertDoesNotExist()
+        composeRule.onNodeWithText("Third API URL (optional)").assertDoesNotExist()
         val values = linkedMapOf(
             "Email" to "test@example.com",
-            "Phone" to "+36123456789",
             "Namespace Name" to "Test namespace",
             "API URL" to "https://primary.example.com",
-            "Additional API URL (optional)" to "https://second.example.com",
-            "Third API URL (optional)" to "https://third.example.com",
         )
         values.forEach { (label, value) ->
             composeRule.onNodeWithText(label).performScrollTo().performTextReplacement(value)
             composeRule.onNodeWithText(label).assertTextContains(value)
         }
-        composeRule.onNodeWithText("Confirm").performScrollTo().performClick()
+        composeRule.onNodeWithText("Confirm").assertIsDisplayed().performClick()
         composeRule.runOnIdle {
             assertEquals(
                 RegistrationUiState(
                     email = values.getValue("Email"),
-                    phone = values.getValue("Phone"),
                     namespaceName = values.getValue("Namespace Name"),
                     apiUrl = values.getValue("API URL"),
-                    additionalApiUrl = values.getValue("Additional API URL (optional)"),
-                    thirdApiUrl = values.getValue("Third API URL (optional)"),
                 ),
                 confirmedState,
             )
         }
-        composeRule.onNodeWithText("Back").performScrollTo().performClick()
+        composeRule.onNodeWithText("Back").assertIsDisplayed().performClick()
         composeRule.runOnIdle { assertEquals(1, backCount) }
     }
 }

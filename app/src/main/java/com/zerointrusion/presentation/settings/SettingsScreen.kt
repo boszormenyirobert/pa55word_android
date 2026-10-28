@@ -1,37 +1,26 @@
 package com.zerointrusion.presentation.settings
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import com.zerointrusion.presentation.common.AppBottomActions
-import com.zerointrusion.presentation.common.AppButton
-import com.zerointrusion.ui.theme.Dark
-import com.zerointrusion.ui.theme.LightDark
-import com.zerointrusion.ui.theme.White
+import com.zerointrusion.presentation.common.AppMenuButton
+import com.zerointrusion.presentation.common.AppSettingsPage
+import com.zerointrusion.presentation.common.AppSettingsPanel
 
 @Composable
 fun SettingsScreen(
@@ -39,72 +28,53 @@ fun SettingsScreen(
     onOpenRecoveryConnection: () -> Unit,
     onOpenDevices: () -> Unit,
     onBack: () -> Unit,
+    corporateMode: Boolean = false,
+    onCorporateModeChanged: (Boolean) -> Unit = {},
+    errorCode: String? = null,
 ) {
-    Column(
-        modifier =
-            Modifier.fillMaxSize()
-                .background(brush = Brush.verticalGradient(colors = listOf(Dark, LightDark, Dark)))
-                .padding(WindowInsets.safeDrawing.asPaddingValues())
-                .padding(horizontal = 20.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-    ) {
-        Column(
-            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Text(text = "Settings", style = MaterialTheme.typography.headlineMedium, color = White)
-
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = LightDark),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    AppButton(
-                        icon = Icons.Default.Storage,
-                        onClick = onOpenAccounts,
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Start,
-                        horizontalContentPadding = 30.dp,
-                    ) {
-                        Text("Accounts - Servers")
-                    }
-
-                    AppButton(
-                        icon = Icons.Default.Devices,
-                        onClick = onOpenDevices,
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Start,
-                        horizontalContentPadding = 30.dp,
-                    ) {
-                        Text("Devices")
-                    }
-
-                    AppButton(
-                        icon = Icons.Default.Restore,
-                        onClick = onOpenRecoveryConnection,
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Start,
-                        horizontalContentPadding = 30.dp,
-                    ) {
-                        Text("Recovery connection")
-                    }
-                }
+    AppSettingsPage(title = "Settings", onBack = onBack) {
+        SettingsModeSelector(corporateMode, onCorporateModeChanged)
+        if (errorCode != null) {
+            Text(errorCode, color = MaterialTheme.colorScheme.error)
+        }
+        AppSettingsPanel(cornerRadius = 24.dp) {
+            if (corporateMode) {
+                AppMenuButton("Database connections", Icons.Default.Storage, onOpenAccounts)
+            }
+            AppMenuButton("Devices", Icons.Default.Devices, onOpenDevices)
+            if (corporateMode) {
+                AppMenuButton("Corporate recovery", Icons.Default.Restore, onOpenRecoveryConnection)
             }
         }
+    }
+}
 
-        AppBottomActions {
-            AppButton(
-                icon = Icons.AutoMirrored.Filled.ArrowBack,
-                onClick = onBack,
-                modifier = Modifier.weight(1f),
+@Composable
+private fun SettingsModeSelector(
+    corporateMode: Boolean,
+    onCorporateModeChanged: (Boolean) -> Unit,
+) {
+    Row(modifier = Modifier.fillMaxWidth().selectableGroup()) {
+        listOf(false to "Private", true to "Corporate").forEach { (value, label) ->
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 48.dp)
+                    .selectable(
+                        selected = corporateMode == value,
+                        onClick = { onCorporateModeChanged(value) },
+                        role = Role.RadioButton,
+                    )
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Back")
+                RadioButton(selected = corporateMode == value, onClick = null)
+                Text(
+                    text = label,
+                    modifier = Modifier.padding(start = 8.dp),
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
             }
-            Spacer(modifier = Modifier.weight(1f))
         }
     }
 }

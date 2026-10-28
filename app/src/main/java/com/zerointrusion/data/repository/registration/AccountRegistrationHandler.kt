@@ -46,7 +46,7 @@ internal class AccountRegistrationHandler(
         val validation = validator.validateForm(input)
         if (!validation.isValid) {
             throw RegistrationFailure.Validation(
-                validation.emailError ?: validation.phoneError ?: validation.namespaceNameError ?: validation.apiUrlError
+                validation.emailError ?: validation.namespaceNameError ?: validation.apiUrlError
                     ?: "Registration form is invalid.",
             )
         }
@@ -66,7 +66,6 @@ internal class AccountRegistrationHandler(
                     device = device,
                     dek = dek,
                     email = input.email.trim(),
-                    phone = input.phone.trim(),
                 )
 
                 validator.validatePayload(payload)
@@ -87,7 +86,6 @@ internal class AccountRegistrationHandler(
                         encDek = payload.dek.encDek,
                     ),
                     email = payload.email,
-                    phone = payload.phone,
                     nonce = nonce,
                 )
 
@@ -141,7 +139,6 @@ internal class AccountRegistrationHandler(
                     namespaceUrl = payload.namespace.url,
                     namespaceId = payload.namespace.namespaceId,
                     email = payload.email,
-                    phone = payload.phone,
                     encDek = payload.dek.encDek,
                     root = true,
                 )

@@ -32,7 +32,6 @@ data class RegistrationPayload(
     val device: Device,
     val dek: DekPayload,
     val email: String,
-    val phone: String,
 )
 
 data class RegistrationResult(
@@ -48,7 +47,6 @@ data class MobileDeviceRegistrationPreparation(
     val namespaceUrls: List<String>,
     val namespaceId: String,
     val email: String,
-    val phone: String,
 )
 
 data class RegistrationState(
@@ -60,12 +58,12 @@ data class RegistrationState(
     val namespaceUrl: String,
     val namespaceId: String,
     val email: String,
-    val phone: String,
     val encDek: String?,
     val root: Boolean = false,
     val fcmToken: String? = null,
     val pendingAdditionalNamespacesScan: Boolean = false,
     val completedAdditionalNamespaceKeys: List<String>? = null,
+    val corporateMode: Boolean = false,
 ) {
     val deviceId: String
         get() = mobileDeviceId
@@ -73,7 +71,6 @@ data class RegistrationState(
 
 data class RegistrationFormInput(
     val email: String,
-    val phone: String,
     val namespaceName: String,
     val apiUrl: String,
     val additionalApiUrls: List<String> = emptyList(),
@@ -81,13 +78,11 @@ data class RegistrationFormInput(
 
 data class RegistrationFormValidation(
     val emailError: String? = null,
-    val phoneError: String? = null,
     val namespaceNameError: String? = null,
     val apiUrlError: String? = null,
 ) {
     val isValid: Boolean =
         emailError == null &&
-            phoneError == null &&
             namespaceNameError == null &&
             apiUrlError == null
 }

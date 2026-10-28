@@ -45,6 +45,8 @@ class AppViewModel @Inject constructor(
     internetConnectivityMonitor: InternetConnectivityMonitor,
 ) : ViewModel() {
     private companion object {
+        const val SETTINGS_LOG_TAG = "ZeroIntrusionSettings"
+        const val SETTINGS_SAVE_ERROR_CODE = "SETTINGS_SAVE_FAILED"
         const val AUTHENTICATION_LOG_TAG = "ZeroIntrusionAuthentication"
         const val QR_LOG_TAG = "ZeroIntrusionQr"
         const val MOBILE_AUTHENTICATION_STATUS_POLL_MILLIS = 1_000L
@@ -179,6 +181,20 @@ class AppViewModel @Inject constructor(
         }
     }
 
+    fun setCorporateMode(corporateMode: Boolean) {
+        viewModelScope.launch {
+            try {
+                registrationRepository.setCorporateMode(corporateMode)
+                _uiState.update { it.copy(settingsErrorCode = null) }
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                Log.e(SETTINGS_LOG_TAG, "$SETTINGS_SAVE_ERROR_CODE: Could not persist registration mode.", exception)
+                _uiState.update { it.copy(settingsErrorCode = SETTINGS_SAVE_ERROR_CODE) }
+            }
+        }
+    }
+
     fun clearQrNamespaceRegistrationState() {
         pendingNamespaceQrPayload = null
         _uiState.update { it.copy(qrNamespaceRegistrationState = QrNamespaceRegistrationUiState.Idle) }
@@ -205,6 +221,7 @@ class AppViewModel @Inject constructor(
     }
 
     fun addDatabase() {
+        if (_uiState.value.registrationState?.corporateMode != true) return
         val form = _uiState.value.addDatabaseState
         if (form.isSubmitting || form.isSuccess) return
         val validation = registrationValidator.validateNamespaceForm(form.name, form.url)
@@ -240,10 +257,9 @@ class AppViewModel @Inject constructor(
     fun setSelectedNamespace(namespace: NamespaceEntry) {
         viewModelScope.launch {
             runCatching { namespacesRepository.setSelectedNamespace(namespace) }
-                .onSuccess { state ->
+                .onSuccess {
                     _uiState.update {
                         it.copy(
-                            registrationState = state,
                             namespaceSelectionErrorMessage = null,
                         )
                     }
@@ -376,6 +392,7 @@ class AppViewModel @Inject constructor(
         }
 
     fun deleteAccount(namespaceUrl: String, accountId: String) {
+        if (_uiState.value.registrationState?.corporateMode != true) return
         if (_uiState.value.accountDeletionInProgress) {
             return
         }
@@ -710,7 +727,6 @@ class AppViewModel @Inject constructor(
                     lastFcmSyncKey = syncedState.accountId + ":" + (syncedState.fcmToken ?: "missing")
                     _uiState.update {
                         it.copy(
-                            registrationState = syncedState,
                             fcmSyncState = FcmSyncUiState.Success(
                                 syncedState.fcmToken?.toPreview() ?: "token unavailable",
                             ),

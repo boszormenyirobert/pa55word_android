@@ -108,7 +108,6 @@ Phone registration request from QR shape:
     "encDek": "string"
   },
   "email": "string",
-  "phone": "string",
   "nonce": "string"
 }
 ```
