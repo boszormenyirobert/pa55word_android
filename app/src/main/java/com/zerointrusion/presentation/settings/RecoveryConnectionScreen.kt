@@ -18,25 +18,27 @@ fun RecoveryConnectionScreen(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     AppSettingsPage(
-        title = "Corporate recovery",
+        title = "Enterprise recovery",
         onBack = onBack,
-        secondaryAction = if (onCancelScan != null) {
-            {
-                AppButton(
-                    icon = Icons.Default.Close,
-                    onClick = onCancelScan,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("Cancel scan")
+        secondaryAction =
+            if (onCancelScan != null) {
+                {
+                    AppButton(
+                        icon = Icons.Default.Close,
+                        onClick = onCancelScan,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text("Cancel scan")
+                    }
                 }
-            }
-        } else {
-            null
-        },
+            } else {
+                null
+            },
     ) {
         AppSettingsPanel {
             Text(
-                text = "Use this feature if you have lost the phone linked to your corporate account. Start the recovery process with an email confirmation, as described in the desktop application. Then scan the recovery QR code displayed on your desktop device to restore the connection.",
+                text =
+                    "Use this feature if you have lost the phone linked to your enterprise account. Start the recovery process with an email confirmation, as described in the desktop application. Then scan the recovery QR code displayed on your desktop device to restore the connection.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface,
             )

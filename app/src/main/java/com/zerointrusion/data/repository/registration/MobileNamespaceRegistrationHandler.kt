@@ -39,7 +39,9 @@ internal class MobileNamespaceRegistrationHandler(
         val validation = validator.validateNamespaceForm(namespaceName, namespaceUrl)
         if (!validation.isValid) {
             throw RegistrationFailure.Validation(
-                validation.namespaceNameError ?: validation.namespaceUrlError ?: "Invalid namespace.",
+                validation.namespaceNameError
+                    ?: validation.namespaceUrlError
+                    ?: "Invalid namespace."
             )
         }
         if (!validator.isValidNamespaceId(namespaceId)) {
@@ -47,53 +49,72 @@ internal class MobileNamespaceRegistrationHandler(
         }
         val url = namespaceUrl.trim().trimEnd('/')
         val requestUrl = buildRegistrationUrl(url)
-        val request = AccountRegistrationRequestDto(
-            namespace = NamespaceDto(namespaceId.trim(), namespaceName.trim(), url),
-            device = AccountRegistrationDeviceDto(
-                mobileDeviceId = state.mobileDeviceId,
-                publicKey = keyStoreService.getPublicKey().encoded.toByteString().base64(),
-                deviceName = state.deviceName,
-            ),
-            dek = AccountRegistrationDekDto(state.mobileDeviceId, storedEncDek),
-            email = state.email,
-            nonce = newRequestNonce(),
-        )
-        val response = try {
-            registrationApi.registerAccount(requestUrl, request)
-        } catch (exception: CancellationException) {
-            throw exception
-        } catch (exception: Exception) {
-            throw mapNetworkException(requestUrl, exception)
-        }
+        val request =
+            AccountRegistrationRequestDto(
+                namespace = NamespaceDto(namespaceId.trim(), namespaceName.trim(), url),
+                device =
+                    AccountRegistrationDeviceDto(
+                        mobileDeviceId = state.mobileDeviceId,
+                        publicKey = keyStoreService.getPublicKey().encoded.toByteString().base64(),
+                        deviceName = state.deviceName,
+                    ),
+                dek = AccountRegistrationDekDto(state.mobileDeviceId, storedEncDek),
+                email = state.email,
+                nonce = newRequestNonce(),
+            )
+        val response =
+            try {
+                registrationApi.registerAccount(requestUrl, request)
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                throw mapNetworkException(requestUrl, exception)
+            }
         if (!response.isSuccessful) {
-            throw serverFailure(gson, response.errorBody()?.charStream(), response.code(), requestUrl)
+            throw serverFailure(
+                gson,
+                response.errorBody()?.charStream(),
+                response.code(),
+                requestUrl,
+            )
         }
         val rawResponse = response.body()?.string()?.trim().orEmpty()
         if (rawResponse.isEmpty()) {
-            throw RegistrationFailure.Server("The backend returned an empty response from $requestUrl.")
-        }
-        val body = try {
-            gson.fromJson(rawResponse, AccountRegistrationResponseDto::class.java)
-        } catch (_: JsonParseException) {
-            throw RegistrationFailure.Server("The backend returned an unreadable response from $requestUrl.")
-        }
-        val accountId = body?.accountId?.trim().orEmpty()
-        if (body?.success != true || accountId.isEmpty()) {
-            throw RegistrationFailure.Server("The backend did not return a valid account ID from $requestUrl.")
-        }
-        if (desktopDeviceId != null && accountId.equals(desktopDeviceId.trim(), ignoreCase = true)) {
             throw RegistrationFailure.Server(
-                "The backend returned desktopDeviceId as accountId from $requestUrl. accountId=$accountId desktopDeviceId=${desktopDeviceId.trim()}.",
+                "The backend returned an empty response from $requestUrl."
             )
         }
-        val registration = MobileNamespaceRegistration(
-            accountId = accountId,
-            mobileDeviceId = state.mobileDeviceId,
-            namespaceId = namespaceId.trim(),
-            namespaceName = namespaceName.trim(),
-            namespaceUrl = url,
-            encDek = storedEncDek,
-        )
+        val body =
+            try {
+                gson.fromJson(rawResponse, AccountRegistrationResponseDto::class.java)
+            } catch (_: JsonParseException) {
+                throw RegistrationFailure.Server(
+                    "The backend returned an unreadable response from $requestUrl."
+                )
+            }
+        val accountId = body?.accountId?.trim().orEmpty()
+        if (body?.success != true || accountId.isEmpty()) {
+            throw RegistrationFailure.Server(
+                "The backend did not return a valid account ID from $requestUrl."
+            )
+        }
+        if (
+            desktopDeviceId != null && accountId.equals(desktopDeviceId.trim(), ignoreCase = true)
+        ) {
+            throw RegistrationFailure.Server(
+                "The backend returned desktopDeviceId as accountId from $requestUrl. accountId=$accountId desktopDeviceId=${desktopDeviceId.trim()}."
+            )
+        }
+        val registration =
+            MobileNamespaceRegistration(
+                accountId = accountId,
+                mobileDeviceId = state.mobileDeviceId,
+                namespaceId = namespaceId.trim(),
+                namespaceName = namespaceName.trim(),
+                namespaceUrl = url,
+                encDek = storedEncDek,
+                email = state.email.trim(),
+            )
         connectedDevicesLocalStore.updateMobileRegistrations { it + registration }
         return registration
     }

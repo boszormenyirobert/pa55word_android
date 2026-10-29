@@ -1,5 +1,6 @@
 package com.zerointrusion.domain.namespaces
 
+import com.zerointrusion.domain.connecteddevices.MobileNamespaceRegistration
 import com.zerointrusion.domain.registration.RegistrationState
 import kotlinx.coroutines.flow.Flow
 
@@ -8,7 +9,9 @@ interface NamespacesRepository {
 
     fun observeAccounts(): Flow<List<NamespaceEntry>>
 
-    suspend fun addDatabase(name: String, url: String)
+    fun observeMobileRegistrations(): Flow<List<MobileNamespaceRegistration>>
+
+    suspend fun addDatabase(name: String, url: String, email: String)
 
     suspend fun setSelectedNamespace(namespace: NamespaceEntry): RegistrationState
 

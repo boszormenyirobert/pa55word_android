@@ -1,7 +1,10 @@
 package com.zerointrusion.presentation.auth
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -9,7 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertWidthIsEqualTo
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -17,6 +22,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import com.zerointrusion.R
 import com.zerointrusion.ui.theme.ZeroIntrusionTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -27,6 +34,79 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class SecurityScreenTest {
     @get:Rule val composeRule = createComposeRule()
+
+    @Test
+    fun logoStaysCenteredInUpperRegionWhenAuthenticationErrorAppears() {
+        var errorMessage by mutableStateOf<String?>(null)
+        var viewHeight by mutableStateOf(480.dp)
+        var verticalInsets = 0f
+        composeRule.setContent {
+            ZeroIntrusionTheme {
+                val insets = WindowInsets.safeDrawing.asPaddingValues()
+                verticalInsets =
+                    (insets.calculateTopPadding() + insets.calculateBottomPadding()).value
+                Box(modifier = Modifier.requiredSize(320.dp, viewHeight)) {
+                    SecurityScreenContent(errorMessage = errorMessage, onRetry = {})
+                }
+            }
+        }
+        listOf(480.dp, 640.dp).forEach { height ->
+            composeRule.runOnIdle { viewHeight = height }
+            listOf<String?>(null, "Authentication failed. Please retry.").forEach { message ->
+                composeRule.runOnIdle { errorMessage = message }
+                val background =
+                    composeRule.onNodeWithTag("security-background").getUnclippedBoundsInRoot()
+                val logo =
+                    composeRule
+                        .onNodeWithContentDescription("pa55word logo")
+                        .assertIsDisplayed()
+                        .assertWidthIsEqualTo(280.dp)
+                        .getUnclippedBoundsInRoot()
+                val region =
+                    composeRule.onNodeWithTag("security-logo-region").getUnclippedBoundsInRoot()
+                assertEquals(
+                    (background.bottom.value - background.top.value - verticalInsets - 40f) * 0.65f,
+                    (region.bottom - region.top).value,
+                    0.5f,
+                )
+                assertEquals(
+                    (region.top.value + region.bottom.value) / 2f,
+                    (logo.top.value + logo.bottom.value) / 2f,
+                    0.5f,
+                )
+                assertTrue(
+                    "Logo must sit above the screen center",
+                    logo.top + logo.bottom < background.top + background.bottom,
+                )
+                val retry =
+                    composeRule
+                        .onNodeWithText(if (message == null) "Retry" else "Retry Authentication")
+                        .assertIsDisplayed()
+                        .getUnclippedBoundsInRoot()
+                assertTrue("Retry must remain below the logo", retry.top >= logo.bottom)
+                if (message != null) {
+                    val banner =
+                        composeRule
+                            .onNodeWithText("Authentication blocked")
+                            .assertIsDisplayed()
+                            .getUnclippedBoundsInRoot()
+                    assertTrue("Error must remain below the logo", banner.top >= logo.bottom)
+                }
+            }
+        }
+    }
+
+    @Test
+    fun applicationAndBiometricPromptUsePa55wordBranding() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val appName = context.getString(R.string.app_name)
+        assertEquals("Pa55word", appName)
+        assertEquals(
+            "Pa55word",
+            context.applicationInfo.loadLabel(context.packageManager).toString(),
+        )
+        assertEquals("Unlock Pa55word", context.getString(R.string.biometric_unlock_title, appName))
+    }
 
     @Test
     fun waitingScreenShowsLogoOnBlackWithoutOldHomeContentAndAllowsRetry() {
@@ -56,6 +136,7 @@ class SecurityScreenTest {
             composeRule
                 .onNodeWithContentDescription("pa55word logo")
                 .assertIsDisplayed()
+                .assertWidthIsEqualTo(280.dp)
                 .captureToImage()
                 .toPixelMap()
         var hasWhite = false

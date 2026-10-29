@@ -13,13 +13,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.toPixelMap
-import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertHeightIsAtLeast
 import androidx.compose.ui.test.assertHeightIsEqualTo
-import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsFocused
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
@@ -32,8 +32,8 @@ import androidx.compose.ui.test.performImeAction
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.unit.dp
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.espresso.Espresso.closeSoftKeyboard
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -42,8 +42,7 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class RegistrationScreensTest {
-    @get:Rule
-    val composeRule = createAndroidComposeRule<ComponentActivity>()
+    @get:Rule val composeRule = createAndroidComposeRule<ComponentActivity>()
 
     @Test
     fun desktopLogoRendersWhiteLetteringAndGreenEmblem() {
@@ -51,8 +50,12 @@ class RegistrationScreensTest {
             RegistrationOptionsScreen(onNewAccount = {}, onAddMobile = {}, onRecovery = {})
         }
 
-        val pixels = composeRule.onNodeWithContentDescription("pa55word logo")
-            .assertIsDisplayed().captureToImage().toPixelMap()
+        val pixels =
+            composeRule
+                .onNodeWithContentDescription("pa55word logo")
+                .assertIsDisplayed()
+                .captureToImage()
+                .toPixelMap()
         var hasWhite = false
         var hasGreen = false
         for (row in 0 until pixels.height step 4) {
@@ -76,8 +79,11 @@ class RegistrationScreensTest {
                 val logoY = row * 240f / pixels.height
                 val distanceX = logoX - 405f
                 val distanceY = logoY - 120f
-                if (color.green > 0.5f && color.red < 0.7f && color.blue < 0.2f &&
-                    distanceX * distanceX + distanceY * distanceY < 100f * 100f
+                if (
+                    color.green > 0.5f &&
+                        color.red < 0.7f &&
+                        color.blue < 0.2f &&
+                        distanceX * distanceX + distanceY * distanceY < 100f * 100f
                 ) {
                     digitLeft = minOf(digitLeft, column)
                     digitRight = maxOf(digitRight, column)
@@ -90,21 +96,33 @@ class RegistrationScreensTest {
             }
         }
         assertTrue("The 55 must be visible inside the circle", digitRight >= digitLeft)
-        assertEquals("The 55 must be horizontally centered", 405f, (digitLeft + digitRight) * 500f / pixels.width, 4f)
-        assertEquals("The 55 must be vertically centered", 120f, (digitTop + digitBottom) * 120f / pixels.height, 4f)
+        assertEquals(
+            "The 55 must be horizontally centered",
+            405f,
+            (digitLeft + digitRight) * 500f / pixels.width,
+            4f,
+        )
+        assertEquals(
+            "The 55 must be vertically centered",
+            120f,
+            (digitTop + digitBottom) * 120f / pixels.height,
+            4f,
+        )
         val prefixGap = 291f - prefixRight * 1000f / pixels.width
         assertTrue("The pa-to-circle gap must remain compact: $prefixGap", prefixGap in 6f..24f)
-        val background = composeRule.onNodeWithTag("registration-options").captureToImage().toPixelMap()
+        val background =
+            composeRule.onNodeWithTag("registration-options").captureToImage().toPixelMap()
         listOf(
-            background[0, 0],
-            background[background.width - 1, 0],
-            background[0, background.height - 1],
-            background[background.width - 1, background.height - 1],
-        ).forEach { color ->
-            assertEquals(0f, color.red, 0.001f)
-            assertEquals(0f, color.green, 0.001f)
-            assertEquals(0f, color.blue, 0.001f)
-        }
+                background[0, 0],
+                background[background.width - 1, 0],
+                background[0, background.height - 1],
+                background[background.width - 1, background.height - 1],
+            )
+            .forEach { color ->
+                assertEquals(0f, color.red, 0.001f)
+                assertEquals(0f, color.green, 0.001f)
+                assertEquals(0f, color.blue, 0.001f)
+            }
     }
 
     @Test
@@ -137,13 +155,12 @@ class RegistrationScreensTest {
         var backCount = 0
         composeRule.setContent {
             RegistrationScreen(
-                state = RegistrationUiState(
-                    isAwaitingMobileRegistration = true,
-                    mobileRegistrationQrPayload = "test-mobile-registration",
-                ),
+                state =
+                    RegistrationUiState(
+                        isAwaitingMobileRegistration = true,
+                        mobileRegistrationQrPayload = "test-mobile-registration",
+                    ),
                 onEmailChanged = {},
-                onNamespaceNameChanged = {},
-                onApiUrlChanged = {},
                 isExistingAccount = true,
                 onConfirm = {},
                 onBack = { backCount++ },
@@ -151,8 +168,10 @@ class RegistrationScreensTest {
         }
 
         composeRule.onNodeWithText("Confirm").assertIsDisplayed().assertIsNotEnabled()
-        composeRule.onNodeWithContentDescription("New mobile registration QR code")
-            .performScrollTo().assertIsDisplayed()
+        composeRule
+            .onNodeWithContentDescription("New mobile registration QR code")
+            .performScrollTo()
+            .assertIsDisplayed()
         composeRule.onNodeWithText("Waiting for approval...").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Back").assertIsDisplayed().performClick()
         composeRule.runOnIdle { assertEquals(1, backCount) }
@@ -172,8 +191,6 @@ class RegistrationScreensTest {
             RegistrationScreen(
                 state = state,
                 onEmailChanged = { state = state.copy(email = it) },
-                onNamespaceNameChanged = { state = state.copy(namespaceName = it) },
-                onApiUrlChanged = { state = state.copy(apiUrl = it) },
                 isExistingAccount = false,
                 onConfirm = {},
                 onBack = {},
@@ -183,19 +200,18 @@ class RegistrationScreensTest {
         try {
             composeRule.onNodeWithText("Email").performClick()
             composeRule.waitUntil(timeoutMillis = 5_000) { imeBottom > 0 }
-            listOf("Email", "Namespace Name", "API URL").forEachIndexed { index, label ->
-                if (index > 0) {
-                    val previous = if (index == 1) "Email" else "Namespace Name"
-                    composeRule.onNodeWithText(previous).performImeAction()
-                }
-                composeRule.waitForIdle()
-                val field = composeRule.onNodeWithText(label).assertIsFocused().assertIsDisplayed()
-                val fieldBounds = field.getUnclippedBoundsInRoot()
-                val backBounds = composeRule.onNodeWithText("Back").assertIsDisplayed().getUnclippedBoundsInRoot()
-                composeRule.onNodeWithText("Confirm").assertIsDisplayed()
-                assertTrue("$label must not be above the visible area", fieldBounds.top >= 0.dp)
-                assertTrue("$label must remain above the action row", fieldBounds.bottom <= backBounds.top)
-            }
+            composeRule.waitForIdle()
+            val field = composeRule.onNodeWithText("Email").assertIsFocused().assertIsDisplayed()
+            val fieldBounds = field.getUnclippedBoundsInRoot()
+            val backBounds =
+                composeRule.onNodeWithText("Back").assertIsDisplayed().getUnclippedBoundsInRoot()
+            composeRule.onNodeWithText("Confirm").assertIsDisplayed()
+            assertTrue("Email must not be above the visible area", fieldBounds.top >= 0.dp)
+            assertTrue(
+                "Email must remain above the action row",
+                fieldBounds.bottom <= backBounds.top,
+            )
+            field.performImeAction()
         } finally {
             closeSoftKeyboard()
         }
@@ -206,13 +222,12 @@ class RegistrationScreensTest {
         composeRule.setContent {
             Box(modifier = Modifier.requiredSize(320.dp, 480.dp)) {
                 RegistrationScreen(
-                    state = RegistrationUiState(
-                        isAwaitingMobileRegistration = true,
-                        mobileRegistrationQrPayload = "test-mobile-registration",
-                    ),
+                    state =
+                        RegistrationUiState(
+                            isAwaitingMobileRegistration = true,
+                            mobileRegistrationQrPayload = "test-mobile-registration",
+                        ),
                     onEmailChanged = {},
-                    onNamespaceNameChanged = {},
-                    onApiUrlChanged = {},
                     isExistingAccount = true,
                     onConfirm = {},
                     onBack = {},
@@ -220,8 +235,10 @@ class RegistrationScreensTest {
             }
         }
 
-        val back = composeRule.onNodeWithText("Back").assertIsDisplayed().assertHeightIsEqualTo(48.dp)
-        val confirm = composeRule.onNodeWithText("Confirm").assertIsDisplayed().assertHeightIsEqualTo(48.dp)
+        val back =
+            composeRule.onNodeWithText("Back").assertIsDisplayed().assertHeightIsEqualTo(48.dp)
+        val confirm =
+            composeRule.onNodeWithText("Confirm").assertIsDisplayed().assertHeightIsEqualTo(48.dp)
         val backBounds = back.getUnclippedBoundsInRoot()
         val confirmBounds = confirm.getUnclippedBoundsInRoot()
         assertEquals(backBounds.top, confirmBounds.top)
@@ -251,9 +268,8 @@ class RegistrationScreensTest {
         composeRule.onNodeWithContentDescription("pa55word logo").assertIsDisplayed()
         composeRule.onNodeWithText("Add new mobile to existing account").assertIsDisplayed()
         composeRule.onNodeWithText("Recovery").assertIsDisplayed()
-        listOf("New account registration", "Add new mobile to existing account", "Recovery").forEach { label ->
-            composeRule.onNodeWithText(label).assertHeightIsAtLeast(80.dp)
-        }
+        listOf("New account registration", "Add new mobile to existing account", "Recovery")
+            .forEach { label -> composeRule.onNodeWithText(label).assertHeightIsAtLeast(80.dp) }
         composeRule.onNodeWithText("Email").assertDoesNotExist()
         composeRule.onNodeWithText("Confirm").assertDoesNotExist()
         composeRule.onNodeWithText(option).performClick()
@@ -268,38 +284,29 @@ class RegistrationScreensTest {
             RegistrationScreen(
                 state = state,
                 onEmailChanged = { state = state.copy(email = it) },
-                onNamespaceNameChanged = { state = state.copy(namespaceName = it) },
-                onApiUrlChanged = { state = state.copy(apiUrl = it) },
                 isExistingAccount = isExistingAccount,
                 onConfirm = { confirmedState = state },
                 onBack = { backCount++ },
             )
         }
 
-        val title = if (isExistingAccount) "Add new mobile to existing account" else "New account registration"
+        val title =
+            if (isExistingAccount) "Add new mobile to existing account"
+            else "New account registration"
         composeRule.onNodeWithText(title).assertIsDisplayed()
         composeRule.onNodeWithText("Phone").assertDoesNotExist()
+        composeRule.onNodeWithText("API URL").assertDoesNotExist()
+        composeRule.onNodeWithText("Namespace Name").assertDoesNotExist()
         composeRule.onNodeWithText("Additional API URL (optional)").assertDoesNotExist()
         composeRule.onNodeWithText("Third API URL (optional)").assertDoesNotExist()
-        val values = linkedMapOf(
-            "Email" to "test@example.com",
-            "Namespace Name" to "Test namespace",
-            "API URL" to "https://primary.example.com",
-        )
+        val values = linkedMapOf("Email" to "test@example.com")
         values.forEach { (label, value) ->
             composeRule.onNodeWithText(label).performScrollTo().performTextReplacement(value)
             composeRule.onNodeWithText(label).assertTextContains(value)
         }
         composeRule.onNodeWithText("Confirm").assertIsDisplayed().performClick()
         composeRule.runOnIdle {
-            assertEquals(
-                RegistrationUiState(
-                    email = values.getValue("Email"),
-                    namespaceName = values.getValue("Namespace Name"),
-                    apiUrl = values.getValue("API URL"),
-                ),
-                confirmedState,
-            )
+            assertEquals(RegistrationUiState(email = values.getValue("Email")), confirmedState)
         }
         composeRule.onNodeWithText("Back").assertIsDisplayed().performClick()
         composeRule.runOnIdle { assertEquals(1, backCount) }

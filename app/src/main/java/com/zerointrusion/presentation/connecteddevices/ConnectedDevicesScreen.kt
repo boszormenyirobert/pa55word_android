@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.zerointrusion.presentation.app.ConnectedDevicesUiState
 import com.zerointrusion.presentation.common.AppButton
+import com.zerointrusion.presentation.common.AppScreenHeader
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
@@ -37,22 +38,14 @@ fun ConnectedDevicesScreen(
     onBack: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Dark, LightDark, Dark),
-                ),
-            )
-            .padding(WindowInsets.safeDrawing.asPaddingValues())
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+        modifier =
+            Modifier.fillMaxSize()
+                .background(brush = Brush.verticalGradient(colors = listOf(Dark, LightDark, Dark)))
+                .padding(WindowInsets.safeDrawing.asPaddingValues())
+                .padding(horizontal = 20.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(
-            text = "Connected devices",
-            style = MaterialTheme.typography.headlineMedium,
-            color = White,
-        )
+        AppScreenHeader("Connected devices")
         Text(
             text = "Account ID: ${accountId.ifBlank { "(empty)" }}",
             style = MaterialTheme.typography.bodyMedium,
@@ -62,30 +55,21 @@ fun ConnectedDevicesScreen(
         Card(
             shape = RoundedCornerShape(18.dp),
             colors = CardDefaults.cardColors(containerColor = LightDark),
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
+            modifier = Modifier.fillMaxWidth().weight(1f),
         ) {
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(14.dp),
+                modifier =
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                ConnectedDevicesContent(
-                    state = state,
-                    onRetry = onRetry,
-                )
+                ConnectedDevicesContent(state = state, onRetry = onRetry)
             }
         }
 
         AppButton(
             icon = Icons.AutoMirrored.Filled.ArrowBack,
             onClick = onBack,
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding(),
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding(),
         ) {
             Text("Back")
         }

@@ -6,10 +6,10 @@ import com.zerointrusion.data.repository.registration.MobileNamespaceRegistratio
 import com.zerointrusion.data.security.KeyStoreService
 import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
 import com.zerointrusion.domain.common.RegistrationFailure
+import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.qr.NamespaceQrPayload
 import com.zerointrusion.domain.qr.NamespaceSyncQrPayload
-import com.zerointrusion.domain.connecteddevices.ConnectedDevicesRepository
 import com.zerointrusion.domain.registration.RegistrationState
 import com.zerointrusion.domain.registration.RegistrationValidator
 
@@ -21,33 +21,41 @@ internal class NamespaceRegistrationFromQrFlow(
     private val gson: Gson,
     private val validator: RegistrationValidator,
 ) {
-    private val mobileRegistrationHandler = MobileNamespaceRegistrationHandler(
-        registrationApi, keyStoreService, connectedDevicesLocalStore, gson, validator,
-    )
+    private val mobileRegistrationHandler =
+        MobileNamespaceRegistrationHandler(
+            registrationApi,
+            keyStoreService,
+            connectedDevicesLocalStore,
+            gson,
+            validator,
+        )
 
     suspend fun prepare(
         registrationState: RegistrationState,
         payload: NamespaceQrPayload,
         storedEncDek: String,
     ): QrRegistrationPreparation {
-        val registration = mobileRegistrationHandler.register(
-            state = registrationState,
-            namespaceId = payload.namespaceId,
-            namespaceName = payload.namespaceName,
-            namespaceUrl = payload.namespaceUrl,
-            storedEncDek = storedEncDek,
-            desktopDeviceId = payload.desktopDeviceId,
-        )
+        val registration =
+            mobileRegistrationHandler.register(
+                state = registrationState,
+                namespaceId = payload.namespaceId,
+                namespaceName = payload.namespaceName,
+                namespaceUrl = payload.namespaceUrl,
+                storedEncDek = storedEncDek,
+                desktopDeviceId = payload.desktopDeviceId,
+            )
 
-        val namespaceEntry = NamespaceEntry(
-            namespaceName = registration.namespaceName,
-            namespaceId = registration.namespaceId,
-            namespaceUrl = registration.namespaceUrl,
-            accountId = registration.accountId,
-            desktopDeviceId = payload.desktopDeviceId,
-            deviceName = payload.deviceName,
-            publicKey = payload.publicKey,
-        )
+        val namespaceEntry =
+            NamespaceEntry(
+                namespaceName = registration.namespaceName,
+                namespaceId = registration.namespaceId,
+                namespaceUrl = registration.namespaceUrl,
+                accountId = registration.accountId,
+                desktopDeviceId = payload.desktopDeviceId,
+                deviceName = payload.deviceName,
+                publicKey = payload.publicKey,
+                email = registration.email,
+            )
 
         return QrRegistrationPreparation(
             namespaceEntry = namespaceEntry,
@@ -68,14 +76,16 @@ internal class NamespaceRegistrationFromQrFlow(
         val registration = resolveNamespaceSyncAccount(registrations, payload, mobileDeviceId)
 
         return QrRegistrationPreparation(
-            namespaceEntry = NamespaceEntry(
-                namespaceName = registration.namespaceName,
-                namespaceId = registration.namespaceId,
-                namespaceUrl = registration.namespaceUrl,
-                accountId = registration.accountId,
-                desktopDeviceId = payload.desktopDeviceId,
-                root = registration.root,
-            ),
+            namespaceEntry =
+                NamespaceEntry(
+                    namespaceName = registration.namespaceName,
+                    namespaceId = registration.namespaceId,
+                    namespaceUrl = registration.namespaceUrl,
+                    accountId = registration.accountId,
+                    desktopDeviceId = payload.desktopDeviceId,
+                    root = registration.root,
+                    email = registration.email.orEmpty(),
+                ),
             targetNamespaceAccountId = registration.accountId,
             scannedDesktopDeviceId = payload.desktopDeviceId,
             scannedPublicKey = payload.publicKey,
@@ -93,5 +103,4 @@ internal class NamespaceRegistrationFromQrFlow(
             throw RegistrationFailure.Validation(namespaceUrlError)
         }
     }
-
 }

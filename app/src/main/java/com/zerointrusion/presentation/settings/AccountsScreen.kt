@@ -34,7 +34,11 @@ import com.zerointrusion.ui.theme.ErrorTextLight
 import com.zerointrusion.ui.theme.LightDark
 import com.zerointrusion.ui.theme.White
 
-private data class AccountListItem(val namespaceUrl: String, val accountId: String)
+private data class AccountListItem(
+    val namespaceUrl: String,
+    val accountId: String,
+    val namespaceName: String,
+)
 
 @Composable
 fun AccountsScreen(
@@ -52,6 +56,7 @@ fun AccountsScreen(
                     AccountListItem(
                         namespaceUrl = namespace.namespaceUrl.trim().trimEnd('/'),
                         accountId = namespace.accountId.trim(),
+                        namespaceName = namespace.namespaceName,
                     )
                 }
                 .filter { item -> item.namespaceUrl.isNotEmpty() && item.accountId.isNotEmpty() }
@@ -81,7 +86,7 @@ fun AccountsScreen(
     }
 
     AppSettingsPage(
-        title = "Accounts",
+        title = "Database connections",
         onBack = onBack,
         secondaryAction = {
             AppButton(
@@ -121,21 +126,12 @@ fun AccountsScreen(
                         modifier = Modifier.padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(
+                        Text(
+                            text = account.namespaceName,
                             modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            Text(
-                                text = account.namespaceUrl,
-                                color = White,
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                            Text(
-                                text = account.accountId,
-                                color = White.copy(alpha = 0.72f),
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
+                            color = White,
+                            style = MaterialTheme.typography.titleSmall,
+                        )
                         AppIconButton(
                             onClick = { pendingDeletion = account },
                             enabled = !deleting,

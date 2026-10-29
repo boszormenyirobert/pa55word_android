@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.presentation.common.AppButton
 import com.zerointrusion.presentation.common.AppIconButton
+import com.zerointrusion.presentation.common.AppScreenHeader
 import com.zerointrusion.ui.theme.ActionDeclineRed
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ErrorTextLight
@@ -60,76 +61,73 @@ fun NamespacesScreen(
     var namespacePendingDelete by remember { mutableStateOf<NamespaceEntry?>(null) }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Dark, LightDark, Dark),
-                ),
-            )
-            .verticalScroll(rememberScrollState())
-            .padding(WindowInsets.safeDrawing.asPaddingValues())
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+        modifier =
+            Modifier.fillMaxSize()
+                .background(brush = Brush.verticalGradient(colors = listOf(Dark, LightDark, Dark)))
+                .padding(WindowInsets.safeDrawing.asPaddingValues())
+                .padding(horizontal = 20.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(
-            text = "Namespaces",
-            style = MaterialTheme.typography.headlineMedium,
-            color = White,
-        )
+        AppScreenHeader("Namespaces")
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            errorMessage
+                ?.takeIf { it.isNotBlank() }
+                ?.let { message ->
+                    Text(
+                        text = message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = ErrorTextLight,
+                    )
+                }
 
-        errorMessage?.takeIf { it.isNotBlank() }?.let { message ->
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = ErrorTextLight,
-            )
-        }
-
-        if (namespaces.isEmpty()) {
-            NamespaceCard(
-                title = "No namespaces stored yet.",
-                body = null,
-                isGateway = false,
-                showDeleteConfirmation = false,
-                onDeleteClick = {},
-                onConfirmDelete = {},
-            )
-        } else {
-            namespaces.forEach { namespace ->
-                val isGateway = namespace.accountId == gatewayAccountId &&
-                    namespace.namespaceId == gatewayNamespaceId &&
-                    namespace.namespaceName == gatewayNamespaceName &&
-                    namespace.namespaceUrl == gatewayNamespaceUrl
-
+            if (namespaces.isEmpty()) {
                 NamespaceCard(
-                    title = namespace.namespaceName,
-                    body = listOf(
-                        "Namespace ID: ${namespace.namespaceId}",
-                        "Namespace URL: ${namespace.namespaceUrl}",
-                        "Account ID: ${namespace.accountId}",
-                        "Desktop Device ID: ${namespace.desktopDeviceId}",
-                        "Device name: ${namespace.deviceName.orEmpty()}",
-                    ),
-                    isGateway = isGateway,
-                    showDeleteConfirmation = namespacePendingDelete == namespace,
-                    onDeleteClick = {
-                        namespacePendingDelete = if (namespacePendingDelete == namespace) null else namespace
-                    },
-                    onConfirmDelete = {
-                        namespacePendingDelete = null
-                        onDeleteNamespace(namespace)
-                    },
+                    title = "No namespaces stored yet.",
+                    body = null,
+                    isGateway = false,
+                    showDeleteConfirmation = false,
+                    onDeleteClick = {},
+                    onConfirmDelete = {},
                 )
+            } else {
+                namespaces.forEach { namespace ->
+                    val isGateway =
+                        namespace.accountId == gatewayAccountId &&
+                            namespace.namespaceId == gatewayNamespaceId &&
+                            namespace.namespaceName == gatewayNamespaceName &&
+                            namespace.namespaceUrl == gatewayNamespaceUrl
+
+                    NamespaceCard(
+                        title = namespace.namespaceName,
+                        body =
+                            listOf(
+                                "Namespace ID: ${namespace.namespaceId}",
+                                "Namespace URL: ${namespace.namespaceUrl}",
+                                "Account ID: ${namespace.accountId}",
+                                "Desktop Device ID: ${namespace.desktopDeviceId}",
+                                "Device name: ${namespace.deviceName.orEmpty()}",
+                            ),
+                        isGateway = isGateway,
+                        showDeleteConfirmation = namespacePendingDelete == namespace,
+                        onDeleteClick = {
+                            namespacePendingDelete =
+                                if (namespacePendingDelete == namespace) null else namespace
+                        },
+                        onConfirmDelete = {
+                            namespacePendingDelete = null
+                            onDeleteNamespace(namespace)
+                        },
+                    )
+                }
             }
         }
-
         AppButton(
             icon = Icons.AutoMirrored.Filled.ArrowBack,
             onClick = onBack,
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding(),
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding(),
         ) {
             Text("Back to main view")
         }
@@ -148,9 +146,9 @@ private fun NamespaceCard(
     Card(
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = LightDark),
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(BorderStroke(2.dp, White.copy(alpha = 0.28f)), RoundedCornerShape(20.dp)),
+        modifier =
+            Modifier.fillMaxWidth()
+                .border(BorderStroke(2.dp, White.copy(alpha = 0.28f)), RoundedCornerShape(20.dp)),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -192,30 +190,31 @@ private fun NamespaceCard(
                 }
             }
             body?.forEach { line ->
-                Text(
-                    text = line,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = White,
-                )
+                Text(text = line, style = MaterialTheme.typography.bodyMedium, color = White)
             }
 
             if (isGateway) {
                 Text(
-                    text = "To delete this namespace, first set another gateway in Device settings.",
+                    text =
+                        "To delete this namespace, first set another gateway in Device settings.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = Yellow,
                 )
             } else if (showDeleteConfirmation) {
                 Spacer(modifier = Modifier.size(4.dp))
                 Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .border(BorderStroke(1.dp, ActionDeclineRed), RoundedCornerShape(14.dp)),
+                    modifier =
+                        Modifier.fillMaxWidth()
+                            .border(
+                                BorderStroke(1.dp, ActionDeclineRed),
+                                RoundedCornerShape(14.dp),
+                            ),
                     shape = RoundedCornerShape(14.dp),
                     color = ActionDeclineRed.copy(alpha = 0.16f),
                 ) {
                     Text(
-                        text = "Deleting this namespace ends the account registration under \"$title\". The credentials saved for the deregistration flow under this namespace will be permanently deleted. This action is final and cannot be undone.",
+                        text =
+                            "Deleting this namespace ends the account registration under \"$title\". The credentials saved for the deregistration flow under this namespace will be permanently deleted. This action is final and cannot be undone.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = White,
                         modifier = Modifier.padding(12.dp),

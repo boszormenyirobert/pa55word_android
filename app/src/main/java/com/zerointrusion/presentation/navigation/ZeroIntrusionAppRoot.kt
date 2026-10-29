@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -16,34 +19,39 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.zerointrusion.domain.notification.NotificationDecision
-import com.zerointrusion.presentation.app.QrNamespaceRegistrationUiState
+import com.zerointrusion.domain.registration.ServicePlan
 import com.zerointrusion.presentation.app.AppViewModel
-import com.zerointrusion.presentation.authentication.DesktopSessionsScreen
+import com.zerointrusion.presentation.app.QrNamespaceRegistrationUiState
+import com.zerointrusion.presentation.auth.BiometricAuthenticationPrompt
 import com.zerointrusion.presentation.auth.SecurityScreen
+import com.zerointrusion.presentation.authentication.DesktopSessionsScreen
 import com.zerointrusion.presentation.common.LoadingScreen
 import com.zerointrusion.presentation.connecteddevices.ConnectedDevicesScreen
 import com.zerointrusion.presentation.connecteddevices.DeviceRemovalScreen
-import com.zerointrusion.presentation.deviceinformation.DevicesScreen
 import com.zerointrusion.presentation.deviceinformation.DeviceInformationScreen
 import com.zerointrusion.presentation.deviceinformation.DeviceInformationUiModel
+import com.zerointrusion.presentation.deviceinformation.DevicesScreen
 import com.zerointrusion.presentation.home.PostLoginHomeScreen
 import com.zerointrusion.presentation.namespaces.NamespacesScreen
 import com.zerointrusion.presentation.qrread.QrNamespaceDeviceSelectionScreen
 import com.zerointrusion.presentation.qrread.QrReadScreen
+import com.zerointrusion.presentation.recovery.RecoveryScreen
+import com.zerointrusion.presentation.registration.RegistrationOptionsScreen
+import com.zerointrusion.presentation.registration.RegistrationScreen
+import com.zerointrusion.presentation.registration.RegistrationViewModel
 import com.zerointrusion.presentation.settings.AccountsScreen
 import com.zerointrusion.presentation.settings.AddDatabaseScreen
-import com.zerointrusion.presentation.settings.SettingsScreen
+import com.zerointrusion.presentation.settings.ServicePlanDetailsScreen
+import com.zerointrusion.presentation.settings.ServicePlanScreen
 import com.zerointrusion.presentation.settings.SettingsConnectedDevicesScreen
-import com.zerointrusion.presentation.registration.RegistrationScreen
-import com.zerointrusion.presentation.registration.RegistrationOptionsScreen
-import com.zerointrusion.presentation.registration.RegistrationViewModel
-import com.zerointrusion.presentation.recovery.RecoveryScreen
+import com.zerointrusion.presentation.settings.SettingsScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 private const val SHARED_ACCOUNT_DETAILS_POLL_INTERVAL_MILLIS = 30_000L
 
-private val EMPTY_CONNECTED_DEVICE_GROUPS = emptyList<com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup>()
+private val EMPTY_CONNECTED_DEVICE_GROUPS =
+    emptyList<com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup>()
 
 @Composable
 fun ZeroIntrusionAppRoot(
@@ -51,38 +59,60 @@ fun ZeroIntrusionAppRoot(
     registrationViewModel: RegistrationViewModel = hiltViewModel(),
 ) {
     val appState by appViewModel.uiState.collectAsStateWithLifecycle()
-    val corporateMode = appState.registrationState?.corporateMode == true
+    val servicePlan = appState.registrationState?.servicePlan ?: ServicePlan.BASIC
+    val isEnterprise = servicePlan == ServicePlan.ENTERPRISE
     val isInternetConnected by appViewModel.isInternetConnected.collectAsStateWithLifecycle()
+    val biometricRemainingSeconds by
+        appViewModel.biometricRemainingSeconds.collectAsStateWithLifecycle()
     val registrationState by registrationViewModel.uiState.collectAsStateWithLifecycle()
     val navController = rememberNavController()
     val lifecycleOwner = LocalLifecycleOwner.current
+    var renewingBiometrics by remember { mutableStateOf(false) }
+
+    LaunchedEffect(appState.isAuthenticated) {
+        if (!appState.isAuthenticated) renewingBiometrics = false
+    }
+    if (renewingBiometrics && appState.isAuthenticated) {
+        BiometricAuthenticationPrompt(
+            requestKey = 0,
+            prepareAuthentication = appViewModel::prepareAuthentication,
+            onAuthenticationSucceeded = {
+                renewingBiometrics = false
+                appViewModel.onAuthenticationSucceeded()
+            },
+            onAuthenticationFailed = appViewModel::onAuthenticationFailed,
+            onDismiss = { renewingBiometrics = false },
+        )
+    }
 
     LaunchedEffect(appState.currentRoute) {
         if (navController.currentDestination?.route != appState.currentRoute) {
             navController.navigate(appState.currentRoute) {
-                popUpTo(navController.graph.findStartDestination().id) {
-                    inclusive = true
-                }
+                popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
                 launchSingleTop = true
             }
         }
     }
 
-    LaunchedEffect(appState.homeNavigationRequestKey) {
-        if (appState.notificationOverlay.notification != null && navController.currentDestination?.route != AppRoute.Home.route) {
-            navController.navigate(AppRoute.Home.route) {
-                popUpTo(navController.graph.findStartDestination().id) {
-                    inclusive = true
-                }
-                launchSingleTop = true
-            }
-        }
-    }
-
-    LaunchedEffect(appState.qrNamespaceRegistrationState) {
+    LaunchedEffect(appState.homeNavigationRequestKey, appState.isAuthenticated) {
         if (
-            appState.qrNamespaceRegistrationState is QrNamespaceRegistrationUiState.AwaitingDeviceSelection &&
-            navController.currentDestination?.route != AppRoute.QrNamespaceDeviceSelection.route
+            appState.isAuthenticated &&
+                appState.notificationOverlay.notification != null &&
+                navController.currentDestination?.route != AppRoute.Home.route
+        ) {
+            navController.navigate(AppRoute.Home.route) {
+                popUpTo(navController.graph.findStartDestination().id) { inclusive = true }
+                launchSingleTop = true
+            }
+        }
+    }
+
+    LaunchedEffect(appState.qrNamespaceRegistrationState, appState.isAuthenticated) {
+        if (
+            appState.isAuthenticated &&
+                appState.qrNamespaceRegistrationState is
+                    QrNamespaceRegistrationUiState.AwaitingDeviceSelection &&
+                navController.currentDestination?.route != AppRoute.QrNamespaceDeviceSelection.route
         ) {
             navController.navigate(AppRoute.QrNamespaceDeviceSelection.route)
         }
@@ -95,39 +125,40 @@ fun ZeroIntrusionAppRoot(
 
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             appViewModel.refreshAccountDetailsSnapshot()
-            appViewModel.refreshLiveDesktopSessions()
+            appViewModel.refreshLiveDesktopSessionsInBackground()
             while (isActive) {
                 delay(SHARED_ACCOUNT_DETAILS_POLL_INTERVAL_MILLIS)
                 appViewModel.refreshAccountDetailsSnapshot()
-                appViewModel.refreshLiveDesktopSessions()
+                appViewModel.refreshLiveDesktopSessionsInBackground()
             }
         }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        NavHost(
-            navController = navController,
-            startDestination = AppRoute.Loading.route,
-        ) {
+        NavHost(navController = navController, startDestination = AppRoute.Loading.route) {
             composable(AppRoute.Loading.route) {
                 LoadingScreen(
-                    message = if (registrationState.isSubmitting) {
-                        "Registering device…"
-                    } else {
-                        "Preparing secure registration…"
-                    },
+                    message =
+                        if (registrationState.isSubmitting) {
+                            "Registering device…"
+                        } else {
+                            "Preparing secure registration…"
+                        }
                 )
             }
             composable(AppRoute.Security.route) {
                 SecurityScreen(
                     errorMessage = appState.authenticationError,
+                    prepareAuthentication = appViewModel::prepareAuthentication,
                     onAuthenticationSucceeded = appViewModel::onAuthenticationSucceeded,
                     onAuthenticationFailed = appViewModel::onAuthenticationFailed,
                 )
             }
             composable(AppRoute.Registration.route) {
                 RegistrationOptionsScreen(
-                    onNewAccount = { navController.navigate(AppRoute.NewAccountRegistration.route) },
+                    onNewAccount = {
+                        navController.navigate(AppRoute.NewAccountRegistration.route)
+                    },
                     onAddMobile = { navController.navigate(AppRoute.AddMobile.route) },
                     onRecovery = { navController.navigate(AppRoute.Recovery.route) },
                 )
@@ -140,14 +171,13 @@ fun ZeroIntrusionAppRoot(
                         RegistrationScreen(
                             state = registrationState,
                             onEmailChanged = registrationViewModel::onEmailChanged,
-                            onNamespaceNameChanged = registrationViewModel::onNamespaceNameChanged,
-                            onApiUrlChanged = registrationViewModel::onApiUrlChanged,
                             isExistingAccount = route == AppRoute.AddMobile,
-                            onConfirm = if (route == AppRoute.AddMobile) {
-                                registrationViewModel::registerNewMobileToExistingAccount
-                            } else {
-                                registrationViewModel::register
-                            },
+                            onConfirm =
+                                if (route == AppRoute.AddMobile) {
+                                    registrationViewModel::registerNewMobileToExistingAccount
+                                } else {
+                                    registrationViewModel::register
+                                },
                             onBack = { navController.popBackStack() },
                         )
                     }
@@ -172,24 +202,25 @@ fun ZeroIntrusionAppRoot(
                     namespaces = appState.namespaces,
                     databaseAvailability = appState.databaseAvailability,
                     isInternetConnected = isInternetConnected,
+                    biometricRemainingSeconds = biometricRemainingSeconds,
                     isHomeRefreshing = appState.isHomeRefreshing,
                     homeRefreshErrorCode = appState.homeRefreshErrorCode,
                     liveDesktopSessions = appState.liveDesktopSessions,
-                    liveDesktopSessionRevokingAttestationId = appState.liveDesktopSessionRevokingAttestationId,
-                    liveDesktopSessionRevokeErrorMessage = appState.liveDesktopSessionRevokeErrorMessage,
+                    liveDesktopSessionRevokingAttestationId =
+                        appState.liveDesktopSessionRevokingAttestationId,
+                    liveDesktopSessionRevokeErrorMessage =
+                        appState.liveDesktopSessionRevokeErrorMessage,
                     notification = appState.notificationOverlay.notification,
                     notificationError = appState.notificationOverlay.mismatchError,
                     qrNamespaceRegistrationState = appState.qrNamespaceRegistrationState,
-                    onOpenSettings = {
-                        navController.navigate(AppRoute.Settings.route)
-                    },
-                    onOpenQrRead = {
-                        navController.navigate(AppRoute.QrRead.route)
-                    },
-                    onClearQrNamespaceRegistrationState = appViewModel::clearQrNamespaceRegistrationState,
+                    onOpenSettings = { navController.navigate(AppRoute.Settings.route) },
+                    onOpenQrRead = { navController.navigate(AppRoute.QrRead.route) },
+                    onClearQrNamespaceRegistrationState =
+                        appViewModel::clearQrNamespaceRegistrationState,
                     onRevokeDesktopSession = appViewModel::revokeDesktopSession,
                     onRefreshHome = appViewModel::refreshLiveDesktopSessions,
-                    onDismissLiveDesktopSessionRevokeError = appViewModel::dismissLiveDesktopSessionRevokeError,
+                    onDismissLiveDesktopSessionRevokeError =
+                        appViewModel::dismissLiveDesktopSessionRevokeError,
                     onAllowNotification = {
                         appViewModel.onNotificationDecision(NotificationDecision.Accept)
                     },
@@ -197,32 +228,57 @@ fun ZeroIntrusionAppRoot(
                         appViewModel.onNotificationDecision(NotificationDecision.Decline)
                     },
                     onDismissNotificationError = appViewModel::dismissNotificationMismatch,
+                    onRenewBiometrics = { renewingBiometrics = true },
                 )
             }
             composable(AppRoute.Settings.route) {
                 SettingsScreen(
-                    corporateMode = corporateMode,
-                    onCorporateModeChanged = appViewModel::setCorporateMode,
+                    servicePlan = servicePlan,
+                    onOpenServicePlan = { navController.navigate(AppRoute.ServicePlan.route) },
                     errorCode = appState.settingsErrorCode,
                     onOpenAccounts = {
-                        if (corporateMode) {
+                        if (isEnterprise) {
                             navController.navigate(AppRoute.Accounts.route)
                         }
                     },
                     onOpenRecoveryConnection = {
-                        if (corporateMode) {
+                        if (isEnterprise) {
                             navController.navigate(AppRoute.RecoveryConnection.route)
                         }
                     },
-                    onOpenDevices = {
-                        navController.navigate(AppRoute.Devices.route)
+                    onOpenDevices = { navController.navigate(AppRoute.Devices.route) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(AppRoute.ServicePlan.route) {
+                ServicePlanScreen(
+                    onOpenBasic = { navController.navigate(AppRoute.BasicServicePlan.route) },
+                    onOpenEnterprise = {
+                        navController.navigate(AppRoute.EnterpriseServicePlan.route)
                     },
                     onBack = { navController.popBackStack() },
                 )
             }
+            listOf(
+                    AppRoute.BasicServicePlan to ServicePlan.BASIC,
+                    AppRoute.EnterpriseServicePlan to ServicePlan.ENTERPRISE,
+                )
+                .forEach { (route, plan) ->
+                    composable(route.route) {
+                        ServicePlanDetailsScreen(
+                            plan = plan,
+                            selectedPlan = servicePlan,
+                            onSelectPlan = appViewModel::setServicePlan,
+                            errorCode = appState.settingsErrorCode,
+                            onBack = { navController.popBackStack() },
+                        )
+                    }
+                }
             composable(AppRoute.Accounts.route) {
-                if (!corporateMode) {
-                    LaunchedEffect(Unit) { navController.popBackStack(AppRoute.Settings.route, false) }
+                if (!isEnterprise) {
+                    LaunchedEffect(Unit) {
+                        navController.popBackStack(AppRoute.Settings.route, false)
+                    }
                     return@composable
                 }
                 AccountsScreen(
@@ -238,8 +294,10 @@ fun ZeroIntrusionAppRoot(
                 )
             }
             composable(AppRoute.AddDatabase.route) {
-                if (!corporateMode) {
-                    LaunchedEffect(Unit) { navController.popBackStack(AppRoute.Settings.route, false) }
+                if (!isEnterprise) {
+                    LaunchedEffect(Unit) {
+                        navController.popBackStack(AppRoute.Settings.route, false)
+                    }
                     return@composable
                 }
                 LaunchedEffect(appState.addDatabaseState.isSuccess) {
@@ -252,6 +310,7 @@ fun ZeroIntrusionAppRoot(
                     state = appState.addDatabaseState,
                     onNameChanged = appViewModel::onDatabaseNameChanged,
                     onUrlChanged = appViewModel::onDatabaseUrlChanged,
+                    onEmailChanged = appViewModel::onDatabaseEmailChanged,
                     onSubmit = appViewModel::addDatabase,
                     onBack = {
                         appViewModel.clearAddDatabaseState()
@@ -260,12 +319,14 @@ fun ZeroIntrusionAppRoot(
                 )
             }
             composable(AppRoute.RecoveryConnection.route) {
-                if (!corporateMode) {
-                    LaunchedEffect(Unit) { navController.popBackStack(AppRoute.Settings.route, false) }
+                if (!isEnterprise) {
+                    LaunchedEffect(Unit) {
+                        navController.popBackStack(AppRoute.Settings.route, false)
+                    }
                     return@composable
                 }
                 RecoveryScreen(
-                    corporateRecovery = true,
+                    enterpriseRecovery = true,
                     onCompleted = {
                         appViewModel.refreshAccountDetailsAfterRecovery()
                         navController.popBackStack(AppRoute.Settings.route, inclusive = false)
@@ -275,19 +336,22 @@ fun ZeroIntrusionAppRoot(
             }
             composable(AppRoute.SettingsConnectedDevices.route) {
                 SettingsConnectedDevicesScreen(
-                    deviceInformation = DeviceInformationUiModel(
-                        accountId = appState.registrationState?.accountId.orEmpty(),
-                        deviceId = appState.registrationState?.deviceId.orEmpty(),
-                        deviceName = appState.registrationState?.deviceName.orEmpty(),
-                        namespaceName = appState.registrationState?.namespaceName.orEmpty(),
-                        namespaceId = appState.registrationState?.namespaceId.orEmpty(),
-                        namespaceUrl = appState.registrationState?.namespaceUrl.orEmpty(),
-                        email = appState.registrationState?.email.orEmpty(),
-                    ),
+                    deviceInformation =
+                        DeviceInformationUiModel(
+                            accountId = appState.registrationState?.accountId.orEmpty(),
+                            deviceId = appState.registrationState?.deviceId.orEmpty(),
+                            deviceName = appState.registrationState?.deviceName.orEmpty(),
+                            namespaceName = appState.registrationState?.namespaceName.orEmpty(),
+                            namespaceId = appState.registrationState?.namespaceId.orEmpty(),
+                            namespaceUrl = appState.registrationState?.namespaceUrl.orEmpty(),
+                            email = appState.registrationState?.email.orEmpty(),
+                        ),
                     namespaces = appState.namespaces,
-                    connectedDeviceGroups = (appState.connectedDevicesState as? com.zerointrusion.presentation.app.ConnectedDevicesUiState.Success)
-                        ?.groups
-                        ?: EMPTY_CONNECTED_DEVICE_GROUPS,
+                    connectedDeviceGroups =
+                        (appState.connectedDevicesState
+                                as?
+                                com.zerointrusion.presentation.app.ConnectedDevicesUiState.Success)
+                            ?.groups ?: EMPTY_CONNECTED_DEVICE_GROUPS,
                     namespaceManagementErrorMessage = appState.namespaceManagementErrorMessage,
                     onDeleteNamespace = appViewModel::deleteNamespace,
                     onBack = { navController.popBackStack() },
@@ -295,15 +359,16 @@ fun ZeroIntrusionAppRoot(
             }
             composable(AppRoute.DeviceInformation.route) {
                 DeviceInformationScreen(
-                    model = DeviceInformationUiModel(
-                        accountId = appState.registrationState?.accountId.orEmpty(),
-                        deviceId = appState.registrationState?.deviceId.orEmpty(),
-                        deviceName = appState.registrationState?.deviceName.orEmpty(),
-                        namespaceName = appState.registrationState?.namespaceName.orEmpty(),
-                        namespaceId = appState.registrationState?.namespaceId.orEmpty(),
-                        namespaceUrl = appState.registrationState?.namespaceUrl.orEmpty(),
-                        email = appState.registrationState?.email.orEmpty(),
-                    ),
+                    model =
+                        DeviceInformationUiModel(
+                            accountId = appState.registrationState?.accountId.orEmpty(),
+                            deviceId = appState.registrationState?.deviceId.orEmpty(),
+                            deviceName = appState.registrationState?.deviceName.orEmpty(),
+                            namespaceName = appState.registrationState?.namespaceName.orEmpty(),
+                            namespaceId = appState.registrationState?.namespaceId.orEmpty(),
+                            namespaceUrl = appState.registrationState?.namespaceUrl.orEmpty(),
+                            email = appState.registrationState?.email.orEmpty(),
+                        ),
                     namespaces = appState.namespaces,
                     errorMessage = appState.namespaceSelectionErrorMessage,
                     onNamespaceSelected = appViewModel::setSelectedNamespace,
@@ -311,13 +376,25 @@ fun ZeroIntrusionAppRoot(
                 )
             }
             composable(AppRoute.Devices.route) {
+                val destination =
+                    devicesEntryRoute(
+                        mobileRegistrations = appState.mobileRegistrations,
+                        registrationState = appState.registrationState,
+                    )
+                if (destination == AppRoute.DeviceRemoval) {
+                    LaunchedEffect(destination) {
+                        navController.navigate(destination.route) {
+                            popUpTo(AppRoute.Devices.route) { inclusive = true }
+                            launchSingleTop = true
+                        }
+                    }
+                    return@composable
+                }
                 DevicesScreen(
                     onOpenDeviceInformation = {
                         navController.navigate(AppRoute.DeviceInformation.route)
                     },
-                    onOpenRemoveDevices = {
-                        navController.navigate(AppRoute.DeviceRemoval.route)
-                    },
+                    onOpenRemoveDevices = { navController.navigate(AppRoute.DeviceRemoval.route) },
                     onBack = { navController.popBackStack() },
                 )
             }
@@ -328,19 +405,35 @@ fun ZeroIntrusionAppRoot(
                     onLoad = appViewModel::loadRemovableDevices,
                     onDelete = appViewModel::deleteDevice,
                     onBack = { navController.popBackStack() },
+                    databaseNameForDevice = { device ->
+                        appState.namespaces
+                            .firstOrNull { namespace ->
+                                namespace.accountId.trim() == device.accountId.trim() &&
+                                    namespace.namespaceUrl.trim().trimEnd('/') ==
+                                        device.namespaceUrl.trim().trimEnd('/')
+                            }
+                            ?.namespaceName
+                            ?: appState.registrationState
+                                ?.takeIf { registration ->
+                                    registration.accountId.trim() == device.accountId.trim() &&
+                                        registration.namespaceUrl.trim().trimEnd('/') ==
+                                            device.namespaceUrl.trim().trimEnd('/')
+                                }
+                                ?.namespaceName
+                            ?: "Unknown database"
+                    },
                 )
             }
             composable(AppRoute.QrRead.route) {
                 QrReadScreen(
                     qrNamespaceRegistrationState = appState.qrNamespaceRegistrationState,
-                    onClearQrNamespaceRegistrationState = appViewModel::clearQrNamespaceRegistrationState,
+                    onClearQrNamespaceRegistrationState =
+                        appViewModel::clearQrNamespaceRegistrationState,
                     onBack = {
                         appViewModel.clearQrNamespaceRegistrationState()
                         navController.popBackStack()
                     },
-                    onPayloadScanned = { payload ->
-                        appViewModel.registerNamespaceFromQr(payload)
-                    },
+                    onPayloadScanned = { payload -> appViewModel.registerNamespaceFromQr(payload) },
                 )
             }
             composable(AppRoute.QrNamespaceDeviceSelection.route) {
@@ -362,9 +455,7 @@ fun ZeroIntrusionAppRoot(
                 )
             }
             composable(AppRoute.DesktopSessions.route) {
-                LaunchedEffect(Unit) {
-                    appViewModel.loadDesktopSessions()
-                }
+                LaunchedEffect(Unit) { appViewModel.loadDesktopSessions() }
                 DesktopSessionsScreen(
                     accountId = appState.registrationState?.accountId.orEmpty(),
                     mobileDeviceId = appState.registrationState?.deviceId.orEmpty(),
@@ -375,9 +466,7 @@ fun ZeroIntrusionAppRoot(
                 )
             }
             composable(AppRoute.Namespaces.route) {
-                LaunchedEffect(Unit) {
-                    appViewModel.refreshAccountDetailsSnapshot()
-                }
+                LaunchedEffect(Unit) { appViewModel.refreshAccountDetailsSnapshot() }
                 NamespacesScreen(
                     namespaces = appState.namespaces,
                     gatewayAccountId = appState.registrationState?.accountId.orEmpty(),

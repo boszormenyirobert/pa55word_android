@@ -10,13 +10,12 @@ data class NamespaceEntry(
     val attestationId: String? = null,
     val deviceName: String? = null,
     val publicKey: String? = null,
+    val email: String = "",
 )
 
 data class NamespaceFormValidation(
     val namespaceNameError: String? = null,
     val namespaceUrlError: String? = null,
 ) {
-    val isValid: Boolean =
-        namespaceNameError == null &&
-            namespaceUrlError == null
+    val isValid: Boolean = namespaceNameError == null && namespaceUrlError == null
 }

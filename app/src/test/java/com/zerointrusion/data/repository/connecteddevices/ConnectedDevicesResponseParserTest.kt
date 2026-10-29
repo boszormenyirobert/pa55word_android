@@ -1,6 +1,9 @@
 package com.zerointrusion.data.repository.connecteddevices
 
 import com.google.gson.Gson
+import com.zerointrusion.data.storage.LocalConnectedDeviceEntry
+import com.zerointrusion.data.storage.toLocalConnectedDeviceEntries
+import com.zerointrusion.data.storage.toNamespaceEntries
 import com.zerointrusion.domain.common.RegistrationFailure
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -20,6 +23,7 @@ class ConnectedDevicesResponseParserTest {
         assertEquals("dev", registration.namespaceName)
         assertEquals("https://target.example", registration.namespaceUrl)
         assertEquals("target-dek", registration.encDek)
+        assertEquals("database@example.com", registration.email)
     }
 
     @Test
@@ -28,7 +32,21 @@ class ConnectedDevicesResponseParserTest {
         assertEquals("desktop", parsed.groups.single().deviceId)
         assertEquals("desktop", parsed.namespaces.single().desktopDeviceId)
         assertEquals("target-account", parsed.namespaces.single().accountId)
+        assertEquals("database@example.com", parsed.namespaces.single().email)
         assertEquals(1, parsed.mobileRegistrations.size)
+    }
+
+    @Test
+    fun `namespace email survives local normalization serialization and conversion`() {
+        val namespace = parser.parse(response(includeDesktop = true), "phone").namespaces.single()
+        val local =
+            listOf(namespace.copy(email = "  database@example.com  "))
+                .toLocalConnectedDeviceEntries()
+                .single()
+        assertEquals("database@example.com", local.namespaces.single().email)
+        val restored = Gson().fromJson(Gson().toJson(local), LocalConnectedDeviceEntry::class.java)
+        assertEquals("database@example.com", restored.namespaces.single().email)
+        assertEquals("database@example.com", listOf(restored).toNamespaceEntries().single().email)
     }
 
     @Test
@@ -44,9 +62,12 @@ class ConnectedDevicesResponseParserTest {
     @Test
     fun `mobile registrations survive snapshot merge independently of desktop namespaces`() {
         val parsed = parser.parse(response(), "phone")
-        val snapshot = com.zerointrusion.domain.connecteddevices.AccountDetailsSnapshot(
-            parsed.groups, parsed.namespaces, parsed.mobileRegistrations,
-        )
+        val snapshot =
+            com.zerointrusion.domain.connecteddevices.AccountDetailsSnapshot(
+                parsed.groups,
+                parsed.namespaces,
+                parsed.mobileRegistrations,
+            )
         val merged = AccountDetailsSnapshotMerger().mergeSnapshots(listOf(snapshot), emptyList())
         assertEquals(parsed.mobileRegistrations, merged.mobileRegistrations)
         assertTrue(merged.groups.isEmpty())
@@ -55,10 +76,17 @@ class ConnectedDevicesResponseParserTest {
     @Test
     fun `shared account filter removes desktop and mobile connections together`() {
         val parsed = parser.parse(response(includeDesktop = true), "phone")
-        val snapshot = com.zerointrusion.domain.connecteddevices.AccountDetailsSnapshot(
-            parsed.groups, parsed.namespaces, parsed.mobileRegistrations,
-        )
-        val removed = setOf(AccountDetailsFetchTarget(" HTTPS://TARGET.EXAMPLE/ ", " target-account ").storageIdentity())
+        val snapshot =
+            com.zerointrusion.domain.connecteddevices.AccountDetailsSnapshot(
+                parsed.groups,
+                parsed.namespaces,
+                parsed.mobileRegistrations,
+            )
+        val removed =
+            setOf(
+                AccountDetailsFetchTarget(" HTTPS://TARGET.EXAMPLE/ ", " target-account ")
+                    .storageIdentity()
+            )
         val filtered = snapshot.withoutAccounts(removed)
         assertTrue(filtered.groups.isEmpty())
         assertTrue(filtered.namespaces.isEmpty())
@@ -68,22 +96,32 @@ class ConnectedDevicesResponseParserTest {
     @Test
     fun `shared account filter preserves connections to another account on same server`() {
         val parsed = parser.parse(response(includeDesktop = true), "phone")
-        val snapshot = com.zerointrusion.domain.connecteddevices.AccountDetailsSnapshot(
-            parsed.groups, parsed.namespaces, parsed.mobileRegistrations,
-        )
-        val removed = setOf(AccountDetailsFetchTarget("https://target.example", "other-account").storageIdentity())
+        val snapshot =
+            com.zerointrusion.domain.connecteddevices.AccountDetailsSnapshot(
+                parsed.groups,
+                parsed.namespaces,
+                parsed.mobileRegistrations,
+            )
+        val removed =
+            setOf(
+                AccountDetailsFetchTarget("https://target.example", "other-account")
+                    .storageIdentity()
+            )
         assertEquals(snapshot, snapshot.withoutAccounts(removed))
     }
 
     private fun response(includeDesktop: Boolean = false): String {
-        val namespace = """{"accountId":"target-account","namespaceId":"1234567890","namespace":"dev","url":"https://target.example/","root":true}"""
-        val desktop = if (includeDesktop) {
-            """,{"desktopDeviceId":"desktop","deviceName":"PC","namespaces":[$namespace]}"""
-        } else {
-            ""
-        }
+        val namespace =
+            """{"accountId":"target-account","namespaceId":"1234567890","namespace":"dev","url":"https://target.example/","root":true}"""
+        val desktop =
+            if (includeDesktop) {
+                """,{"desktopDeviceId":"desktop","deviceName":"PC","namespaces":[$namespace]}"""
+            } else {
+                ""
+            }
         return """{"success":true,"accounts":[{
             "accountId":"target-account",
+            "email":"database@example.com",
             "devices":[{"mobileDeviceId":"phone","desktopDeviceId":null,"namespaces":[$namespace]}$desktop],
             "dek":[{"mobileDeviceId":"phone","encDek":"target-dek"},{"mobileDeviceId":"other","encDek":"wrong-dek"}]
         }]}"""

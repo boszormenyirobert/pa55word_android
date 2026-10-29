@@ -8,7 +8,6 @@ import com.zerointrusion.data.storage.ConnectedDevicesLocalStore
 import com.zerointrusion.data.storage.LocalConnectedDeviceEntry
 import com.zerointrusion.data.storage.LocalConnectedNamespace
 import com.zerointrusion.data.storage.RegistrationStateStore
-import com.zerointrusion.domain.common.RegistrationFailure
 import com.zerointrusion.domain.connecteddevices.MobileNamespaceRegistration
 import com.zerointrusion.domain.connecteddevices.RemovableAccountDevice
 import com.zerointrusion.domain.registration.RegistrationState
@@ -28,22 +27,97 @@ import retrofit2.Response
 
 class AccountDetailsSnapshotFetcherTest {
     @Test
-    fun `deleting current phone on default server preserves surviving registration`() = runBlocking {
-        val fixture = Fixture(home = "removed")
-        fixture.repository().deleteDevice(
-            RemovableAccountDevice("removed", "https://removed.example", targetMobileDeviceId = "phone"),
-        )
-        assertEquals("active", fixture.state.value?.accountId)
-        assertEquals("active-dek", fixture.state.value?.encDek)
-        assertEquals(listOf("active"), fixture.store.registrations.map { it.accountId })
+    fun `mobile-only database uses its stored name even when unavailable`() = runBlocking {
+        val fixture = Fixture(home = "active", unavailableAccount = "removed")
+        fixture.store.replaceEntries(emptyList())
+        fixture.store.registrations =
+            fixture.store.registrations.map {
+                it.copy(
+                    namespaceName =
+                        if (it.accountId == "removed") "Secondary database" else "Primary database"
+                )
+            }
+
+        fixture.fetcher().fetchSnapshot()
+
+        val secondary =
+            fixture.holder.observeDatabaseAvailability().first().single {
+                it.accountId == "removed"
+            }
+        assertEquals("Secondary database", secondary.namespaceName)
+        assertEquals(false, secondary.isAvailable)
     }
+
+    @Test
+    fun `mobile-only database uses the name returned during the current refresh`() = runBlocking {
+        val fixture = Fixture(home = "active", removedAvailable = true)
+        fixture.store.replaceEntries(emptyList())
+        fixture.store.registrations =
+            fixture.store.registrations.map { it.copy(namespaceName = "") }
+
+        fixture.fetcher().fetchSnapshot()
+
+        val secondary =
+            fixture.holder.observeDatabaseAvailability().first().single {
+                it.accountId == "removed"
+            }
+        assertEquals("dev", secondary.namespaceName)
+        assertEquals(true, secondary.isAvailable)
+    }
+
+    @Test
+    fun `newly discovered unavailable namespace keeps its descriptive name`() = runBlocking {
+        val fixture =
+            Fixture(
+                home = "active",
+                unavailableAccount = "removed",
+                extraNamespace =
+                    """{"namespaceId":"abcdef0123","namespace":"Discovered database","url":"https://removed.example"}""",
+            )
+        fixture.store.replaceEntries(emptyList())
+        fixture.store.registrations =
+            fixture.store.registrations.filter { it.accountId == "active" }
+
+        fixture.fetcher().fetchSnapshot()
+
+        val discovered =
+            fixture.holder.observeDatabaseAvailability().first().single {
+                it.namespaceUrl == "https://removed.example"
+            }
+        assertEquals("Discovered database", discovered.namespaceName)
+        assertEquals(false, discovered.isAvailable)
+    }
+
+    @Test
+    fun `deleting current phone on default server preserves surviving registration`() =
+        runBlocking {
+            val fixture = Fixture(home = "removed")
+            fixture
+                .repository()
+                .deleteDevice(
+                    RemovableAccountDevice(
+                        "removed",
+                        "https://removed.example",
+                        targetMobileDeviceId = "phone",
+                    )
+                )
+            assertEquals("active", fixture.state.value?.accountId)
+            assertEquals("active-dek", fixture.state.value?.encDek)
+            assertEquals(listOf("active"), fixture.store.registrations.map { it.accountId })
+        }
 
     @Test
     fun `deleting last phone registration clears local registration`() = runBlocking {
         val fixture = Fixture(home = "removed", includeActive = false)
-        fixture.repository().deleteDevice(
-            RemovableAccountDevice("removed", "https://removed.example", targetMobileDeviceId = "phone"),
-        )
+        fixture
+            .repository()
+            .deleteDevice(
+                RemovableAccountDevice(
+                    "removed",
+                    "https://removed.example",
+                    targetMobileDeviceId = "phone",
+                )
+            )
         assertNull(fixture.state.value)
         assertEquals(emptyList<MobileNamespaceRegistration>(), fixture.store.registrations)
     }
@@ -72,7 +146,10 @@ class AccountDetailsSnapshotFetcherTest {
     @Test
     fun `last removed account clears registration without a list error`() = runBlocking {
         val fixture = Fixture(home = "removed", includeActive = false)
-        assertEquals(emptyList<MobileNamespaceRegistration>(), fixture.fetcher().fetchSnapshot().mobileRegistrations)
+        assertEquals(
+            emptyList<MobileNamespaceRegistration>(),
+            fixture.fetcher().fetchSnapshot().mobileRegistrations,
+        )
         assertNull(fixture.state.value)
         assertEquals(emptyList<MobileNamespaceRegistration>(), fixture.store.registrations)
     }
@@ -105,7 +182,10 @@ class AccountDetailsSnapshotFetcherTest {
 
         assertEquals(listOf("active", "removed"), fixture.requests)
         assertEquals(listOf("removed"), snapshot.mobileRegistrations.map { it.accountId })
-        val availability = fixture.holder.observeDatabaseAvailability().first().associate { it.accountId to it.isAvailable }
+        val availability =
+            fixture.holder.observeDatabaseAvailability().first().associate {
+                it.accountId to it.isAvailable
+            }
         assertEquals(false, availability["active"])
         assertEquals(true, availability["removed"])
     }
@@ -129,29 +209,45 @@ class AccountDetailsSnapshotFetcherTest {
         private val timeoutAccount: String? = null,
         private val cancelAccount: String? = null,
         private val removedAvailable: Boolean = false,
+        private val extraNamespace: String? = null,
     ) {
-        val state = MutableStateFlow<RegistrationState?>(
-            RegistrationState(
-                accountId = home, mobileDeviceId = "phone", deviceName = "Phone",
-                namespaceName = "dev", namespaceUrl = "https://$home.example",
-                namespaceId = "1234567890", email = "a@example.com",
-                encDek = "$home-dek",
-            ),
-        )
-        val store = Store(
-            (if (includeActive) listOf("active", "removed") else listOf("removed")).map {
-                MobileNamespaceRegistration(it, "phone", "1234567890", "dev", "https://$it.example", "$it-dek")
-            },
-        )
+        val state =
+            MutableStateFlow<RegistrationState?>(
+                RegistrationState(
+                    accountId = home,
+                    mobileDeviceId = "phone",
+                    deviceName = "Phone",
+                    namespaceName = "dev",
+                    namespaceUrl = "https://$home.example",
+                    namespaceId = "1234567890",
+                    email = "a@example.com",
+                    encDek = "$home-dek",
+                )
+            )
+        val store =
+            Store(
+                (if (includeActive) listOf("active", "removed") else listOf("removed")).map {
+                    MobileNamespaceRegistration(
+                        it,
+                        "phone",
+                        "1234567890",
+                        "dev",
+                        "https://$it.example",
+                        "$it-dek",
+                    )
+                }
+            )
         val requests = mutableListOf<String>()
         val holder = InMemoryAccountDetailsStateHolder()
 
-        private val api = proxy(AccountApi::class.java) { method, args ->
+        private val api =
+            proxy(AccountApi::class.java) { method, args ->
                 if (method == "deleteAccountDevice") {
                     return@proxy Response.success("""{"success":true}""".toResponseBody())
                 }
                 check(method == "getAccountDetails")
-                val account = if (args[0].toString().contains("active.example")) "active" else "removed"
+                val account =
+                    if (args[0].toString().contains("active.example")) "active" else "removed"
                 requests += account
                 if (account == timeoutAccount) {
                     return@proxy suspendUntilCancelled(args.last())
@@ -163,32 +259,61 @@ class AccountDetailsSnapshotFetcherTest {
                     throw IllegalStateException("$account server is unavailable")
                 }
                 if (account == "removed" && !removedAvailable) {
-                    Response.error<okhttp3.ResponseBody>(401, """{"internalCode":"$errorCode"}""".toResponseBody())
+                    Response.error<okhttp3.ResponseBody>(
+                        401,
+                        """{"internalCode":"$errorCode"}""".toResponseBody(),
+                    )
                 } else {
+                    val desktop =
+                        extraNamespace
+                            ?.let {
+                                """,{"desktopDeviceId":"discovered-desktop","namespaces":[$it]}"""
+                            }
+                            .orEmpty()
                     Response.success(
                         """{"success":true,"accounts":[{"accountId":"$account",
                         "devices":[{"mobileDeviceId":"phone","namespaces":[{"namespaceId":"1234567890",
-                        "namespace":"dev","url":"https://$account.example"}]}],
-                        "dek":[{"mobileDeviceId":"phone","encDek":"$account-dek"}]}]}""".toResponseBody(),
+                        "namespace":"dev","url":"https://$account.example"}]}$desktop],
+                        "dek":[{"mobileDeviceId":"phone","encDek":"$account-dek"}]}]}"""
+                            .toResponseBody()
                     )
                 }
             }
-        private val stateStore = object : RegistrationStateStore {
+        private val stateStore =
+            object : RegistrationStateStore {
                 override fun observeState() = state
-                override suspend fun save(state: RegistrationState) { this@Fixture.state.value = state }
-                override suspend fun clear() { state.value = null }
+
+                override suspend fun save(state: RegistrationState) {
+                    this@Fixture.state.value = state
+                }
+
+                override suspend fun clear() {
+                    state.value = null
+                }
             }
-        private val signatureService = proxy(SignatureService::class.java) { method, _ ->
-            check(method == "signJsonString")
-            "signature"
-        }
+        private val signatureService =
+            proxy(SignatureService::class.java) { method, _ ->
+                check(method == "signJsonString")
+                "signature"
+            }
 
-        fun repository() = ConnectedDevicesRepositoryImpl(
-            fetcher(), holder, store, stateStore, api, signatureService, Gson(),
-        )
+        fun repository() =
+            ConnectedDevicesRepositoryImpl(
+                fetcher(),
+                holder,
+                store,
+                stateStore,
+                api,
+                signatureService,
+                Gson(),
+            )
 
-        fun fetcher(): AccountDetailsSnapshotFetcher = AccountDetailsSnapshotFetcher(
-                api, stateStore, holder, store,
+        fun fetcher(): AccountDetailsSnapshotFetcher =
+            AccountDetailsSnapshotFetcher(
+                api,
+                stateStore,
+                holder,
+                store,
                 proxy(DekService::class.java) { method, _ ->
                     check(method == "decryptDek")
                     ByteArray(32)
@@ -198,28 +323,53 @@ class AccountDetailsSnapshotFetcherTest {
             )
     }
 
-    private class Store(var registrations: List<MobileNamespaceRegistration>) : ConnectedDevicesLocalStore {
-        private val entries = MutableStateFlow(
-            registrations.map {
-                LocalConnectedDeviceEntry(
-                    it.namespaceUrl, it.accountId, "desktop",
-                    listOf(LocalConnectedNamespace(
-                        it.accountId, "desktop", it.namespaceId, it.namespaceName, it.namespaceUrl,
-                    )),
-                )
-            },
-        )
+    private class Store(var registrations: List<MobileNamespaceRegistration>) :
+        ConnectedDevicesLocalStore {
+        private val entries =
+            MutableStateFlow(
+                registrations.map {
+                    LocalConnectedDeviceEntry(
+                        it.namespaceUrl,
+                        it.accountId,
+                        "desktop",
+                        listOf(
+                            LocalConnectedNamespace(
+                                it.accountId,
+                                "desktop",
+                                it.namespaceId,
+                                it.namespaceName,
+                                it.namespaceUrl,
+                                email = "user@example.com",
+                            )
+                        ),
+                    )
+                }
+            )
+
         override fun observeEntries() = entries
+
         override fun currentEntries() = entries.value
-        override suspend fun replaceEntries(entries: List<LocalConnectedDeviceEntry>) { this.entries.value = entries }
-        override suspend fun upsertEntry(entry: LocalConnectedDeviceEntry) { entries.value += entry }
+
+        override suspend fun replaceEntries(entries: List<LocalConnectedDeviceEntry>) {
+            this.entries.value = entries
+        }
+
+        override suspend fun upsertEntry(entry: LocalConnectedDeviceEntry) {
+            entries.value += entry
+        }
+
         override fun currentMobileRegistrations() = registrations
+
         override fun observeMobileRegistrations() = kotlinx.coroutines.flow.flowOf(registrations)
-        override suspend fun replaceMobileRegistrations(registrations: List<MobileNamespaceRegistration>) {
+
+        override suspend fun replaceMobileRegistrations(
+            registrations: List<MobileNamespaceRegistration>
+        ) {
             this.registrations = registrations
         }
+
         override suspend fun updateMobileRegistrations(
-            transform: (List<MobileNamespaceRegistration>) -> List<MobileNamespaceRegistration>,
+            transform: (List<MobileNamespaceRegistration>) -> List<MobileNamespaceRegistration>
         ) {
             registrations = transform(registrations)
         }
@@ -234,8 +384,12 @@ class AccountDetailsSnapshotFetcherTest {
         }
 
         private fun <T : Any> proxy(type: Class<T>, handler: (String, Array<out Any?>) -> Any): T =
-            requireNotNull(type.cast(Proxy.newProxyInstance(type.classLoader, arrayOf(type)) { _, method, args ->
-                handler(method.name, args ?: emptyArray())
-            }))
+            requireNotNull(
+                type.cast(
+                    Proxy.newProxyInstance(type.classLoader, arrayOf(type)) { _, method, args ->
+                        handler(method.name, args ?: emptyArray())
+                    }
+                )
+            )
     }
 }

@@ -31,10 +31,38 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
-enum class AppButtonSize {
-    Small,
-    Compact,
-    Large,
+enum class AppButtonSize(
+    internal val height: Dp,
+    internal val iconSize: Dp,
+    internal val iconSpacing: Dp,
+    internal val verticalPadding: Dp,
+    internal val horizontalPadding: Dp,
+    internal val menuHorizontalPadding: Dp,
+) {
+    Small(
+        height = 32.dp,
+        iconSize = 16.dp,
+        iconSpacing = 6.dp,
+        verticalPadding = 4.dp,
+        horizontalPadding = 16.dp,
+        menuHorizontalPadding = 30.dp,
+    ),
+    Compact(
+        height = 48.dp,
+        iconSize = 20.dp,
+        iconSpacing = 10.dp,
+        verticalPadding = 10.dp,
+        horizontalPadding = 16.dp,
+        menuHorizontalPadding = 30.dp,
+    ),
+    Large(
+        height = 80.dp,
+        iconSize = 26.dp,
+        iconSpacing = 16.dp,
+        verticalPadding = 18.dp,
+        horizontalPadding = 20.dp,
+        menuHorizontalPadding = 20.dp,
+    ),
 }
 
 @Composable
@@ -46,17 +74,15 @@ fun AppButton(
     color: Color = MaterialTheme.colorScheme.primary,
     size: AppButtonSize = AppButtonSize.Compact,
     contentAlignment: Alignment.Horizontal = Alignment.CenterHorizontally,
-    horizontalContentPadding: Dp = if (size == AppButtonSize.Large) 20.dp else 16.dp,
+    horizontalContentPadding: Dp = size.horizontalPadding,
     disabledContentAlpha: Float = 0.38f,
     content: @Composable RowScope.() -> Unit,
 ) {
     val isSmall = size == AppButtonSize.Small
-    val isLarge = size == AppButtonSize.Large
     OutlinedButton(
         onClick = onClick,
         modifier =
-            if (isSmall) modifier.height(32.dp)
-            else modifier.heightIn(min = if (isLarge) 80.dp else 48.dp),
+            if (isSmall) modifier.height(size.height) else modifier.heightIn(min = size.height),
         enabled = enabled,
         shape = RoundedCornerShape(8.dp),
         border = BorderStroke(1.dp, color.copy(alpha = if (enabled) 0.6f else 0.2f)),
@@ -66,10 +92,7 @@ fun AppButton(
                 disabledContentColor = color.copy(alpha = disabledContentAlpha),
             ),
         contentPadding =
-            PaddingValues(
-                horizontal = horizontalContentPadding,
-                vertical = if (isSmall) 4.dp else if (isLarge) 18.dp else 10.dp,
-            ),
+            PaddingValues(horizontal = horizontalContentPadding, vertical = size.verticalPadding),
     ) {
         Row(
             modifier =
@@ -77,12 +100,8 @@ fun AppButton(
             horizontalArrangement = Arrangement.aligned(contentAlignment),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                modifier = Modifier.size(if (isSmall) 16.dp else if (isLarge) 26.dp else 20.dp),
-            )
-            Spacer(modifier = Modifier.width(if (isSmall) 6.dp else if (isLarge) 16.dp else 10.dp))
+            Icon(icon, contentDescription = null, modifier = Modifier.size(size.iconSize))
+            Spacer(modifier = Modifier.width(size.iconSpacing))
             ProvideTextStyle(
                 if (isSmall) MaterialTheme.typography.labelLarge
                 else MaterialTheme.typography.titleMedium
@@ -94,13 +113,19 @@ fun AppButton(
 }
 
 @Composable
-fun AppMenuButton(text: String, icon: ImageVector, onClick: () -> Unit) {
+fun AppMenuButton(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    size: AppButtonSize = AppButtonSize.Compact,
+) {
     AppButton(
         onClick = onClick,
         icon = icon,
         modifier = Modifier.fillMaxWidth(),
+        size = size,
         contentAlignment = Alignment.Start,
-        horizontalContentPadding = 30.dp,
+        horizontalContentPadding = size.menuHorizontalPadding,
     ) {
         Text(text)
     }

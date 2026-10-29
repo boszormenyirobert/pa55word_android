@@ -26,6 +26,7 @@ fun AddDatabaseScreen(
     state: AddDatabaseUiState,
     onNameChanged: (String) -> Unit,
     onUrlChanged: (String) -> Unit,
+    onEmailChanged: (String) -> Unit,
     onSubmit: () -> Unit,
     onBack: () -> Unit,
 ) {
@@ -47,6 +48,19 @@ fun AddDatabaseScreen(
         },
     ) {
         AppSettingsPanel {
+            OutlinedTextField(
+                value = state.email,
+                onValueChange = onEmailChanged,
+                label = { Text("Email") },
+                enabled = !state.isSubmitting,
+                isError = state.emailError != null,
+                supportingText = { state.emailError?.let { Text(it) } },
+                keyboardOptions =
+                    KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                singleLine = true,
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.fillMaxWidth(),
+            )
             OutlinedTextField(
                 value = state.name,
                 onValueChange = onNameChanged,

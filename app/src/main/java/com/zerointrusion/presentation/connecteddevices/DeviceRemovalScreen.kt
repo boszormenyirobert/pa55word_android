@@ -46,6 +46,7 @@ import com.zerointrusion.domain.connecteddevices.RemovableAccountDevice
 import com.zerointrusion.presentation.app.DeviceRemovalUiState
 import com.zerointrusion.presentation.common.AppButton
 import com.zerointrusion.presentation.common.AppIconButton
+import com.zerointrusion.presentation.common.AppScreenHeader
 import com.zerointrusion.ui.theme.ActionDeclineRed
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.ErrorTextLight
@@ -60,6 +61,7 @@ fun DeviceRemovalScreen(
     onLoad: () -> Unit,
     onDelete: (RemovableAccountDevice) -> Unit,
     onBack: () -> Unit,
+    databaseNameForDevice: (RemovableAccountDevice) -> String = { "Unknown database" },
 ) {
     var pendingDeviceId by remember { mutableStateOf<String?>(null) }
     var isServerMenuExpanded by remember { mutableStateOf(false) }
@@ -67,84 +69,90 @@ fun DeviceRemovalScreen(
     LaunchedEffect(Unit) { onLoad() }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(Dark, LightDark, Dark)))
-            .verticalScroll(rememberScrollState())
-            .padding(WindowInsets.safeDrawing.asPaddingValues())
-            .padding(horizontal = 20.dp, vertical = 20.dp),
+        modifier =
+            Modifier.fillMaxSize()
+                .background(Brush.verticalGradient(listOf(Dark, LightDark, Dark)))
+                .padding(WindowInsets.safeDrawing.asPaddingValues())
+                .padding(horizontal = 20.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(
-            text = "Remove devices",
-            style = MaterialTheme.typography.headlineMedium,
-            color = White,
-        )
-
-        when (state) {
-            DeviceRemovalUiState.Idle,
-            DeviceRemovalUiState.InProgress -> Text("Loading devices...", color = White)
-            is DeviceRemovalUiState.Error -> {
-                Text(state.message, color = ErrorTextLight)
-                AppButton(icon = Icons.Default.Refresh, onClick = onLoad, modifier = Modifier.fillMaxWidth()) { Text("Retry") }
-            }
-            is DeviceRemovalUiState.Success -> {
-                state.errorMessage?.let { Text(it, color = ErrorTextLight) }
-                val serverUrls = state.devices
-                    .map { device -> device.namespaceUrl.trim().trimEnd('/') }
-                    .filter { serverUrl -> serverUrl.isNotEmpty() }
-                    .distinct()
-                    .sorted()
-                LaunchedEffect(serverUrls) {
-                    if (selectedServerUrl !in serverUrls) {
-                        selectedServerUrl = serverUrls.firstOrNull()
+        AppScreenHeader("Remove devices")
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            when (state) {
+                DeviceRemovalUiState.Idle,
+                DeviceRemovalUiState.InProgress -> Text("Loading devices...", color = White)
+                is DeviceRemovalUiState.Error -> {
+                    Text(state.message, color = ErrorTextLight)
+                    AppButton(
+                        icon = Icons.Default.Refresh,
+                        onClick = onLoad,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Retry")
                     }
                 }
-                val displayedDevices = state.devices.filter { device ->
-                    selectedServerUrl == null ||
-                        device.namespaceUrl.trim().trimEnd('/') == selectedServerUrl
-                }
+                is DeviceRemovalUiState.Success -> {
+                    state.errorMessage?.let { Text(it, color = ErrorTextLight) }
+                    val serverUrls =
+                        state.devices
+                            .map { device -> device.namespaceUrl.trim().trimEnd('/') }
+                            .filter { serverUrl -> serverUrl.isNotEmpty() }
+                            .distinct()
+                            .sorted()
+                    LaunchedEffect(serverUrls) {
+                        if (selectedServerUrl !in serverUrls) {
+                            selectedServerUrl = serverUrls.firstOrNull()
+                        }
+                    }
+                    val displayedDevices =
+                        state.devices.filter { device ->
+                            selectedServerUrl == null ||
+                                device.namespaceUrl.trim().trimEnd('/') == selectedServerUrl
+                        }
 
-                if (serverUrls.isNotEmpty()) {
-                    ServerUrlDropdown(
-                        serverUrls = serverUrls,
-                        selectedServerUrl = selectedServerUrl ?: serverUrls.first(),
-                        expanded = isServerMenuExpanded,
-                        onExpandedChange = { isServerMenuExpanded = it },
-                        onServerSelected = { serverUrl ->
-                            selectedServerUrl = serverUrl
-                            isServerMenuExpanded = false
-                        },
-                    )
-                }
-
-                if (displayedDevices.isEmpty()) {
-                    Text("No devices are available to remove.", color = White)
-                } else {
-                    displayedDevices.forEach { device ->
-                        DeviceRemovalCard(
-                            device = device,
-                            isCurrentPhone = device.targetMobileDeviceId == currentMobileDeviceId,
-                            deleting = state.deletingDeviceId == device.id,
-                            showConfirmation = pendingDeviceId == device.id,
-                            onRequestDelete = { pendingDeviceId = device.id },
-                            onCancelDelete = { pendingDeviceId = null },
-                            onConfirmDelete = {
-                                pendingDeviceId = null
-                                onDelete(device)
+                    if (serverUrls.size > 1) {
+                        ServerUrlDropdown(
+                            serverUrls = serverUrls,
+                            selectedServerUrl = selectedServerUrl ?: serverUrls.first(),
+                            expanded = isServerMenuExpanded,
+                            onExpandedChange = { isServerMenuExpanded = it },
+                            onServerSelected = { serverUrl ->
+                                selectedServerUrl = serverUrl
+                                isServerMenuExpanded = false
                             },
                         )
+                    }
+
+                    if (displayedDevices.isEmpty()) {
+                        Text("No devices are available to remove.", color = White)
+                    } else {
+                        displayedDevices.forEach { device ->
+                            DeviceRemovalCard(
+                                device = device,
+                                databaseName = databaseNameForDevice(device),
+                                isCurrentPhone =
+                                    device.targetMobileDeviceId == currentMobileDeviceId,
+                                deleting = state.deletingDeviceId == device.id,
+                                showConfirmation = pendingDeviceId == device.id,
+                                onRequestDelete = { pendingDeviceId = device.id },
+                                onCancelDelete = { pendingDeviceId = null },
+                                onConfirmDelete = {
+                                    pendingDeviceId = null
+                                    onDelete(device)
+                                },
+                            )
+                        }
                     }
                 }
             }
         }
-
         AppButton(
             icon = Icons.AutoMirrored.Filled.ArrowBack,
             onClick = onBack,
-            modifier = Modifier
-                .fillMaxWidth()
-                .navigationBarsPadding(),
+            modifier = Modifier.fillMaxWidth().navigationBarsPadding(),
         ) {
             Text("Back")
         }
@@ -160,30 +168,19 @@ private fun ServerUrlDropdown(
     onExpandedChange: (Boolean) -> Unit,
     onServerSelected: (String) -> Unit,
 ) {
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = onExpandedChange,
-    ) {
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = onExpandedChange) {
         OutlinedTextField(
             value = selectedServerUrl,
             onValueChange = {},
             readOnly = true,
             label = { Text("Server") },
-            trailingIcon = {
-                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-            },
-            modifier = Modifier
-                .menuAnchor(
-                    type = MenuAnchorType.PrimaryNotEditable,
-                    enabled = true,
-                )
-                .fillMaxWidth(),
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier =
+                Modifier.menuAnchor(type = MenuAnchorType.PrimaryNotEditable, enabled = true)
+                    .fillMaxWidth(),
         )
 
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { onExpandedChange(false) },
-        ) {
+        DropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
             serverUrls.forEach { serverUrl ->
                 DropdownMenuItem(
                     text = { Text(serverUrl) },
@@ -197,6 +194,7 @@ private fun ServerUrlDropdown(
 @Composable
 private fun DeviceRemovalCard(
     device: RemovableAccountDevice,
+    databaseName: String,
     isCurrentPhone: Boolean,
     deleting: Boolean,
     showConfirmation: Boolean,
@@ -257,17 +255,10 @@ private fun DeviceRemovalCard(
                 }
             }
             Text(
-                text = "Server: ${device.namespaceUrl}",
+                text = "Database: $databaseName",
                 style = MaterialTheme.typography.bodySmall,
                 color = White.copy(alpha = 0.72f),
             )
-            device.lastTimeUsed?.let { lastTimeUsed ->
-                Text(
-                    text = "Last used: $lastTimeUsed",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = White.copy(alpha = 0.72f),
-                )
-            }
             if (showConfirmation) {
                 Text("Remove this device from the account?", color = White)
                 AppButton(
@@ -279,7 +270,11 @@ private fun DeviceRemovalCard(
                 ) {
                     Text(if (deleting) "Removing..." else "Confirm removal")
                 }
-                AppButton(icon = Icons.Default.Close, onClick = onCancelDelete, modifier = Modifier.fillMaxWidth()) {
+                AppButton(
+                    icon = Icons.Default.Close,
+                    onClick = onCancelDelete,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
                     Text("Cancel")
                 }
             }

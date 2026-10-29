@@ -26,18 +26,24 @@ internal class AdditionalMobileNamespacesFromQrFlow(
     ): QrNamespaceRegistrationResult {
         if (!canImportAdditionalMobileNamespaces(registrationState)) {
             throw RegistrationFailure.Validation(
-                "Additional namespace import is only available while adding a mobile device to an existing account.",
+                "Additional namespace import is only available while adding a mobile device to an existing account."
             )
         }
-        val completedNamespaceKeys = registrationState.completedAdditionalNamespaceKeys.orEmpty().toMutableSet()
+        val completedNamespaceKeys =
+            registrationState.completedAdditionalNamespaceKeys.orEmpty().toMutableSet()
         val registeredEntries = mutableListOf<NamespaceEntry>()
-        val targets = payload.namespaces
-            .filterNot { it.url.normalizedUrl() == registrationState.namespaceUrl.normalizedUrl() }
+        val targets =
+            payload.namespaces.filterNot {
+                it.url.normalizedUrl() == registrationState.namespaceUrl.normalizedUrl()
+            }
 
         targets.forEach { namespace ->
             val namespaceKey = namespace.registrationKey()
             if (namespaceKey in completedNamespaceKeys) {
-                Log.d(QR_LOG_TAG, "Additional mobile namespace already registered. key=$namespaceKey")
+                Log.d(
+                    QR_LOG_TAG,
+                    "Additional mobile namespace already registered. key=$namespaceKey",
+                )
                 return@forEach
             }
             val accountId = namespace.accountId.trim()
@@ -46,39 +52,45 @@ internal class AdditionalMobileNamespacesFromQrFlow(
                     url = namespace.url,
                     accountId = accountId,
                     desktopDeviceId = namespace.desktopDeviceId,
-                    namespaces = listOf(
-                        LocalConnectedNamespace(
-                            accountId = accountId,
-                            desktopDeviceId = namespace.desktopDeviceId,
-                            namespaceId = namespace.namespaceId,
-                            namespace = namespace.namespace,
-                            url = namespace.url,
-                            root = namespace.root,
+                    namespaces =
+                        listOf(
+                            LocalConnectedNamespace(
+                                accountId = accountId,
+                                desktopDeviceId = namespace.desktopDeviceId,
+                                namespaceId = namespace.namespaceId,
+                                namespace = namespace.namespace,
+                                url = namespace.url,
+                                root = namespace.root,
+                                email = registrationState.email.trim(),
+                            )
                         ),
-                    ),
-                ),
+                )
             )
-            registeredEntries += NamespaceEntry(
-                namespaceName = namespace.namespace,
-                namespaceId = namespace.namespaceId,
-                namespaceUrl = namespace.url,
-                accountId = accountId,
-                desktopDeviceId = namespace.desktopDeviceId,
-                root = namespace.root,
-            )
+            registeredEntries +=
+                NamespaceEntry(
+                    namespaceName = namespace.namespace,
+                    namespaceId = namespace.namespaceId,
+                    namespaceUrl = namespace.url,
+                    accountId = accountId,
+                    desktopDeviceId = namespace.desktopDeviceId,
+                    root = namespace.root,
+                    email = registrationState.email.trim(),
+                )
             completedNamespaceKeys += namespaceKey
-            val progressState = (stateStore.observeState().first() ?: registrationState).copy(
-                pendingAdditionalNamespacesScan = true,
-                completedAdditionalNamespaceKeys = completedNamespaceKeys.toList(),
-            )
+            val progressState =
+                (stateStore.observeState().first() ?: registrationState).copy(
+                    pendingAdditionalNamespacesScan = true,
+                    completedAdditionalNamespaceKeys = completedNamespaceKeys.toList(),
+                )
             stateStore.save(progressState)
         }
 
         val currentState = stateStore.observeState().first() ?: registrationState
-        val finalState = currentState.copy(
-            pendingAdditionalNamespacesScan = false,
-            completedAdditionalNamespaceKeys = completedNamespaceKeys.toList(),
-        )
+        val finalState =
+            currentState.copy(
+                pendingAdditionalNamespacesScan = false,
+                completedAdditionalNamespaceKeys = completedNamespaceKeys.toList(),
+            )
         stateStore.save(finalState)
         registeredEntries.forEach { registered ->
             fcmTokenSynchronizer.syncNamespace(
@@ -90,11 +102,12 @@ internal class AdditionalMobileNamespacesFromQrFlow(
             .onFailure { Log.w(QR_LOG_TAG, "Additional namespace account refresh failed.", it) }
 
         return QrNamespaceRegistrationResult(
-            message = if (targets.isEmpty()) {
-                "No additional namespace servers were provided."
-            } else {
-                "Additional namespace servers connected: ${targets.size}"
-            },
+            message =
+                if (targets.isEmpty()) {
+                    "No additional namespace servers were provided."
+                } else {
+                    "Additional namespace servers connected: ${targets.size}"
+                }
         )
     }
 
@@ -109,4 +122,8 @@ internal fun canImportAdditionalMobileNamespaces(registrationState: Registration
     registrationState.pendingAdditionalNamespacesScan
 
 private fun com.zerointrusion.domain.qr.AdditionalMobileNamespace.registrationKey(): String =
-    desktopDeviceId.trim().lowercase() + "|" + namespaceId.trim().lowercase() + "|" + url.normalizedUrl()
+    desktopDeviceId.trim().lowercase() +
+        "|" +
+        namespaceId.trim().lowercase() +
+        "|" +
+        url.normalizedUrl()

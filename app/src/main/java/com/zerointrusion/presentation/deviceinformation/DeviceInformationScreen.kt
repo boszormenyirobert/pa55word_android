@@ -12,7 +12,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -20,9 +19,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.unit.dp
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.presentation.common.AppButton
+import com.zerointrusion.presentation.common.AppScreenHeader
 import com.zerointrusion.ui.theme.Dark
 import com.zerointrusion.ui.theme.LightDark
-import com.zerointrusion.ui.theme.White
 
 @Composable
 fun DeviceInformationScreen(
@@ -33,36 +32,24 @@ fun DeviceInformationScreen(
     onBack: () -> Unit,
 ) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Dark, LightDark, Dark),
-                ),
-            )
-            .verticalScroll(rememberScrollState())
-            .padding(WindowInsets.safeDrawing.asPaddingValues())
-            .padding(20.dp),
+        modifier =
+            Modifier.fillMaxSize()
+                .background(brush = Brush.verticalGradient(colors = listOf(Dark, LightDark, Dark)))
+                .padding(WindowInsets.safeDrawing.asPaddingValues())
+                .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Text(
-            text = "Device information",
-            style = MaterialTheme.typography.headlineMedium,
-            color = White,
-        )
+        AppScreenHeader("Device information")
 
-        DeviceInformationContent(
-            model = model,
-            namespaces = namespaces,
-            errorMessage = errorMessage,
-            onNamespaceSelected = onNamespaceSelected,
-        )
-
-        AppButton(
-            icon = Icons.AutoMirrored.Filled.ArrowBack,
-            onClick = onBack,
-        ) {
-            Text("Back")
+        Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            DeviceInformationContent(
+                model = model,
+                namespaces = namespaces,
+                errorMessage = errorMessage,
+                onNamespaceSelected = onNamespaceSelected,
+            )
         }
+
+        AppButton(icon = Icons.AutoMirrored.Filled.ArrowBack, onClick = onBack) { Text("Back") }
     }
 }

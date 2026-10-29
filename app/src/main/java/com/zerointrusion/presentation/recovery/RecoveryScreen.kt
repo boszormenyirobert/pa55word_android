@@ -1,18 +1,8 @@
 package com.zerointrusion.presentation.recovery
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -28,11 +18,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.zerointrusion.presentation.common.AppBackground
 import com.zerointrusion.presentation.common.AppButton
+import com.zerointrusion.presentation.common.AppSettingsPage
 import com.zerointrusion.presentation.common.BannerTone
 import com.zerointrusion.presentation.common.HeroPanel
 import com.zerointrusion.presentation.common.PrimaryActionButton
@@ -45,31 +34,28 @@ import com.zerointrusion.presentation.settings.RecoveryConnectionScreen
 fun RecoveryScreen(
     onBack: () -> Unit,
     onCompleted: () -> Unit,
-    corporateRecovery: Boolean = false,
+    enterpriseRecovery: Boolean = false,
     viewModel: RecoveryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(viewModel) {
-        viewModel.refreshOnScreenOpened()
-    }
-    DisposableEffect(viewModel) {
-        onDispose(viewModel::onScreenExited)
-    }
+    LaunchedEffect(viewModel) { viewModel.refreshOnScreenOpened() }
+    DisposableEffect(viewModel) { onDispose(viewModel::onScreenExited) }
 
     RecoveryScreenContent(
         state = state,
-        corporateRecovery = corporateRecovery,
-        actions = RecoveryActions(
-            onBack = onBack,
-            onCompleted = onCompleted,
-            onQrScanned = viewModel::onQrScanned,
-            onScannerError = viewModel::onScannerError,
-            onConfirmServer = viewModel::confirmServer,
-            onRetry = viewModel::retry,
-            onRetryFcm = viewModel::retryFcm,
-            onCancel = viewModel::cancel,
-        ),
+        enterpriseRecovery = enterpriseRecovery,
+        actions =
+            RecoveryActions(
+                onBack = onBack,
+                onCompleted = onCompleted,
+                onQrScanned = viewModel::onQrScanned,
+                onScannerError = viewModel::onScannerError,
+                onConfirmServer = viewModel::confirmServer,
+                onRetry = viewModel::retry,
+                onRetryFcm = viewModel::retryFcm,
+                onCancel = viewModel::cancel,
+            ),
     )
 }
 
@@ -87,29 +73,31 @@ internal data class RecoveryActions(
 @Composable
 internal fun RecoveryScreenContent(
     state: RecoveryUiState,
-    corporateRecovery: Boolean,
+    enterpriseRecovery: Boolean,
     actions: RecoveryActions,
     scanner: @Composable ((String) -> Unit, (String) -> Unit) -> Unit = { onScanned, onError ->
         QrScannerContent(onPayloadScanned = onScanned, onScannerError = onError)
     },
 ) {
-    var scannerVisible by rememberSaveable { mutableStateOf(corporateRecovery && state.step == RecoveryStep.SCAN) }
+    var scannerVisible by rememberSaveable {
+        mutableStateOf(enterpriseRecovery && state.step == RecoveryStep.SCAN)
+    }
     val onPayloadScanned: (String) -> Unit = { payload ->
         scannerVisible = false
         actions.onQrScanned(payload)
     }
 
-    LaunchedEffect(state.step) {
-        if (state.step != RecoveryStep.SCAN) scannerVisible = false
-    }
+    LaunchedEffect(state.step) { if (state.step != RecoveryStep.SCAN) scannerVisible = false }
 
-    val showInlineScanner = corporateRecovery && scannerVisible && !state.isWorking && !state.isCompleted
+    val showInlineScanner =
+        enterpriseRecovery && scannerVisible && !state.isWorking && !state.isCompleted
     val recoveryContent: @Composable ColumnScope.() -> Unit = {
-        if (!corporateRecovery) {
+        if (!enterpriseRecovery) {
             HeroPanel(
                 eyebrow = "Account recovery",
                 title = "Restore an existing account",
-                body = "Use the recovery QR code from your active desktop device to restore access to your existing account. Confirm the recovery server, then match the pairing code on your desktop to approve this mobile device.",
+                body =
+                    "Use the recovery QR code from your active desktop device to restore access to your existing account. Confirm the recovery server, then match the pairing code on your desktop to approve this mobile device.",
             )
         }
         state.scannedQr?.let { qr ->
@@ -120,11 +108,7 @@ internal fun RecoveryScreenContent(
             )
         }
         state.pairingCode?.let { code ->
-            StatusBanner(
-                title = "Pairing code",
-                message = code,
-                tone = BannerTone.Success,
-            )
+            StatusBanner(title = "Pairing code", message = code, tone = BannerTone.Success)
         }
         state.errorCode?.let { errorCode ->
             StatusBanner(
@@ -141,35 +125,17 @@ internal fun RecoveryScreenContent(
         }
     }
 
-    if (corporateRecovery) {
+    if (enterpriseRecovery) {
         RecoveryConnectionScreen(
             onBack = actions.onBack,
             onCancelScan = if (showInlineScanner) ({ scannerVisible = false }) else null,
             content = recoveryContent,
         )
     } else {
-        AppBackground {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(WindowInsets.safeDrawing.asPaddingValues())
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                recoveryContent()
-                AppButton(
-                    icon = Icons.AutoMirrored.Filled.ArrowBack,
-                    onClick = actions.onBack,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Back")
-                }
-            }
-        }
+        AppSettingsPage(title = "Recovery", onBack = actions.onBack) { recoveryContent() }
     }
 
-    if (scannerVisible && !corporateRecovery && !state.isWorking && !state.isCompleted) {
+    if (scannerVisible && !enterpriseRecovery && !state.isWorking && !state.isCompleted) {
         QrScannerSheet(
             onDismiss = { scannerVisible = false },
             onPayloadScanned = onPayloadScanned,
@@ -247,5 +213,4 @@ private fun RecoveryActionButtons(
             }
         }
     }
-
 }

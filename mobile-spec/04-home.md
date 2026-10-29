@@ -16,13 +16,26 @@ Data source:
 - Live desktop sessions come from an in-memory list refreshed by backend polling across all locally known namespaces, then merged client-side.
 - The incoming authentication notification is delivered by FCM and held in memory; it is not persisted locally.
 
+Server list:
+- Show each registered namespace name and its availability indicator, without a separate domain or URL line.
+- Keep stored namespace URLs and their use for backend requests unchanged.
+
 Notification information box:
-- With no notification, show only `Internet connection` and `Device: X`, using
-  the current device identity and a blue border. Precede the title with the same
-  12 dp status circle as database rows: green when Android reports both internet
-  capability and validated access on the default network, red otherwise. Observe
-  changes while the UI is active and release network callbacks when inactive.
-- With a notification, show only `Incoming notification`, `Device: X`, and
+- Always show `Biometric validity` and a live `mm:ss` countdown, using the existing
+  biometric access deadline and a monotonic clock. Update once per second, never
+  extend the access window just by ticking or tapping, and reset to zero on lock or expiry.
+- Tapping the existing biometric validity row while its countdown is positive opens
+  the system strong-biometric prompt without adding a separate button or navigating
+  away from Home. Successful biometric authentication and local device-key proof
+  restart the full 300-second window. Cancellation or an unsuccessful scan does not
+  extend the previous deadline. The row is disabled when the countdown reaches zero.
+- When online, show no internet-connection label or positive network indicator.
+- Show `No internet connection` with a red 12 dp status circle only when Android
+  does not report validated internet access. This warning also appears alongside
+  an incoming notification. Observe network changes while the UI is active and
+  release callbacks when inactive.
+- With no notification, show `Device: X` using the current device identity and a blue border.
+- With a notification, additionally show `Incoming notification`, `Device: X`, and
   `Date time`, with a green border. Use the notification device name, falling back
   to its desktop device ID and then the current device identity.
 - Display the received timestamp in the device's local date and time format.
@@ -37,11 +50,15 @@ Request ownership:
 Post-login background behavior:
 - Desktop-session polling runs immediately and then every 30 seconds while the authenticated, registered app is in the foreground. It refreshes immediately again whenever the app returns to the foreground.
 - This screen renders the shared in-memory live-session state produced by that background poller.
+- Automatic polling never activates the header refresh button's busy indicator.
 - Session polling also queries the current phone's mobile registrations when no desktop connections remain. A successful empty session response clears the old live-session list rather than treating the absence of desktop connections as a refresh error.
 
 Manual refresh behavior:
-- Reuse the shared availability/session refresh path, with a busy indicator and no
-  overlapping refresh submissions.
+- Reuse the shared availability/session refresh path. Show the header busy indicator
+  only for a user-triggered refresh, and clear it on completion or failure.
+- If background refresh is already running, a manual click joins that work and
+  shows progress without submitting overlapping requests. Further automatic ticks
+  cannot hide an active manual refresh indicator.
 - Check every known account/server target. A target's two-second timeout or request
   failure marks it unavailable and must not abort checks of remaining targets.
 - Skip session requests for targets reported offline. Query reachable targets with

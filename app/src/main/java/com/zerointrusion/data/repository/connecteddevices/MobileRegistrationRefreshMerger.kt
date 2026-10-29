@@ -7,10 +7,16 @@ internal fun mergeRefreshedMobileRegistrations(
     current: List<MobileNamespaceRegistration>,
     refreshed: List<MobileNamespaceRegistration>,
 ): List<MobileNamespaceRegistration> {
-    fun MobileNamespaceRegistration.identity() = listOf(
-        namespaceUrl.trim().trimEnd('/').lowercase(), accountId, mobileDeviceId, namespaceId,
-    )
+    fun MobileNamespaceRegistration.identity() =
+        listOf(namespaceUrl.trim().trimEnd('/').lowercase(), accountId, mobileDeviceId, namespaceId)
     val previousIdentities = beforeRefresh.map { it.identity() }.toSet()
     val addedDuringRefresh = current.filter { it.identity() !in previousIdentities }
-    return (refreshed + addedDuringRefresh).distinctBy { it.identity() }
+    val refreshedWithEmail =
+        refreshed.map { registration ->
+            val stored = current.firstOrNull { it.identity() == registration.identity() }
+            registration.copy(
+                email = registration.email.orEmpty().ifBlank { stored?.email.orEmpty() }
+            )
+        }
+    return (refreshedWithEmail + addedDuringRefresh).distinctBy { it.identity() }
 }

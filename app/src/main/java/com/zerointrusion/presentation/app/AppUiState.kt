@@ -4,6 +4,7 @@ import com.zerointrusion.domain.authentication.ActiveDesktopSession
 import com.zerointrusion.domain.authentication.NamespaceAuthenticationResult
 import com.zerointrusion.domain.connecteddevices.ConnectedDeviceGroup
 import com.zerointrusion.domain.connecteddevices.DatabaseAvailability
+import com.zerointrusion.domain.connecteddevices.MobileNamespaceRegistration
 import com.zerointrusion.domain.connecteddevices.RemovableAccountDevice
 import com.zerointrusion.domain.namespaces.NamespaceEntry
 import com.zerointrusion.domain.notification.BackendPushNotification
@@ -12,22 +13,27 @@ import com.zerointrusion.presentation.navigation.AppRoute
 
 sealed class FcmSyncUiState {
     data object Idle : FcmSyncUiState()
+
     data object InProgress : FcmSyncUiState()
+
     data class Success(val tokenPreview: String) : FcmSyncUiState()
+
     data class Error(val message: String) : FcmSyncUiState()
 }
 
 sealed class QrNamespaceRegistrationUiState {
     data object Idle : QrNamespaceRegistrationUiState()
+
     data class AwaitingDeviceSelection(
         val namespaceName: String,
         val deviceOptions: List<QrNamespaceDeviceOption>,
     ) : QrNamespaceRegistrationUiState()
+
     data object InProgress : QrNamespaceRegistrationUiState()
-    data class Success(
-        val message: String,
-        val followUpQrPayload: String? = null,
-    ) : QrNamespaceRegistrationUiState()
+
+    data class Success(val message: String, val followUpQrPayload: String? = null) :
+        QrNamespaceRegistrationUiState()
+
     data class Error(val message: String) : QrNamespaceRegistrationUiState()
 }
 
@@ -40,6 +46,8 @@ data class QrNamespaceDeviceOption(
 data class AddDatabaseUiState(
     val name: String = "",
     val url: String = "",
+    val email: String = "",
+    val emailError: String? = null,
     val nameError: String? = null,
     val urlError: String? = null,
     val errorMessage: String? = null,
@@ -49,30 +57,39 @@ data class AddDatabaseUiState(
 
 sealed class ConnectedDevicesUiState {
     data object Idle : ConnectedDevicesUiState()
+
     data object InProgress : ConnectedDevicesUiState()
+
     data class Success(val groups: List<ConnectedDeviceGroup>) : ConnectedDevicesUiState()
+
     data class Error(val message: String) : ConnectedDevicesUiState()
 }
 
 sealed class DeviceRemovalUiState {
     data object Idle : DeviceRemovalUiState()
+
     data object InProgress : DeviceRemovalUiState()
+
     data class Success(
         val devices: List<RemovableAccountDevice>,
         val deletingDeviceId: String? = null,
         val errorMessage: String? = null,
     ) : DeviceRemovalUiState()
+
     data class Error(val message: String) : DeviceRemovalUiState()
 }
 
 sealed class DesktopSessionsUiState {
     data object Idle : DesktopSessionsUiState()
+
     data object InProgress : DesktopSessionsUiState()
+
     data class Success(
         val sessions: List<ActiveDesktopSession>,
         val revokingAttestationId: String? = null,
         val message: String? = null,
     ) : DesktopSessionsUiState()
+
     data class Error(val message: String) : DesktopSessionsUiState()
 }
 
@@ -85,6 +102,15 @@ data class NotificationOverlayUiState(
     val isVisible: Boolean = notification != null
 }
 
+enum class HomeRefreshState {
+    IDLE,
+    BACKGROUND,
+    MANUAL;
+
+    fun requested(manually: Boolean): HomeRefreshState =
+        if (manually || this == MANUAL) MANUAL else BACKGROUND
+}
+
 data class AppUiState(
     val isInitialized: Boolean = false,
     val isAuthenticated: Boolean = false,
@@ -93,18 +119,20 @@ data class AppUiState(
     val authenticationError: String? = null,
     val settingsErrorCode: String? = null,
     val fcmSyncState: FcmSyncUiState = FcmSyncUiState.Idle,
-    val qrNamespaceRegistrationState: QrNamespaceRegistrationUiState = QrNamespaceRegistrationUiState.Idle,
+    val qrNamespaceRegistrationState: QrNamespaceRegistrationUiState =
+        QrNamespaceRegistrationUiState.Idle,
     val connectedDevicesState: ConnectedDevicesUiState = ConnectedDevicesUiState.Idle,
     val deviceRemovalState: DeviceRemovalUiState = DeviceRemovalUiState.Idle,
     val desktopSessionsState: DesktopSessionsUiState = DesktopSessionsUiState.Idle,
     val liveDesktopSessions: List<ActiveDesktopSession> = emptyList(),
-    val isHomeRefreshing: Boolean = false,
+    val homeRefreshState: HomeRefreshState = HomeRefreshState.IDLE,
     val homeRefreshErrorCode: String? = null,
     val liveDesktopSessionRevokingAttestationId: String? = null,
     val liveDesktopSessionRevokeErrorMessage: String? = null,
     val databaseAvailability: List<DatabaseAvailability> = emptyList(),
     val namespaces: List<NamespaceEntry> = emptyList(),
     val accounts: List<NamespaceEntry> = emptyList(),
+    val mobileRegistrations: List<MobileNamespaceRegistration> = emptyList(),
     val addDatabaseState: AddDatabaseUiState = AddDatabaseUiState(),
     val namespaceSelectionErrorMessage: String? = null,
     val namespaceManagementErrorMessage: String? = null,
@@ -113,12 +141,17 @@ data class AppUiState(
     val homeNavigationRequestKey: Long = 0L,
     val notificationOverlay: NotificationOverlayUiState = NotificationOverlayUiState(),
 ) {
+    val isHomeRefreshing: Boolean
+        get() = homeRefreshState == HomeRefreshState.MANUAL
+
     val currentRoute: String
-        get() = when {
-            !isInitialized -> AppRoute.Loading.route
-            !isAuthenticated -> AppRoute.Security.route
-            isRegistered && registrationState?.pendingAdditionalNamespacesScan == true -> AppRoute.QrRead.route
-            isRegistered -> AppRoute.Home.route
-            else -> AppRoute.Registration.route
-        }
+        get() =
+            when {
+                !isInitialized -> AppRoute.Loading.route
+                !isAuthenticated -> AppRoute.Security.route
+                isRegistered && registrationState?.pendingAdditionalNamespacesScan == true ->
+                    AppRoute.QrRead.route
+                isRegistered -> AppRoute.Home.route
+                else -> AppRoute.Registration.route
+            }
 }

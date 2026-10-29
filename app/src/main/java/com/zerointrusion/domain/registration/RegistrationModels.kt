@@ -2,15 +2,15 @@ package com.zerointrusion.domain.registration
 
 import com.google.gson.annotations.SerializedName
 
-data class Namespace(
-    val namespaceId: String,
-    val name: String,
-    val url: String,
-)
+enum class ServicePlan {
+    @SerializedName("basic") BASIC,
+    @SerializedName("enterprise") ENTERPRISE,
+}
+
+data class Namespace(val namespaceId: String, val name: String, val url: String)
 
 data class Device(
-    @SerializedName("mobileDeviceId")
-    val mobileDeviceId: String,
+    @SerializedName("mobileDeviceId") val mobileDeviceId: String,
     val publicKey: String,
     val deviceName: String,
 ) {
@@ -19,8 +19,7 @@ data class Device(
 }
 
 data class DekPayload(
-    @SerializedName("mobileDeviceId")
-    val mobileDeviceId: String,
+    @SerializedName("mobileDeviceId") val mobileDeviceId: String,
     val encDek: String,
 ) {
     val deviceId: String
@@ -34,9 +33,7 @@ data class RegistrationPayload(
     val email: String,
 )
 
-data class RegistrationResult(
-    val accountId: String,
-)
+data class RegistrationResult(val accountId: String)
 
 data class MobileDeviceRegistrationPreparation(
     val qrPayload: String,
@@ -51,8 +48,7 @@ data class MobileDeviceRegistrationPreparation(
 
 data class RegistrationState(
     val accountId: String,
-    @SerializedName("mobileDeviceId")
-    val mobileDeviceId: String,
+    @SerializedName("mobileDeviceId") val mobileDeviceId: String,
     val deviceName: String,
     val namespaceName: String,
     val namespaceUrl: String,
@@ -63,7 +59,7 @@ data class RegistrationState(
     val fcmToken: String? = null,
     val pendingAdditionalNamespacesScan: Boolean = false,
     val completedAdditionalNamespaceKeys: List<String>? = null,
-    val corporateMode: Boolean = false,
+    val servicePlan: ServicePlan = ServicePlan.BASIC,
 ) {
     val deviceId: String
         get() = mobileDeviceId
@@ -81,8 +77,5 @@ data class RegistrationFormValidation(
     val namespaceNameError: String? = null,
     val apiUrlError: String? = null,
 ) {
-    val isValid: Boolean =
-        emailError == null &&
-            namespaceNameError == null &&
-            apiUrlError == null
+    val isValid: Boolean = emailError == null && namespaceNameError == null && apiUrlError == null
 }

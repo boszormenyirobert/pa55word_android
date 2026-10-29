@@ -14,9 +14,7 @@ internal data class QrRegistrationPreparation(
     val targetEncDek: String? = null,
 )
 
-internal class DeviceRegistrationFromQrFlow(
-)
-{
+internal class DeviceRegistrationFromQrFlow() {
     suspend fun prepare(
         registrationState: RegistrationState,
         payload: DeviceRegistrationQrPayload,
@@ -25,18 +23,20 @@ internal class DeviceRegistrationFromQrFlow(
         val requestBaseUrl = registrationState.namespaceUrl.trim().trimEnd('/')
         if (targetUrl.isEmpty() || !targetUrl.equals(requestBaseUrl, ignoreCase = true)) {
             throw RegistrationFailure.Validation(
-                "The QR target URL ($targetUrl) does not match the selected server ($requestBaseUrl). Select the matching server before registering this desktop.",
+                "The QR target URL ($targetUrl) does not match the selected server ($requestBaseUrl). Select the matching server before registering this desktop."
             )
         }
-        val namespaceEntry = NamespaceEntry(
-            namespaceName = registrationState.namespaceName,
-            namespaceId = registrationState.namespaceId,
-            namespaceUrl = registrationState.namespaceUrl,
-            accountId = registrationState.accountId,
-            desktopDeviceId = payload.desktopDeviceId,
-            deviceName = payload.deviceName,
-            publicKey = payload.publicKey,
-        )
+        val namespaceEntry =
+            NamespaceEntry(
+                namespaceName = registrationState.namespaceName,
+                namespaceId = registrationState.namespaceId,
+                namespaceUrl = registrationState.namespaceUrl,
+                accountId = registrationState.accountId,
+                desktopDeviceId = payload.desktopDeviceId,
+                deviceName = payload.deviceName,
+                publicKey = payload.publicKey,
+                email = registrationState.email,
+            )
 
         return QrRegistrationPreparation(
             namespaceEntry = namespaceEntry,

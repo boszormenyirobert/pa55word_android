@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -32,7 +31,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.zerointrusion.presentation.common.AppButton
 import com.zerointrusion.presentation.common.AppButtonSize
-import com.zerointrusion.presentation.common.Pa55wordLogo
+import com.zerointrusion.presentation.common.AppScreenHeader
 
 @Composable
 fun RegistrationOptionsScreen(
@@ -45,18 +44,19 @@ fun RegistrationOptionsScreen(
             Modifier.fillMaxSize()
                 .background(Color.Black)
                 .testTag("registration-options")
-                .verticalScroll(rememberScrollState())
                 .padding(WindowInsets.safeDrawing.asPaddingValues())
-                .padding(horizontal = 24.dp, vertical = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(40.dp, Alignment.CenterVertically),
+                .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Pa55wordLogo(
-            modifier = Modifier.widthIn(max = 360.dp).fillMaxWidth().aspectRatio(1000f / 240f)
-        )
+        AppScreenHeader("Registration")
         Column(
-            modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier =
+                Modifier.weight(1f)
+                    .widthIn(max = 420.dp)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
         ) {
             RegistrationOptionButton(
                 "New account registration",

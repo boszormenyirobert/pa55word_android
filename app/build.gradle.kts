@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "com.zerointrusion"
-        minSdk = 24
+        minSdk = 30
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -21,11 +21,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    buildTypes {
-        release {
-            isMinifyEnabled = false
-        }
-    }
+    buildTypes { release { isMinifyEnabled = false } }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -36,9 +32,7 @@ android {
     }
 }
 
-kotlin {
-    jvmToolchain(11)
-}
+kotlin { jvmToolchain(11) }
 
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
@@ -85,6 +79,4 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
 
-hilt {
-    enableAggregatingTask = false
-}
+hilt { enableAggregatingTask = false }

@@ -4,11 +4,11 @@ Purpose: create the phone registration against the selected namespace.
 
 Inputs:
 - Email
-- Namespace name
-- API URL
 
 Data source:
 - User-entered form fields.
+- Both registration flows use the default namespace name `Pa55word basic`; neither form asks for a namespace name.
+- Both new account registration and adding a new mobile to an existing account automatically use `AppConstants.PRODUCTION_API_BASE_URL` (`https://prod-api.pa55word.com`). Neither form asks for an API URL.
 - Locally generated Android Keystore public key.
 - Locally generated device identity.
 - Locally generated encrypted DEK.
@@ -55,4 +55,5 @@ Notes:
 - Phone numbers are not collected, stored, validated, or sent in registration requests.
 - Validation happens before request.
 - Success stores registration state locally.
+- API URL persistence and later use of saved URLs remain unchanged. Existing saved registrations are not rewritten to use the production URL.
 - Initial phone registration does not populate the local namespace list by itself.

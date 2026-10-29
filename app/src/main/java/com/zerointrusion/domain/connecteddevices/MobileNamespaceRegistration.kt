@@ -8,4 +8,5 @@ data class MobileNamespaceRegistration(
     val namespaceUrl: String,
     val encDek: String,
     val root: Boolean = false,
+    val email: String = "",
 )

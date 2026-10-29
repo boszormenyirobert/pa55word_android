@@ -1,13 +1,13 @@
-# Corporate Recovery
+# Enterprise Recovery
 
 Scope: this is the authenticated Settings view for recovery of the currently
 selected namespace server.
 
-Purpose: restore a corporate account connection using a recovery QR code from
+Purpose: restore an enterprise account connection using a recovery QR code from
 the desktop device when the previously linked phone has been lost.
 
 Layout:
-- The Settings action and page title are `Corporate recovery`.
+- The Settings action and page title are `Enterprise recovery`.
 - A description panel explains starting recovery on the desktop and scanning
 	its recovery QR code. Stored email and other contact details are not shown.
 - The QR reader is embedded directly below the description, with the existing

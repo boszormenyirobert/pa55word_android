@@ -1,7 +1,5 @@
 package com.zerointrusion.presentation.auth
 
-import android.app.KeyguardManager
-import android.os.Build
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.core.LinearEasing
@@ -17,20 +15,22 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import com.zerointrusion.R
 import com.zerointrusion.presentation.common.AppButton
 import com.zerointrusion.presentation.common.BannerTone
 import com.zerointrusion.presentation.common.Pa55wordLogo
@@ -54,13 +55,40 @@ import com.zerointrusion.presentation.common.StatusBanner
 @Composable
 fun SecurityScreen(
     errorMessage: String?,
+    prepareAuthentication: suspend () -> Boolean,
     onAuthenticationSucceeded: () -> Unit,
     onAuthenticationFailed: (String) -> Unit,
 ) {
+    var promptNonce by rememberSaveable { mutableIntStateOf(0) }
+    val awaitingConfirmation =
+        BiometricAuthenticationPrompt(
+            requestKey = promptNonce,
+            prepareAuthentication = prepareAuthentication,
+            onAuthenticationSucceeded = onAuthenticationSucceeded,
+            onAuthenticationFailed = onAuthenticationFailed,
+        )
+    SecurityScreenContent(
+        errorMessage = errorMessage,
+        onRetry = { promptNonce++ },
+        awaitingConfirmation = awaitingConfirmation,
+    )
+}
+
+@Composable
+internal fun BiometricAuthenticationPrompt(
+    requestKey: Int,
+    prepareAuthentication: suspend () -> Boolean,
+    onAuthenticationSucceeded: () -> Unit,
+    onAuthenticationFailed: (String) -> Unit,
+    onDismiss: () -> Unit = {},
+): Boolean {
     val context = LocalContext.current
     val activity = context as? FragmentActivity
-    var promptNonce by rememberSaveable { mutableIntStateOf(0) }
     var awaitingConfirmation by remember { mutableStateOf(false) }
+    val currentPrepareAuthentication by rememberUpdatedState(prepareAuthentication)
+    val currentOnSucceeded by rememberUpdatedState(onAuthenticationSucceeded)
+    val currentOnFailed by rememberUpdatedState(onAuthenticationFailed)
+    val currentOnDismiss by rememberUpdatedState(onDismiss)
 
     val biometricPrompt: BiometricPrompt? =
         remember(activity) {
@@ -79,46 +107,53 @@ fun SecurityScreen(
                                     errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
                                     errorCode != BiometricPrompt.ERROR_CANCELED
                             ) {
-                                onAuthenticationFailed(errString.toString())
+                                currentOnFailed(errString.toString())
                             }
+                            currentOnDismiss()
                         }
 
                         override fun onAuthenticationSucceeded(
                             result: BiometricPrompt.AuthenticationResult
                         ) {
                             awaitingConfirmation = false
-                            onAuthenticationSucceeded()
+                            currentOnSucceeded()
                         }
 
                         override fun onAuthenticationFailed() {
-                            onAuthenticationFailed("Authentication failed. Please retry.")
+                            currentOnFailed("Authentication failed. Please retry.")
                         }
                     },
                 )
             }
         }
 
-    LaunchedEffect(activity, promptNonce) {
+    DisposableEffect(biometricPrompt) { onDispose { biometricPrompt?.cancelAuthentication() } }
+
+    LaunchedEffect(activity, requestKey) {
         val prompt = biometricPrompt
         if (activity == null || prompt == null) {
-            onAuthenticationFailed("Authentication is unavailable on this device.")
+            currentOnFailed("Authentication is unavailable on this device.")
+            currentOnDismiss()
             return@LaunchedEffect
         }
 
         when (val status = canAuthenticate(context)) {
             AuthAvailability.Available -> {
+                if (!currentPrepareAuthentication()) {
+                    currentOnDismiss()
+                    return@LaunchedEffect
+                }
                 awaitingConfirmation = true
-                prompt.authenticate(buildPromptInfo())
+                prompt.authenticate(buildPromptInfo(context))
             }
-            is AuthAvailability.Unavailable -> onAuthenticationFailed(status.message)
+            is AuthAvailability.Unavailable -> {
+                currentOnFailed(status.message)
+                currentOnDismiss()
+            }
         }
     }
 
-    SecurityScreenContent(
-        errorMessage = errorMessage,
-        onRetry = { promptNonce++ },
-        awaitingConfirmation = awaitingConfirmation,
-    )
+    return awaitingConfirmation
 }
 
 @Composable
@@ -138,58 +173,62 @@ internal fun SecurityScreenContent(
                     label = "logo-ring-rotation",
                 )
         } else null
-    Column(
+    Box(
         modifier =
             Modifier.fillMaxSize()
                 .background(Color.Black)
                 .testTag("security-background")
                 .padding(WindowInsets.safeDrawing.asPaddingValues())
-                .padding(24.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+                .padding(20.dp)
     ) {
-        Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.65f).testTag("security-logo-region"),
+            contentAlignment = Alignment.Center,
+        ) {
             Pa55wordLogo(
                 modifier =
-                    Modifier.widthIn(max = 360.dp)
-                        .fillMaxWidth()
-                        .aspectRatio(1000f / 240f)
-                        .drawWithContent {
-                            drawContent()
-                            ringRotation?.let { rotation ->
-                                val scale = size.width / 1000f
-                                val center = Offset(405f * scale, 120f * scale)
-                                rotate(rotation.value, center) {
-                                    drawCircle(
-                                        brush =
-                                            Brush.sweepGradient(
-                                                colors =
-                                                    listOf(
-                                                        Color(0xFF78CD00),
-                                                        Color(0xFFFFD600),
-                                                        Color(0xFFFF4D5A),
-                                                        Color(0xFF78CD00),
-                                                    ),
-                                                center = center,
-                                            ),
-                                        center = center,
-                                        radius = 110f * scale,
-                                        style = Stroke(width = 8f * scale),
-                                    )
-                                }
+                    Modifier.fillMaxWidth().aspectRatio(1000f / 240f).drawWithContent {
+                        drawContent()
+                        ringRotation?.let { rotation ->
+                            val scale = size.width / 1000f
+                            val center = Offset(405f * scale, 120f * scale)
+                            rotate(rotation.value, center) {
+                                drawCircle(
+                                    brush =
+                                        Brush.sweepGradient(
+                                            colors =
+                                                listOf(
+                                                    Color(0xFF78CD00),
+                                                    Color(0xFFFFD600),
+                                                    Color(0xFFFF4D5A),
+                                                    Color(0xFF78CD00),
+                                                ),
+                                            center = center,
+                                        ),
+                                    center = center,
+                                    radius = 110f * scale,
+                                    style = Stroke(width = 8f * scale),
+                                )
                             }
                         }
+                    }
             )
         }
-        if (!errorMessage.isNullOrBlank()) {
-            StatusBanner(
-                title = "Authentication blocked",
-                message = errorMessage,
-                tone = BannerTone.Error,
-            )
-        }
-        AppButton(icon = Icons.Default.Fingerprint, onClick = onRetry) {
-            Text(if (errorMessage.isNullOrBlank()) "Retry" else "Retry Authentication")
+        Column(
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (!errorMessage.isNullOrBlank()) {
+                StatusBanner(
+                    title = "Authentication blocked",
+                    message = errorMessage,
+                    tone = BannerTone.Error,
+                )
+            }
+            AppButton(icon = Icons.Default.Fingerprint, onClick = onRetry) {
+                Text(if (errorMessage.isNullOrBlank()) "Retry" else "Retry Authentication")
+            }
         }
     }
 }
@@ -202,22 +241,7 @@ private sealed class AuthAvailability {
 
 private fun canAuthenticate(context: android.content.Context): AuthAvailability {
     val biometricManager = BiometricManager.from(context)
-    val authenticators =
-        BiometricManager.Authenticators.BIOMETRIC_STRONG or
-            BiometricManager.Authenticators.DEVICE_CREDENTIAL
-
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-        val biometricResult =
-            biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-        if (biometricResult == BiometricManager.BIOMETRIC_SUCCESS) {
-            return AuthAvailability.Available
-        }
-
-        val keyguardManager = context.getSystemService(KeyguardManager::class.java)
-        if (keyguardManager?.isDeviceSecure == true) {
-            return AuthAvailability.Available
-        }
-    }
+    val authenticators = BiometricManager.Authenticators.BIOMETRIC_STRONG
 
     return when (biometricManager.canAuthenticate(authenticators)) {
         BiometricManager.BIOMETRIC_SUCCESS -> AuthAvailability.Available
@@ -226,25 +250,18 @@ private fun canAuthenticate(context: android.content.Context): AuthAvailability 
         BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE ->
             AuthAvailability.Unavailable("Biometric hardware is currently unavailable.")
         BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED ->
-            AuthAvailability.Unavailable("No biometric or device credential is enrolled.")
+            AuthAvailability.Unavailable("No strong biometric is enrolled.")
         else -> AuthAvailability.Unavailable("Authentication is unavailable on this device.")
     }
 }
 
-private fun buildPromptInfo(): BiometricPrompt.PromptInfo {
-    val builder =
-        BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Unlock ZeroIntrusion")
-            .setSubtitle("Confirm your identity to continue")
-
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        builder.setAllowedAuthenticators(
-            BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                BiometricManager.Authenticators.DEVICE_CREDENTIAL
+private fun buildPromptInfo(context: android.content.Context): BiometricPrompt.PromptInfo {
+    return BiometricPrompt.PromptInfo.Builder()
+        .setTitle(
+            context.getString(R.string.biometric_unlock_title, context.getString(R.string.app_name))
         )
-    } else {
-        builder.setDeviceCredentialAllowed(true)
-    }
-
-    return builder.build()
+        .setSubtitle("Confirm your identity to continue")
+        .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+        .setNegativeButtonText("Cancel")
+        .build()
 }

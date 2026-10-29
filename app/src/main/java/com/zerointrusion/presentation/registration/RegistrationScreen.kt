@@ -29,14 +29,14 @@ import com.zerointrusion.presentation.common.StatusBanner
 fun RegistrationScreen(
     state: RegistrationUiState,
     onEmailChanged: (String) -> Unit,
-    onNamespaceNameChanged: (String) -> Unit,
-    onApiUrlChanged: (String) -> Unit,
     isExistingAccount: Boolean,
     onConfirm: () -> Unit,
     onBack: () -> Unit,
 ) {
     AppSettingsPage(
-        title = if (isExistingAccount) "Add new mobile to existing account" else "New account registration",
+        title =
+            if (isExistingAccount) "Add new mobile to existing account"
+            else "New account registration",
         onBack = onBack,
         modifier = Modifier.imePadding(),
         secondaryAction = {
@@ -59,10 +59,7 @@ fun RegistrationScreen(
                 modifier = Modifier.padding(22.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp),
             ) {
-                Text(
-                    text = "Registration details",
-                    style = MaterialTheme.typography.titleLarge,
-                )
+                Text(text = "Registration details", style = MaterialTheme.typography.titleLarge)
                 RegistrationTextField(
                     value = state.email,
                     onValueChange = onEmailChanged,
@@ -70,24 +67,6 @@ fun RegistrationScreen(
                     supporting = state.emailError ?: "Used in the registration payload only.",
                     isError = state.emailError != null,
                     keyboardType = KeyboardType.Email,
-                    imeAction = ImeAction.Next,
-                )
-                RegistrationTextField(
-                    value = state.namespaceName,
-                    onValueChange = onNamespaceNameChanged,
-                    label = "Namespace Name",
-                    supporting = state.namespaceNameError ?: "Shown in the stored registration state.",
-                    isError = state.namespaceNameError != null,
-                    keyboardType = KeyboardType.Text,
-                    imeAction = ImeAction.Next,
-                )
-                RegistrationTextField(
-                    value = state.apiUrl,
-                    onValueChange = onApiUrlChanged,
-                    label = "API URL",
-                    supporting = state.apiUrlError ?: "Base URL with port only, for example http://192.168.178.20:3000. The app appends /api/v1/account.",
-                    isError = state.apiUrlError != null,
-                    keyboardType = KeyboardType.Uri,
                     imeAction = ImeAction.Done,
                 )
                 if (!state.errorMessage.isNullOrBlank()) {
@@ -97,25 +76,26 @@ fun RegistrationScreen(
                         tone = BannerTone.Error,
                     )
                 }
-                state.mobileRegistrationQrPayload?.takeIf { isExistingAccount }?.let { payload ->
-                    Text(
-                        text = "Scan this code with a mobile device already connected to the account.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    QrCodeImage(
-                        payload = payload,
-                        contentDescription = "New mobile registration QR code",
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .aspectRatio(1f),
-                    )
-                    Text(
-                        text = "Waiting for approval...",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
+                state.mobileRegistrationQrPayload
+                    ?.takeIf { isExistingAccount }
+                    ?.let { payload ->
+                        Text(
+                            text =
+                                "Scan this code with a mobile device already connected to the account.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        QrCodeImage(
+                            payload = payload,
+                            contentDescription = "New mobile registration QR code",
+                            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+                        )
+                        Text(
+                            text = "Waiting for approval...",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
             }
         }
-}
+    }
 }

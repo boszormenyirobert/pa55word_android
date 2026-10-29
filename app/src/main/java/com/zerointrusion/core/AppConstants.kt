@@ -1,6 +1,8 @@
 package com.zerointrusion.core
 
 object AppConstants {
+    const val PRODUCTION_API_BASE_URL = "https://prod-api.pa55word.com"
+
     const val KEYSTORE_ALIAS = "secure_device_registration_primary"
     const val ENCRYPTED_PREFS_NAME = "zero_intrusion_secure_registration"
     const val ENCRYPTED_PREFS_STATE_KEY = "registration_state"

@@ -8,43 +8,43 @@ import org.junit.Test
 
 class RegistrationStateTest {
     private val gson = Gson()
-    private val state = RegistrationState(
-        accountId = "account",
-        mobileDeviceId = "mobile",
-        deviceName = "Phone",
-        namespaceName = "Database",
-        namespaceUrl = "https://example.test",
-        namespaceId = "namespace",
-        email = "user@example.test",
-        encDek = "encrypted-key",
-    )
+    private val state =
+        RegistrationState(
+            accountId = "account",
+            mobileDeviceId = "mobile",
+            deviceName = "Phone",
+            namespaceName = "Database",
+            namespaceUrl = "https://example.test",
+            namespaceId = "namespace",
+            email = "user@example.test",
+            encDek = "encrypted-key",
+        )
 
     @Test
-    fun newRegistrationDefaultsToPrivate() {
-        assertFalse(state.corporateMode)
+    fun newRegistrationDefaultsToBasic() {
+        assertEquals(ServicePlan.BASIC, state.servicePlan)
     }
 
     @Test
-    fun existingRegistrationDefaultsToPrivate() {
-        val json = gson.toJsonTree(state).asJsonObject.apply { remove("corporateMode") }
+    fun selectedServicePlanSurvivesSerializationWithoutChangingRegistration() {
+        ServicePlan.entries.forEach { servicePlan ->
+            val updated = state.copy(servicePlan = servicePlan)
 
-        assertEquals(state, gson.fromJson(json, RegistrationState::class.java))
-    }
-
-    @Test
-    fun selectedModeSurvivesSerializationWithoutChangingRegistration() {
-        listOf(true, false).forEach { corporateMode ->
-            val updated = state.copy(corporateMode = corporateMode)
-
-            assertEquals(updated, gson.fromJson(gson.toJson(updated), RegistrationState::class.java))
+            assertEquals(
+                updated,
+                gson.fromJson(gson.toJson(updated), RegistrationState::class.java),
+            )
+            assertEquals(
+                servicePlan.name.lowercase(),
+                gson.toJsonTree(updated).asJsonObject.get("servicePlan").asString,
+            )
         }
     }
 
     @Test
     fun legacyPhoneIsIgnoredAndNeverSerialized() {
-        val legacy = gson.toJsonTree(state).asJsonObject.apply {
-            addProperty("phone", "+36123456789")
-        }
+        val legacy =
+            gson.toJsonTree(state).asJsonObject.apply { addProperty("phone", "+36123456789") }
         val restored = gson.fromJson(legacy, RegistrationState::class.java)
 
         assertEquals(state, restored)
@@ -53,11 +53,12 @@ class RegistrationStateTest {
 
     @Test
     fun registrationValidationDoesNotRequirePhone() {
-        val input = RegistrationFormInput(
-            email = "user@example.test",
-            namespaceName = "Database",
-            apiUrl = "https://example.test",
-        )
+        val input =
+            RegistrationFormInput(
+                email = "user@example.test",
+                namespaceName = "Database",
+                apiUrl = "https://example.test",
+            )
 
         assertTrue(RegistrationValidator().validateForm(input).isValid)
         assertFalse(gson.toJsonTree(input).asJsonObject.has("phone"))
